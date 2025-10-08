@@ -1,0 +1,1 @@
+- This custom component is not yet deplyable via HACS
