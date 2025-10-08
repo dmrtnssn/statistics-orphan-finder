@@ -24,7 +24,4 @@ Thumbs.db
 
 # Claude local configuration (not to be shared)
 CLAUDE.local.md
-
-# Keep Claude agent configurations
-!.claude/
-!.claude/agents/
+.claude/
