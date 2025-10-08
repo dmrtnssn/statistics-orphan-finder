@@ -393,4 +393,3 @@ When helping create Home Assistant components, Claude should:
 
 5. **Provide installation and testing instructions**
 
-* This custom component is not yet deployable via HACS
