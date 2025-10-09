@@ -118,6 +118,9 @@ class StatisticsOrphanView(HomeAssistantView):
         elif action == "database_size":
             db_size = await self.coordinator.async_get_database_size()
             return web.json_response(db_size)
+        elif action == "entity_storage_overview":
+            overview = await self.coordinator.async_get_entity_storage_overview()
+            return web.json_response(overview)
         elif action == "generate_delete_sql":
             metadata_id = request.query.get("metadata_id")
             origin = request.query.get("origin")

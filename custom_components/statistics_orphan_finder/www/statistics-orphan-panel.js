@@ -3,9 +3,18 @@ class StatisticsOrphanPanel extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.orphansData = [];
+    this.storageOverviewData = [];
+    this.storageOverviewSummary = {};
+    this.currentView = 'orphans'; // 'orphans' or 'storage'
     this.sortColumn = 'entity_id';
     this.sortDirection = 'asc';
+    this.storageSortStack = [{column: 'entity_id', direction: 'asc'}]; // Multi-column sort stack
     this.statusFilter = 'all'; // all, deleted, unavailable
+    this.storageFilter = 'all'; // all, in_registry, not_in_registry, deleted
+    this.storageAdvancedFilter = 'all'; // all, sync_issues, only_states, only_stats, orphaned_metadata
+    this.registryStatusFilter = null; // null, 'Enabled', 'Disabled'
+    this.stateStatusFilter = null; // null, 'Available', 'Unavailable'
+    this.searchQuery = '';
     this.loadingProgress = 0;
     this.loadingStatus = '';
     this.databaseSize = { states: 0, statistics: 0, statistics_short_term: 0, other: 0 };
@@ -426,6 +435,420 @@ class StatisticsOrphanPanel extends HTMLElement {
     ctx.fill();
   }
 
+  async loadStorageOverview() {
+    this.updateLoadingProgress(0, 'Loading storage overview...');
+
+    try {
+      const response = await fetch('/api/statistics_orphan_finder?action=entity_storage_overview', {
+        headers: {
+          'Authorization': `Bearer ${this._hass.auth.data.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load storage overview');
+      }
+
+      this.updateLoadingProgress(50, 'Processing data...');
+
+      const data = await response.json();
+      this.storageOverviewData = data.entities || [];
+      this.storageOverviewSummary = data.summary || {};
+
+      this.updateLoadingProgress(90, 'Rendering table...');
+      this.renderStorageOverview();
+
+      this.updateLoadingProgress(100, 'Complete!');
+
+    } catch (error) {
+      this.updateLoadingProgress(0, 'Error: ' + error.message);
+      this.storageOverviewData = [];
+      this.storageOverviewSummary = {};
+      this.renderStorageOverview();
+    }
+  }
+
+  switchView(view) {
+    this.currentView = view;
+
+    // Update tab buttons
+    const orphansTab = this.shadowRoot.getElementById('tab-orphans');
+    const storageTab = this.shadowRoot.getElementById('tab-storage');
+
+    orphansTab.classList.remove('active');
+    storageTab.classList.remove('active');
+
+    if (view === 'orphans') {
+      orphansTab.classList.add('active');
+      this.showOrphansView();
+    } else {
+      storageTab.classList.add('active');
+      this.showStorageView();
+    }
+  }
+
+  showOrphansView() {
+    const orphansView = this.shadowRoot.getElementById('orphans-view');
+    const storageView = this.shadowRoot.getElementById('storage-view');
+
+    orphansView.style.display = 'block';
+    storageView.style.display = 'none';
+
+    // Load data if needed
+    if (this.orphansData.length === 0) {
+      this.loadOrphans();
+    }
+  }
+
+  showStorageView() {
+    const orphansView = this.shadowRoot.getElementById('orphans-view');
+    const storageView = this.shadowRoot.getElementById('storage-view');
+
+    orphansView.style.display = 'none';
+    storageView.style.display = 'block';
+
+    // Load data if needed
+    if (this.storageOverviewData.length === 0) {
+      this.loadStorageOverview();
+    }
+  }
+
+  getFilteredStorageData() {
+    let filtered = this.storageOverviewData;
+
+    // Apply search query
+    if (this.searchQuery && this.searchQuery.trim() !== '') {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(e => e.entity_id.toLowerCase().includes(query));
+    }
+
+    // Apply registry status filter (from clickable summary)
+    if (this.registryStatusFilter) {
+      filtered = filtered.filter(e => e.registry_status === this.registryStatusFilter);
+    }
+
+    // Apply state status filter (from clickable summary)
+    if (this.stateStatusFilter) {
+      filtered = filtered.filter(e => e.state_status === this.stateStatusFilter);
+    }
+
+    // Apply basic filter
+    if (this.storageFilter === 'in_registry') {
+      filtered = filtered.filter(e => e.in_entity_registry);
+    } else if (this.storageFilter === 'not_in_registry') {
+      filtered = filtered.filter(e => !e.in_entity_registry);
+    } else if (this.storageFilter === 'deleted') {
+      filtered = filtered.filter(e => !e.in_entity_registry && !e.in_state_machine);
+    }
+
+    // Apply advanced filter
+    if (this.storageAdvancedFilter === 'sync_issues') {
+      // Entities with synchronization issues
+      filtered = filtered.filter(e =>
+        (e.in_states_meta && !e.in_states) || // orphaned states_meta
+        (e.in_statistics_meta && !e.in_statistics_short_term && !e.in_statistics_long_term) // orphaned statistics_meta
+      );
+    } else if (this.storageAdvancedFilter === 'only_states') {
+      // Only in states, not in statistics
+      filtered = filtered.filter(e => e.in_states && !e.in_statistics_meta);
+    } else if (this.storageAdvancedFilter === 'only_stats') {
+      // Only in statistics, not in states
+      filtered = filtered.filter(e => e.in_statistics_meta && !e.in_states);
+    } else if (this.storageAdvancedFilter === 'orphaned_metadata') {
+      // Metadata without actual data
+      filtered = filtered.filter(e =>
+        (e.in_states_meta && !e.in_states) ||
+        (e.in_statistics_meta && !e.in_statistics_short_term && !e.in_statistics_long_term)
+      );
+    } else if (this.storageAdvancedFilter === 'missing_from_registry') {
+      // In database but not in entity registry
+      filtered = filtered.filter(e => !e.in_entity_registry && (e.in_states || e.in_statistics_meta));
+    } else if (this.storageAdvancedFilter === 'fully_synced') {
+      // Entities that are in registry and state machine
+      filtered = filtered.filter(e => e.in_entity_registry && e.in_state_machine);
+    }
+
+    return filtered;
+  }
+
+  sortStorageData(column, shiftKey = false) {
+    // Find if column already in sort stack
+    const existingIndex = this.storageSortStack.findIndex(s => s.column === column);
+
+    if (!shiftKey) {
+      // Normal click - make this the primary sort
+      if (existingIndex === 0) {
+        // Already primary, toggle direction
+        this.storageSortStack[0].direction = this.storageSortStack[0].direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        // Make this primary sort
+        this.storageSortStack = [{column, direction: 'asc'}];
+      }
+    } else {
+      // Shift+Click - add to sort stack or toggle if exists
+      if (existingIndex >= 0) {
+        // Toggle direction of existing sort
+        this.storageSortStack[existingIndex].direction =
+          this.storageSortStack[existingIndex].direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        // Add to sort stack (max 3 columns)
+        if (this.storageSortStack.length < 3) {
+          this.storageSortStack.push({column, direction: 'asc'});
+        }
+      }
+    }
+
+    this.renderStorageOverview();
+  }
+
+  clearStorageSort() {
+    this.storageSortStack = [{column: 'entity_id', direction: 'asc'}];
+    this.renderStorageOverview();
+  }
+
+  renderStorageOverview() {
+    const tableBody = this.shadowRoot.getElementById('storage-table-body');
+    const summaryContainer = this.shadowRoot.getElementById('storage-summary');
+
+    // Clear table
+    tableBody.innerHTML = '';
+
+    // Render summary with sub-totals (clickable)
+    summaryContainer.innerHTML = `
+      <div class="stats-grid">
+        <div class="stats-card">
+          <h2>Total Entities</h2>
+          <div class="stats-value">${(this.storageOverviewSummary.total_entities || 0).toLocaleString()}</div>
+        </div>
+        <div class="stats-card">
+          <h2>In Entity Registry</h2>
+          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="in_registry">${(this.storageOverviewSummary.in_entity_registry || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">
+            <span class="stats-subtitle-link" data-filter-type="registry" data-filter-value="Enabled" style="color: var(--success-color, #4CAF50);">✓ Enabled: ${(this.storageOverviewSummary.registry_enabled || 0).toLocaleString()}</span><br>
+            <span class="stats-subtitle-link" data-filter-type="registry" data-filter-value="Disabled" style="color: var(--warning-color, #FF9800);">⊘ Disabled: ${(this.storageOverviewSummary.registry_disabled || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div class="stats-card">
+          <h2>In State Machine</h2>
+          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="in_state">${(this.storageOverviewSummary.in_state_machine || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">
+            <span class="stats-subtitle-link" data-filter-type="state" data-filter-value="Available" style="color: var(--success-color, #4CAF50);">✓ Available: ${(this.storageOverviewSummary.state_available || 0).toLocaleString()}</span><br>
+            <span class="stats-subtitle-link" data-filter-type="state" data-filter-value="Unavailable" style="color: var(--warning-color, #FF9800);">⚠ Unavailable: ${(this.storageOverviewSummary.state_unavailable || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div class="stats-card">
+          <h2>Deleted</h2>
+          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="deleted">${(this.storageOverviewSummary.deleted_from_registry || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">Not in registry or state machine</div>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stats-card">
+          <h2>In States</h2>
+          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.in_states || 0).toLocaleString()}</div>
+        </div>
+        <div class="stats-card">
+          <h2>In Statistics</h2>
+          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.in_statistics_meta || 0).toLocaleString()}</div>
+        </div>
+        <div class="stats-card">
+          <h2>Only States</h2>
+          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.only_in_states || 0).toLocaleString()}</div>
+        </div>
+        <div class="stats-card">
+          <h2>Only Statistics</h2>
+          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.only_in_statistics || 0).toLocaleString()}</div>
+        </div>
+      </div>
+    `;
+
+    // Add click handlers for summary links (sub-totals)
+    this.shadowRoot.querySelectorAll('.stats-subtitle-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        const filterType = e.target.dataset.filterType;
+        const filterValue = e.target.dataset.filterValue;
+        this.filterByStatus(filterType, filterValue);
+      });
+    });
+
+    // Add click handlers for main card values
+    this.shadowRoot.querySelectorAll('.stats-value-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        const filterType = e.target.dataset.filterType;
+        const filterValue = e.target.dataset.filterValue;
+        this.filterByStatus(filterType, filterValue);
+      });
+    });
+
+    // Sort data using multi-column sort stack
+    const filteredData = this.getFilteredStorageData();
+    const sortedData = [...filteredData].sort((a, b) => {
+      // Apply sorts in order from stack
+      for (const {column, direction} of this.storageSortStack) {
+        let aVal, bVal, result = 0;
+
+        if (column === 'entity_id') {
+          // String comparison
+          aVal = a.entity_id.toLowerCase();
+          bVal = b.entity_id.toLowerCase();
+          result = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else if (column === 'states_count' || column === 'stats_short_count' || column === 'stats_long_count') {
+          // Numeric comparison for counts
+          aVal = a[column] || 0;
+          bVal = b[column] || 0;
+          result = aVal - bVal;
+        } else if (column === 'last_state_update' || column === 'last_stats_update') {
+          // Date comparison
+          aVal = a[column] ? new Date(a[column]).getTime() : 0;
+          bVal = b[column] ? new Date(b[column]).getTime() : 0;
+          result = aVal - bVal;
+        } else if (column === 'registry_status' || column === 'state_status') {
+          // String comparison for status
+          aVal = a[column] || '';
+          bVal = b[column] || '';
+          result = aVal.localeCompare(bVal);
+        } else {
+          // Boolean comparison (checkboxes)
+          aVal = a[column] ? 1 : 0;
+          bVal = b[column] ? 1 : 0;
+          result = aVal - bVal;
+        }
+
+        // Apply direction
+        if (direction === 'desc') {
+          result = -result;
+        }
+
+        // If not equal, return this result; otherwise continue to next sort
+        if (result !== 0) {
+          return result;
+        }
+      }
+
+      return 0; // All sorts were equal
+    });
+
+    if (sortedData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="14" style="text-align: center;">No data available</td></tr>';
+    } else {
+      sortedData.forEach(entity => {
+        const row = document.createElement('tr');
+
+        // Helper to create status badge
+        const statusBadge = (status, type) => {
+          if (type === 'registry') {
+            if (status === 'Enabled') {
+              return '<span class="status-badge status-enabled" title="Enabled">✓</span>';
+            } else if (status === 'Disabled') {
+              return '<span class="status-badge status-disabled" title="Disabled">⊘</span>';
+            } else {
+              return '<span class="status-badge status-not-in-registry" title="Not in Registry">✕</span>';
+            }
+          } else if (type === 'state') {
+            if (status === 'Available') {
+              return '<span class="status-badge status-available" title="Available">✓</span>';
+            } else if (status === 'Unavailable') {
+              return '<span class="status-badge status-unavailable" title="Unavailable">⚠</span>';
+            } else {
+              return '<span class="status-badge status-not-present" title="Not Present">○</span>';
+            }
+          }
+          return '';
+        };
+
+        // Helper to create checkmark or empty cell
+        const check = (val) => val ? '✓' : '';
+
+        row.innerHTML = `
+          <td>${entity.entity_id}</td>
+          <td style="text-align: center;">${statusBadge(entity.registry_status, 'registry')}</td>
+          <td style="text-align: center;">${statusBadge(entity.state_status, 'state')}</td>
+          <td class="group-border-left" style="text-align: center;">${check(entity.in_states_meta)}</td>
+          <td style="text-align: center;">${check(entity.in_states)}</td>
+          <td style="text-align: right;">${(entity.states_count || 0).toLocaleString()}</td>
+          <td style="text-align: center; font-size: 11px;">${entity.last_state_update || ''}</td>
+          <td class="group-border-left" style="text-align: center;">${check(entity.in_statistics_meta)}</td>
+          <td style="text-align: center;">${check(entity.in_statistics_short_term)}</td>
+          <td style="text-align: center;">${check(entity.in_statistics_long_term)}</td>
+          <td style="text-align: right;">${(entity.stats_short_count || 0).toLocaleString()}</td>
+          <td style="text-align: right;">${(entity.stats_long_count || 0).toLocaleString()}</td>
+          <td style="text-align: center; font-size: 11px;">${entity.last_stats_update || ''}</td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
+
+    // Update sort indicators
+    this.updateStorageSortIndicators();
+  }
+
+  updateStorageSortIndicators() {
+    // Remove all existing indicators
+    const headers = [
+      'storage-header-entity-id',
+      'storage-header-registry',
+      'storage-header-state',
+      'storage-header-states-meta',
+      'storage-header-states',
+      'storage-header-stats-meta',
+      'storage-header-stats-short',
+      'storage-header-stats-long',
+      'storage-header-states-count',
+      'storage-header-stats-short-count',
+      'storage-header-stats-long-count',
+      'storage-header-last-state-update',
+      'storage-header-last-stats-update'
+    ];
+
+    headers.forEach(headerId => {
+      const header = this.shadowRoot.getElementById(headerId);
+      if (header) {
+        header.classList.remove('sorted-asc', 'sorted-desc', 'sorted-asc-2', 'sorted-desc-2', 'sorted-asc-3', 'sorted-desc-3');
+        // Remove any existing sort indicator text
+        const textContent = header.textContent.replace(/[▲▼]₁|[▲▼]₂|[▲▼]₃/g, '').trim();
+        header.textContent = textContent;
+      }
+    });
+
+    // Add indicators for all sorted columns in stack
+    const columnMap = {
+      'entity_id': 'storage-header-entity-id',
+      'registry_status': 'storage-header-registry',
+      'state_status': 'storage-header-state',
+      'in_entity_registry': 'storage-header-registry',
+      'in_state_machine': 'storage-header-state',
+      'in_states_meta': 'storage-header-states-meta',
+      'in_states': 'storage-header-states',
+      'in_statistics_meta': 'storage-header-stats-meta',
+      'in_statistics_short_term': 'storage-header-stats-short',
+      'in_statistics_long_term': 'storage-header-stats-long',
+      'states_count': 'storage-header-states-count',
+      'stats_short_count': 'storage-header-stats-short-count',
+      'stats_long_count': 'storage-header-stats-long-count',
+      'last_state_update': 'storage-header-last-state-update',
+      'last_stats_update': 'storage-header-last-stats-update'
+    };
+
+    this.storageSortStack.forEach((sort, index) => {
+      const headerId = columnMap[sort.column];
+      const header = this.shadowRoot.getElementById(headerId);
+      if (header) {
+        const priority = index + 1;
+        const arrow = sort.direction === 'asc' ? '▲' : '▼';
+        const subscript = priority === 1 ? '₁' : priority === 2 ? '₂' : '₃';
+
+        // Add class for styling
+        const sortClass = sort.direction === 'asc' ?
+          (priority === 1 ? 'sorted-asc' : `sorted-asc-${priority}`) :
+          (priority === 1 ? 'sorted-desc' : `sorted-desc-${priority}`);
+        header.classList.add(sortClass);
+
+        // Add indicator to text
+        header.textContent = header.textContent + ' ' + arrow + subscript;
+      }
+    });
+  }
+
   render() {
     this.shadowRoot.innerHTML = `
       <style>
@@ -626,7 +1049,6 @@ class StatisticsOrphanPanel extends HTMLElement {
         }
 
         .status-unavailable {
-          background: var(--warning-color, #FF9800);
           color: white;
         }
 
@@ -785,6 +1207,217 @@ class StatisticsOrphanPanel extends HTMLElement {
           align-items: flex-end;
         }
 
+        .tab-navigation {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 16px;
+          border-bottom: 2px solid var(--divider-color);
+        }
+
+        .tab-button {
+          background: none;
+          border: none;
+          padding: 12px 24px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--secondary-text-color);
+          border-bottom: 3px solid transparent;
+          transition: all 0.3s;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: -2px;
+        }
+
+        .tab-button:hover {
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+        }
+
+        .tab-button.active {
+          color: var(--primary-color);
+          border-bottom-color: var(--primary-color);
+        }
+
+        .view-container {
+          display: none;
+        }
+
+        .view-container.active {
+          display: block;
+        }
+
+        .storage-filter-buttons {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 16px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+
+        .search-filter-container {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 16px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .search-box {
+          flex: 1;
+          min-width: 250px;
+        }
+
+        .search-box input {
+          width: 100%;
+          padding: 10px 16px;
+          border: 2px solid var(--divider-color);
+          border-radius: 4px;
+          font-size: 14px;
+          color: var(--primary-text-color);
+          background: var(--card-background-color);
+          transition: border-color 0.3s;
+        }
+
+        .search-box input:focus {
+          outline: none;
+          border-color: var(--primary-color);
+        }
+
+        .advanced-filter {
+          flex: 1;
+          min-width: 200px;
+        }
+
+        .advanced-filter select {
+          width: 100%;
+          padding: 10px 16px;
+          border: 2px solid var(--divider-color);
+          border-radius: 4px;
+          font-size: 14px;
+          color: var(--primary-text-color);
+          background: var(--card-background-color);
+          cursor: pointer;
+          transition: border-color 0.3s;
+        }
+
+        .advanced-filter select:focus {
+          outline: none;
+          border-color: var(--primary-color);
+        }
+
+        .clear-filters-btn {
+          padding: 10px 20px;
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          border: 2px solid var(--divider-color);
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.3s;
+        }
+
+        .clear-filters-btn:hover {
+          background: var(--divider-color);
+        }
+
+        /* Status badge styles */
+        .status-badge {
+          display: inline-block;
+          font-weight: bold;
+          font-size: 14px;
+        }
+
+        .status-enabled {
+          color: var(--success-color, #4CAF50);
+        }
+
+        .status-disabled {
+          color: var(--warning-color, #FF9800);
+        }
+
+        .status-not-in-registry {
+          color: var(--error-color, #F44336);
+        }
+
+        .status-available {
+          color: var(--success-color, #4CAF50);
+        }
+
+        .status-unavailable {
+          color: var(--warning-color, #FF9800);
+        }
+
+        .status-not-present {
+          color: var(--secondary-text-color);
+        }
+
+        /* Column grouping */
+        .group-border-left {
+          border-left: 3px solid var(--primary-color) !important;
+        }
+
+        th.group-border-left {
+          border-left: 3px solid var(--primary-color) !important;
+        }
+
+        /* Multi-line header support */
+        th {
+          white-space: pre-line;
+          line-height: 1.3;
+        }
+
+        /* Secondary and tertiary sort indicators */
+        th.sorted-asc-2::after,
+        th.sorted-desc-2::after,
+        th.sorted-asc-3::after,
+        th.sorted-desc-3::after {
+          opacity: 0.6;
+        }
+
+        /* Clear sort button */
+        .clear-sort-btn {
+          padding: 10px 20px;
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          border: 2px solid var(--divider-color);
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.3s;
+        }
+
+        .clear-sort-btn:hover {
+          background: var(--divider-color);
+        }
+
+        /* Clickable summary stats */
+        .stats-subtitle-link {
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+
+        .stats-subtitle-link:hover {
+          opacity: 0.7;
+          text-decoration: underline;
+        }
+
+        /* Clickable main card values */
+        .stats-value-link {
+          cursor: pointer;
+          transition: all 0.2s;
+          border-radius: 4px;
+          padding: 4px 8px;
+          margin: -4px -8px;
+        }
+
+        .stats-value-link:hover {
+          background: var(--secondary-background-color);
+          transform: scale(1.05);
+        }
+
         .modal {
           display: none;
           position: fixed;
@@ -929,12 +1562,18 @@ class StatisticsOrphanPanel extends HTMLElement {
         </div>
       </div>
 
-      <div class="description">
-        This tool identifies entities that exist in Home Assistant's long-term statistics
-        database but are no longer present in your current configuration.
-        <strong>Deleted</strong> entities have been completely removed, while <strong>Unavailable</strong>
-        entities are registered but currently offline or disabled.
+      <div class="tab-navigation">
+        <button class="tab-button active" id="tab-orphans">Orphaned Entities</button>
+        <button class="tab-button" id="tab-storage">Storage Overview</button>
       </div>
+
+      <div id="orphans-view" class="view-container" style="display: block;">
+        <div class="description">
+          This tool identifies entities that exist in Home Assistant's long-term statistics
+          database but are no longer present in your current configuration.
+          <strong>Deleted</strong> entities have been completely removed, while <strong>Unavailable</strong>
+          entities are registered but currently offline or disabled.
+        </div>
 
       <div class="db-size-section">
         <h2>Database Size</h2>
@@ -1023,6 +1662,78 @@ class StatisticsOrphanPanel extends HTMLElement {
           </tbody>
         </table>
       </div>
+      </div>
+
+      <!-- Storage Overview View -->
+      <div id="storage-view" class="view-container" style="display: none;">
+        <div class="description">
+          Complete overview of all entities across Home Assistant's storage locations.
+          This shows which entities exist in the Entity Registry, State Machine, and various database tables.
+        </div>
+
+        <div id="storage-summary"></div>
+
+        <div class="search-filter-container">
+          <div class="search-box">
+            <input type="text" id="storage-search" placeholder="🔍 Search entity IDs..." />
+          </div>
+          <div class="advanced-filter">
+            <select id="storage-advanced-filter">
+              <option value="all">All Entities</option>
+              <option value="sync_issues">⚠️ Sync Issues</option>
+              <option value="orphaned_metadata">🗑️ Orphaned Metadata</option>
+              <option value="only_states">📊 Only in States</option>
+              <option value="only_stats">📈 Only in Statistics</option>
+              <option value="missing_from_registry">❌ Missing from Registry</option>
+              <option value="fully_synced">✅ Fully Synced</option>
+            </select>
+          </div>
+          <button class="clear-filters-btn" id="clear-storage-filters">Clear Filters</button>
+          <button class="clear-sort-btn" id="clear-storage-sort">Clear Sort</button>
+        </div>
+
+        <div class="storage-filter-buttons">
+          <button class="filter-button active" id="storage-filter-all">All</button>
+          <button class="filter-button" id="storage-filter-registry">In Registry</button>
+          <button class="filter-button" id="storage-filter-not-registry">Not in Registry</button>
+          <button class="filter-button" id="storage-filter-deleted">Deleted</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th id="storage-header-entity-id" class="sorted-asc">Entity ID</th>
+                <th id="storage-header-registry" style="text-align: center; font-size: 10px;">ENTITY
+REGISTRY</th>
+                <th id="storage-header-state" style="text-align: center; font-size: 10px;">STATE
+MACHINE</th>
+                <th id="storage-header-states-meta" class="group-border-left" style="text-align: center; font-size: 10px;">States
+Meta</th>
+                <th id="storage-header-states" style="text-align: center; font-size: 10px;">States</th>
+                <th id="storage-header-states-count" style="text-align: right; font-size: 10px;">States #</th>
+                <th id="storage-header-last-state-update" style="text-align: center; font-size: 10px;">Last State
+Update</th>
+                <th id="storage-header-stats-meta" class="group-border-left" style="text-align: center; font-size: 10px;">Stats
+Meta</th>
+                <th id="storage-header-stats-short" style="text-align: center; font-size: 10px;">Stats
+Short</th>
+                <th id="storage-header-stats-long" style="text-align: center; font-size: 10px;">Stats
+Long</th>
+                <th id="storage-header-stats-short-count" style="text-align: right; font-size: 10px;">Short #</th>
+                <th id="storage-header-stats-long-count" style="text-align: right; font-size: 10px;">Long #</th>
+                <th id="storage-header-last-stats-update" style="text-align: center; font-size: 10px;">Last Stats
+Update</th>
+              </tr>
+            </thead>
+            <tbody id="storage-table-body">
+              <tr>
+                <td colspan="14" style="text-align: center;">No data loaded</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- Delete Modal -->
       <div id="delete-modal" class="modal">
@@ -1100,6 +1811,120 @@ class StatisticsOrphanPanel extends HTMLElement {
       }
     });
 
+    // Tab navigation
+    this.shadowRoot.getElementById('tab-orphans').addEventListener('click', () => {
+      this.switchView('orphans');
+    });
+
+    this.shadowRoot.getElementById('tab-storage').addEventListener('click', () => {
+      this.switchView('storage');
+    });
+
+    // Storage filter buttons
+    this.shadowRoot.getElementById('storage-filter-all').addEventListener('click', () => {
+      this.setStorageFilter('all');
+    });
+
+    this.shadowRoot.getElementById('storage-filter-registry').addEventListener('click', () => {
+      this.setStorageFilter('in_registry');
+    });
+
+    this.shadowRoot.getElementById('storage-filter-not-registry').addEventListener('click', () => {
+      this.setStorageFilter('not_in_registry');
+    });
+
+    this.shadowRoot.getElementById('storage-filter-deleted').addEventListener('click', () => {
+      this.setStorageFilter('deleted');
+    });
+
+    // Storage table column sorting (with Shift+Click support)
+    this.shadowRoot.getElementById('storage-header-entity-id').addEventListener('click', (e) => {
+      this.sortStorageData('entity_id', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-registry').addEventListener('click', (e) => {
+      this.sortStorageData('registry_status', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-state').addEventListener('click', (e) => {
+      this.sortStorageData('state_status', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-states-meta').addEventListener('click', (e) => {
+      this.sortStorageData('in_states_meta', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-states').addEventListener('click', (e) => {
+      this.sortStorageData('in_states', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-stats-meta').addEventListener('click', (e) => {
+      this.sortStorageData('in_statistics_meta', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-stats-short').addEventListener('click', (e) => {
+      this.sortStorageData('in_statistics_short_term', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-stats-long').addEventListener('click', (e) => {
+      this.sortStorageData('in_statistics_long_term', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-states-count').addEventListener('click', (e) => {
+      this.sortStorageData('states_count', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-stats-short-count').addEventListener('click', (e) => {
+      this.sortStorageData('stats_short_count', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-stats-long-count').addEventListener('click', (e) => {
+      this.sortStorageData('stats_long_count', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-last-state-update').addEventListener('click', (e) => {
+      this.sortStorageData('last_state_update', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-last-stats-update').addEventListener('click', (e) => {
+      this.sortStorageData('last_stats_update', e.shiftKey);
+    });
+
+    // Search box
+    this.shadowRoot.getElementById('storage-search').addEventListener('input', (e) => {
+      this.searchQuery = e.target.value;
+      this.renderStorageOverview();
+    });
+
+    // Advanced filter dropdown
+    this.shadowRoot.getElementById('storage-advanced-filter').addEventListener('change', (e) => {
+      this.storageAdvancedFilter = e.target.value;
+      this.renderStorageOverview();
+    });
+
+    // Clear filters button
+    this.shadowRoot.getElementById('clear-storage-filters').addEventListener('click', () => {
+      this.searchQuery = '';
+      this.storageFilter = 'all';
+      this.storageAdvancedFilter = 'all';
+      this.registryStatusFilter = null;
+      this.stateStatusFilter = null;
+      this.shadowRoot.getElementById('storage-search').value = '';
+      this.shadowRoot.getElementById('storage-advanced-filter').value = 'all';
+
+      // Reset button states
+      const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      this.shadowRoot.getElementById('storage-filter-all').classList.add('active');
+
+      this.renderStorageOverview();
+    });
+
+    // Clear sort button
+    this.shadowRoot.getElementById('clear-storage-sort').addEventListener('click', () => {
+      this.clearStorageSort();
+    });
+
     this.content = this.shadowRoot.querySelector('div');
   }
 
@@ -1116,6 +1941,72 @@ class StatisticsOrphanPanel extends HTMLElement {
     }
 
     this.renderTable();
+  }
+
+  setStorageFilter(filter) {
+    this.storageFilter = filter;
+
+    // Update button states
+    const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
+    buttons.forEach(btn => btn.classList.remove('active'));
+
+    const activeButton = this.shadowRoot.getElementById(`storage-filter-${filter.replace('_', '-')}`);
+    if (activeButton) {
+      activeButton.classList.add('active');
+    }
+
+    this.renderStorageOverview();
+  }
+
+  filterByStatus(statusType, statusValue) {
+    // Reset filters first
+    this.registryStatusFilter = null;
+    this.stateStatusFilter = null;
+    this.storageAdvancedFilter = 'all';
+    this.storageFilter = 'all';
+
+    // Set filter based on type
+    if (statusType === 'registry') {
+      // Sub-category: Enabled or Disabled
+      this.storageFilter = 'in_registry';
+      this.registryStatusFilter = statusValue;
+    } else if (statusType === 'state') {
+      // Sub-category: Available or Unavailable
+      this.stateStatusFilter = statusValue;
+    } else if (statusType === 'basic') {
+      // Main card value
+      this.storageFilter = statusValue;
+    } else if (statusType === 'advanced') {
+      // Advanced filter
+      this.storageAdvancedFilter = statusValue;
+    }
+
+    // Update button states
+    const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
+    buttons.forEach(btn => btn.classList.remove('active'));
+
+    // Activate appropriate button
+    if (this.storageFilter === 'in_registry') {
+      const btn = this.shadowRoot.getElementById('storage-filter-registry');
+      if (btn) btn.classList.add('active');
+    } else if (this.storageFilter === 'not_in_registry') {
+      const btn = this.shadowRoot.getElementById('storage-filter-not-registry');
+      if (btn) btn.classList.add('active');
+    } else if (this.storageFilter === 'deleted') {
+      const btn = this.shadowRoot.getElementById('storage-filter-deleted');
+      if (btn) btn.classList.add('active');
+    } else {
+      const btn = this.shadowRoot.getElementById('storage-filter-all');
+      if (btn) btn.classList.add('active');
+    }
+
+    // Update advanced filter dropdown
+    if (this.storageAdvancedFilter !== 'all') {
+      const dropdown = this.shadowRoot.getElementById('storage-advanced-filter');
+      if (dropdown) dropdown.value = this.storageAdvancedFilter;
+    }
+
+    this.renderStorageOverview();
   }
 }
 

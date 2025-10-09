@@ -471,6 +471,191 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
         return sql
 
+    def _fetch_entity_storage_overview(self) -> dict[str, Any]:
+        """Fetch comprehensive overview of entity storage across all tables (blocking I/O)."""
+        engine = self._get_engine()
+        from collections import defaultdict
+
+        entity_map = defaultdict(lambda: {
+            'in_states_meta': False,
+            'in_states': False,
+            'in_statistics_meta': False,
+            'in_statistics_short_term': False,
+            'in_statistics_long_term': False,
+            'states_count': 0,
+            'stats_short_count': 0,
+            'stats_long_count': 0,
+            'last_state_update': None,
+            'last_stats_update': None,
+        })
+
+        with engine.connect() as conn:
+            # 1. Get entities from states_meta
+            _LOGGER.info("Querying states_meta...")
+            query = text("SELECT DISTINCT entity_id FROM states_meta")
+            result = conn.execute(query)
+            for row in result:
+                entity_map[row[0]]['in_states_meta'] = True
+
+            # 2. Get entities from states with counts and last update
+            _LOGGER.info("Querying states...")
+            query = text("""
+                SELECT sm.entity_id, COUNT(*) as count, MAX(s.last_updated_ts) as last_update
+                FROM states s
+                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
+                GROUP BY sm.entity_id
+            """)
+            result = conn.execute(query)
+            for row in result:
+                entity_id = row[0]
+                entity_map[entity_id]['in_states'] = True
+                entity_map[entity_id]['states_count'] = row[1]
+                if row[2]:
+                    from datetime import datetime
+                    entity_map[entity_id]['last_state_update'] = datetime.fromtimestamp(row[2]).isoformat()
+
+            # 3. Get entities from statistics_meta
+            _LOGGER.info("Querying statistics_meta...")
+            query = text("SELECT DISTINCT statistic_id FROM statistics_meta")
+            result = conn.execute(query)
+            for row in result:
+                entity_map[row[0]]['in_statistics_meta'] = True
+
+            # 4. Get entities from statistics_short_term with counts
+            _LOGGER.info("Querying statistics_short_term...")
+            try:
+                query = text("""
+                    SELECT sm.statistic_id, COUNT(*) as count, MAX(s.start_ts) as last_update
+                    FROM statistics_short_term s
+                    JOIN statistics_meta sm ON s.metadata_id = sm.id
+                    GROUP BY sm.statistic_id
+                """)
+                result = conn.execute(query)
+                for row in result:
+                    entity_id = row[0]
+                    entity_map[entity_id]['in_statistics_short_term'] = True
+                    entity_map[entity_id]['stats_short_count'] = row[1]
+                    if row[2]:
+                        from datetime import datetime
+                        last_update = datetime.fromtimestamp(row[2]).isoformat()
+                        if not entity_map[entity_id]['last_stats_update'] or \
+                           last_update > entity_map[entity_id]['last_stats_update']:
+                            entity_map[entity_id]['last_stats_update'] = last_update
+            except Exception as err:
+                _LOGGER.warning("Could not query statistics_short_term: %s", err)
+
+            # 5. Get entities from statistics (long-term) with counts
+            _LOGGER.info("Querying statistics (long-term)...")
+            query = text("""
+                SELECT sm.statistic_id, COUNT(*) as count, MAX(s.start_ts) as last_update
+                FROM statistics s
+                JOIN statistics_meta sm ON s.metadata_id = sm.id
+                GROUP BY sm.statistic_id
+            """)
+            result = conn.execute(query)
+            for row in result:
+                entity_id = row[0]
+                entity_map[entity_id]['in_statistics_long_term'] = True
+                entity_map[entity_id]['stats_long_count'] = row[1]
+                if row[2]:
+                    from datetime import datetime
+                    last_update = datetime.fromtimestamp(row[2]).isoformat()
+                    if not entity_map[entity_id]['last_stats_update'] or \
+                       last_update > entity_map[entity_id]['last_stats_update']:
+                        entity_map[entity_id]['last_stats_update'] = last_update
+
+        # Get entity registry for comparison
+        entity_registry = er.async_get(self.hass)
+
+        # Convert to list format and add registry info
+        entities_list = []
+        for entity_id, info in sorted(entity_map.items()):
+            # Check if in entity registry and get status
+            registry_entry = entity_registry.async_get(entity_id)
+            in_registry = registry_entry is not None
+
+            # Determine registry status
+            if registry_entry is not None:
+                registry_status = "Disabled" if registry_entry.disabled else "Enabled"
+            else:
+                registry_status = "Not in Registry"
+
+            # Check if in current state machine and get status
+            state = self.hass.states.get(entity_id)
+            in_state_machine = state is not None
+
+            # Determine state machine status
+            if state is not None:
+                if state.state in ["unavailable", "unknown"]:
+                    state_status = "Unavailable"
+                else:
+                    state_status = "Available"
+            else:
+                state_status = "Not Present"
+
+            entities_list.append({
+                'entity_id': entity_id,
+                'in_entity_registry': in_registry,
+                'registry_status': registry_status,
+                'in_state_machine': in_state_machine,
+                'state_status': state_status,
+                'in_states_meta': info['in_states_meta'],
+                'in_states': info['in_states'],
+                'in_statistics_meta': info['in_statistics_meta'],
+                'in_statistics_short_term': info['in_statistics_short_term'],
+                'in_statistics_long_term': info['in_statistics_long_term'],
+                'states_count': info['states_count'],
+                'stats_short_count': info['stats_short_count'],
+                'stats_long_count': info['stats_long_count'],
+                'last_state_update': info['last_state_update'],
+                'last_stats_update': info['last_stats_update'],
+            })
+
+        # Generate summary statistics
+        summary = {
+            'total_entities': len(entity_map),
+            'in_entity_registry': sum(1 for e in entities_list if e['in_entity_registry']),
+            'registry_enabled': sum(1 for e in entities_list if e['registry_status'] == 'Enabled'),
+            'registry_disabled': sum(1 for e in entities_list if e['registry_status'] == 'Disabled'),
+            'in_state_machine': sum(1 for e in entities_list if e['in_state_machine']),
+            'state_available': sum(1 for e in entities_list if e['state_status'] == 'Available'),
+            'state_unavailable': sum(1 for e in entities_list if e['state_status'] == 'Unavailable'),
+            'in_states_meta': sum(1 for e in entities_list if e['in_states_meta']),
+            'in_states': sum(1 for e in entities_list if e['in_states']),
+            'in_statistics_meta': sum(1 for e in entities_list if e['in_statistics_meta']),
+            'in_statistics_short_term': sum(1 for e in entities_list if e['in_statistics_short_term']),
+            'in_statistics_long_term': sum(1 for e in entities_list if e['in_statistics_long_term']),
+            'only_in_states': sum(1 for e in entities_list if e['in_states'] and not e['in_statistics_meta']),
+            'only_in_statistics': sum(1 for e in entities_list if e['in_statistics_meta'] and not e['in_states']),
+            'in_both_states_and_stats': sum(1 for e in entities_list if e['in_states'] and e['in_statistics_meta']),
+            'orphaned_states_meta': sum(1 for e in entities_list if e['in_states_meta'] and not e['in_states']),
+            'orphaned_statistics_meta': sum(1 for e in entities_list if e['in_statistics_meta'] and not (e['in_statistics_short_term'] or e['in_statistics_long_term'])),
+            'deleted_from_registry': sum(1 for e in entities_list if not e['in_entity_registry'] and not e['in_state_machine']),
+        }
+
+        _LOGGER.info(
+            "Entity storage overview: %d total entities, %d in registry, %d in state machine",
+            summary['total_entities'],
+            summary['in_entity_registry'],
+            summary['in_state_machine']
+        )
+
+        return {
+            'entities': entities_list,
+            'summary': summary
+        }
+
+    async def async_get_entity_storage_overview(self) -> dict[str, Any]:
+        """Get comprehensive entity storage overview."""
+        try:
+            return await self.hass.async_add_executor_job(self._fetch_entity_storage_overview)
+        except SQLAlchemyError as err:
+            _LOGGER.error("Error fetching entity storage overview: %s", err)
+            return {
+                'entities': [],
+                'summary': {}
+            }
+
     async def async_shutdown(self) -> None:
         """Shutdown coordinator."""
         if self._engine:
