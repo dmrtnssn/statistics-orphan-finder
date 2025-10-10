@@ -631,6 +631,17 @@ class StatisticsOrphanPanel extends HTMLElement {
     // Clear table
     tableBody.innerHTML = '';
 
+    // Determine active states for highlighting
+    const isRegistryFilterActive = this.storageFilter === 'in_registry' && !this.registryStatusFilter;
+    const isEnabledActive = this.registryStatusFilter === 'Enabled';
+    const isDisabledActive = this.registryStatusFilter === 'Disabled';
+    const isStateFilterActive = this.stateStatusFilter !== null && this.storageFilter === 'all';
+    const isAvailableActive = this.stateStatusFilter === 'Available';
+    const isUnavailableActive = this.stateStatusFilter === 'Unavailable';
+    const isDeletedActive = this.storageFilter === 'deleted';
+    const isOnlyStatesActive = this.storageAdvancedFilter === 'only_states';
+    const isOnlyStatsActive = this.storageAdvancedFilter === 'only_stats';
+
     // Render summary with sub-totals (clickable)
     summaryContainer.innerHTML = `
       <div class="stats-grid">
@@ -638,44 +649,44 @@ class StatisticsOrphanPanel extends HTMLElement {
           <h2>Total Entities</h2>
           <div class="stats-value">${(this.storageOverviewSummary.total_entities || 0).toLocaleString()}</div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${(isRegistryFilterActive || isEnabledActive || isDisabledActive) ? 'active-filter' : ''}">
           <h2>In Entity Registry</h2>
-          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="in_registry">${(this.storageOverviewSummary.in_entity_registry || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isRegistryFilterActive ? 'active' : ''}" data-filter-type="basic" data-filter-value="in_registry">${(this.storageOverviewSummary.in_entity_registry || 0).toLocaleString()}</div>
           <div class="stats-subtitle">
-            <span class="stats-subtitle-link" data-filter-type="registry" data-filter-value="Enabled" style="color: var(--success-color, #4CAF50);">✓ Enabled: ${(this.storageOverviewSummary.registry_enabled || 0).toLocaleString()}</span><br>
-            <span class="stats-subtitle-link" data-filter-type="registry" data-filter-value="Disabled" style="color: var(--warning-color, #FF9800);">⊘ Disabled: ${(this.storageOverviewSummary.registry_disabled || 0).toLocaleString()}</span>
+            <span class="stats-subtitle-link ${isEnabledActive ? 'active' : ''}" data-filter-type="registry" data-filter-value="Enabled" style="color: ${isEnabledActive ? 'inherit' : 'var(--success-color, #4CAF50)'};">✓ Enabled: ${(this.storageOverviewSummary.registry_enabled || 0).toLocaleString()}</span><br>
+            <span class="stats-subtitle-link ${isDisabledActive ? 'active' : ''}" data-filter-type="registry" data-filter-value="Disabled" style="color: ${isDisabledActive ? 'inherit' : 'var(--warning-color, #FF9800)'};">⊘ Disabled: ${(this.storageOverviewSummary.registry_disabled || 0).toLocaleString()}</span>
           </div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${(isStateFilterActive || isAvailableActive || isUnavailableActive) ? 'active-filter' : ''}">
           <h2>In State Machine</h2>
           <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="in_state">${(this.storageOverviewSummary.in_state_machine || 0).toLocaleString()}</div>
           <div class="stats-subtitle">
-            <span class="stats-subtitle-link" data-filter-type="state" data-filter-value="Available" style="color: var(--success-color, #4CAF50);">✓ Available: ${(this.storageOverviewSummary.state_available || 0).toLocaleString()}</span><br>
-            <span class="stats-subtitle-link" data-filter-type="state" data-filter-value="Unavailable" style="color: var(--warning-color, #FF9800);">⚠ Unavailable: ${(this.storageOverviewSummary.state_unavailable || 0).toLocaleString()}</span>
+            <span class="stats-subtitle-link ${isAvailableActive ? 'active' : ''}" data-filter-type="state" data-filter-value="Available" style="color: ${isAvailableActive ? 'inherit' : 'var(--success-color, #4CAF50)'};">✓ Available: ${(this.storageOverviewSummary.state_available || 0).toLocaleString()}</span><br>
+            <span class="stats-subtitle-link ${isUnavailableActive ? 'active' : ''}" data-filter-type="state" data-filter-value="Unavailable" style="color: ${isUnavailableActive ? 'inherit' : 'var(--warning-color, #FF9800)'};">⚠ Unavailable: ${(this.storageOverviewSummary.state_unavailable || 0).toLocaleString()}</span>
           </div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${isDeletedActive ? 'active-filter' : ''}">
           <h2>Deleted</h2>
-          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="deleted">${(this.storageOverviewSummary.deleted_from_registry || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isDeletedActive ? 'active' : ''}" data-filter-type="basic" data-filter-value="deleted">${(this.storageOverviewSummary.deleted_from_registry || 0).toLocaleString()}</div>
           <div class="stats-subtitle">Not in registry or state machine</div>
         </div>
       </div>
       <div class="stats-grid">
-        <div class="stats-card">
+        <div class="stats-card ${isOnlyStatesActive ? 'active-filter' : ''}">
           <h2>In States</h2>
           <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.in_states || 0).toLocaleString()}</div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${isOnlyStatsActive ? 'active-filter' : ''}">
           <h2>In Statistics</h2>
-          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.in_statistics_meta || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isOnlyStatsActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.in_statistics_meta || 0).toLocaleString()}</div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${isOnlyStatesActive ? 'active-filter' : ''}">
           <h2>Only States</h2>
-          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.only_in_states || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isOnlyStatesActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.only_in_states || 0).toLocaleString()}</div>
         </div>
-        <div class="stats-card">
+        <div class="stats-card ${isOnlyStatsActive ? 'active-filter' : ''}">
           <h2>Only Statistics</h2>
-          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.only_in_statistics || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isOnlyStatsActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.only_in_statistics || 0).toLocaleString()}</div>
         </div>
       </div>
     `;
@@ -1392,12 +1403,21 @@ class StatisticsOrphanPanel extends HTMLElement {
         /* Clickable summary stats */
         .stats-subtitle-link {
           cursor: pointer;
-          transition: opacity 0.2s;
+          transition: all 0.2s;
+          padding: 2px 4px;
+          border-radius: 3px;
         }
 
         .stats-subtitle-link:hover {
           opacity: 0.7;
           text-decoration: underline;
+        }
+
+        .stats-subtitle-link.active {
+          background: var(--primary-color);
+          color: var(--text-primary-color, #fff) !important;
+          font-weight: bold;
+          text-decoration: none;
         }
 
         /* Clickable main card values */
@@ -1412,6 +1432,18 @@ class StatisticsOrphanPanel extends HTMLElement {
         .stats-value-link:hover {
           background: var(--secondary-background-color);
           transform: scale(1.05);
+        }
+
+        .stats-value-link.active {
+          background: var(--primary-color);
+          color: var(--text-primary-color, #fff);
+          font-weight: bold;
+        }
+
+        /* Active filter card indication */
+        .stats-card.active-filter {
+          border: 2px solid var(--primary-color);
+          box-shadow: 0 0 12px rgba(var(--rgb-primary-color, 3, 169, 244), 0.4);
         }
 
         /* Clickable entity IDs */
