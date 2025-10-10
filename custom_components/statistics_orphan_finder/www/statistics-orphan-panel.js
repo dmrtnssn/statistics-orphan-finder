@@ -143,7 +143,7 @@ class StatisticsOrphanPanel extends HTMLElement {
         }
 
         row.innerHTML = `
-          <td>${orphan.entity_id}</td>
+          <td><span class="entity-id-link" data-entity-id="${orphan.entity_id}">${orphan.entity_id}</span></td>
           <td style="text-align: center;">${statusBadge}</td>
           <td style="text-align: center;">${originBadge}</td>
           <td style="text-align: center;">${lastUpdateFormatted}</td>
@@ -162,6 +162,14 @@ class StatisticsOrphanPanel extends HTMLElement {
           const metadataId = e.target.dataset.metadataId;
           const origin = e.target.dataset.origin;
           this.showDeleteModal(entityId, metadataId, origin);
+        });
+      });
+
+      // Add event listeners to all entity ID links
+      this.shadowRoot.querySelectorAll('.entity-id-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          const entityId = e.target.dataset.entityId;
+          this.showMoreInfo(entityId);
         });
       });
     }
@@ -348,6 +356,16 @@ class StatisticsOrphanPanel extends HTMLElement {
   closeDeleteModal() {
     const modal = this.shadowRoot.getElementById('delete-modal');
     modal.style.display = 'none';
+  }
+
+  showMoreInfo(entityId) {
+    // Fire the hass-more-info event to show Home Assistant's entity popup dialog
+    const event = new CustomEvent('hass-more-info', {
+      bubbles: true,
+      composed: true,
+      detail: { entityId }
+    });
+    this.dispatchEvent(event);
   }
 
   renderDatabaseChart() {
@@ -760,7 +778,7 @@ class StatisticsOrphanPanel extends HTMLElement {
         const check = (val) => val ? '✓' : '';
 
         row.innerHTML = `
-          <td>${entity.entity_id}</td>
+          <td><span class="entity-id-link" data-entity-id="${entity.entity_id}">${entity.entity_id}</span></td>
           <td style="text-align: center;">${statusBadge(entity.registry_status, 'registry')}</td>
           <td style="text-align: center;">${statusBadge(entity.state_status, 'state')}</td>
           <td class="group-border-left" style="text-align: center;">${check(entity.in_states_meta)}</td>
@@ -775,6 +793,14 @@ class StatisticsOrphanPanel extends HTMLElement {
           <td style="text-align: center; font-size: 11px;">${entity.last_stats_update || ''}</td>
         `;
         tableBody.appendChild(row);
+      });
+
+      // Add event listeners to all entity ID links
+      this.shadowRoot.querySelectorAll('.entity-id-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          const entityId = e.target.dataset.entityId;
+          this.showMoreInfo(entityId);
+        });
       });
     }
 
@@ -1247,14 +1273,6 @@ class StatisticsOrphanPanel extends HTMLElement {
           display: block;
         }
 
-        .storage-filter-buttons {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 16px;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-
         .search-filter-container {
           display: flex;
           gap: 16px;
@@ -1280,28 +1298,6 @@ class StatisticsOrphanPanel extends HTMLElement {
         }
 
         .search-box input:focus {
-          outline: none;
-          border-color: var(--primary-color);
-        }
-
-        .advanced-filter {
-          flex: 1;
-          min-width: 200px;
-        }
-
-        .advanced-filter select {
-          width: 100%;
-          padding: 10px 16px;
-          border: 2px solid var(--divider-color);
-          border-radius: 4px;
-          font-size: 14px;
-          color: var(--primary-text-color);
-          background: var(--card-background-color);
-          cursor: pointer;
-          transition: border-color 0.3s;
-        }
-
-        .advanced-filter select:focus {
           outline: none;
           border-color: var(--primary-color);
         }
@@ -1416,6 +1412,19 @@ class StatisticsOrphanPanel extends HTMLElement {
         .stats-value-link:hover {
           background: var(--secondary-background-color);
           transform: scale(1.05);
+        }
+
+        /* Clickable entity IDs */
+        .entity-id-link {
+          cursor: pointer;
+          color: var(--primary-text-color);
+          text-decoration: none;
+          transition: all 0.2s;
+        }
+
+        .entity-id-link:hover {
+          color: var(--primary-text-color);
+          text-decoration: underline;
         }
 
         .modal {
@@ -1677,26 +1686,8 @@ class StatisticsOrphanPanel extends HTMLElement {
           <div class="search-box">
             <input type="text" id="storage-search" placeholder="🔍 Search entity IDs..." />
           </div>
-          <div class="advanced-filter">
-            <select id="storage-advanced-filter">
-              <option value="all">All Entities</option>
-              <option value="sync_issues">⚠️ Sync Issues</option>
-              <option value="orphaned_metadata">🗑️ Orphaned Metadata</option>
-              <option value="only_states">📊 Only in States</option>
-              <option value="only_stats">📈 Only in Statistics</option>
-              <option value="missing_from_registry">❌ Missing from Registry</option>
-              <option value="fully_synced">✅ Fully Synced</option>
-            </select>
-          </div>
           <button class="clear-filters-btn" id="clear-storage-filters">Clear Filters</button>
           <button class="clear-sort-btn" id="clear-storage-sort">Clear Sort</button>
-        </div>
-
-        <div class="storage-filter-buttons">
-          <button class="filter-button active" id="storage-filter-all">All</button>
-          <button class="filter-button" id="storage-filter-registry">In Registry</button>
-          <button class="filter-button" id="storage-filter-not-registry">Not in Registry</button>
-          <button class="filter-button" id="storage-filter-deleted">Deleted</button>
         </div>
 
         <div class="table-container">
@@ -1820,23 +1811,6 @@ Update</th>
       this.switchView('storage');
     });
 
-    // Storage filter buttons
-    this.shadowRoot.getElementById('storage-filter-all').addEventListener('click', () => {
-      this.setStorageFilter('all');
-    });
-
-    this.shadowRoot.getElementById('storage-filter-registry').addEventListener('click', () => {
-      this.setStorageFilter('in_registry');
-    });
-
-    this.shadowRoot.getElementById('storage-filter-not-registry').addEventListener('click', () => {
-      this.setStorageFilter('not_in_registry');
-    });
-
-    this.shadowRoot.getElementById('storage-filter-deleted').addEventListener('click', () => {
-      this.setStorageFilter('deleted');
-    });
-
     // Storage table column sorting (with Shift+Click support)
     this.shadowRoot.getElementById('storage-header-entity-id').addEventListener('click', (e) => {
       this.sortStorageData('entity_id', e.shiftKey);
@@ -1896,12 +1870,6 @@ Update</th>
       this.renderStorageOverview();
     });
 
-    // Advanced filter dropdown
-    this.shadowRoot.getElementById('storage-advanced-filter').addEventListener('change', (e) => {
-      this.storageAdvancedFilter = e.target.value;
-      this.renderStorageOverview();
-    });
-
     // Clear filters button
     this.shadowRoot.getElementById('clear-storage-filters').addEventListener('click', () => {
       this.searchQuery = '';
@@ -1910,12 +1878,6 @@ Update</th>
       this.registryStatusFilter = null;
       this.stateStatusFilter = null;
       this.shadowRoot.getElementById('storage-search').value = '';
-      this.shadowRoot.getElementById('storage-advanced-filter').value = 'all';
-
-      // Reset button states
-      const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
-      buttons.forEach(btn => btn.classList.remove('active'));
-      this.shadowRoot.getElementById('storage-filter-all').classList.add('active');
 
       this.renderStorageOverview();
     });
@@ -1943,21 +1905,6 @@ Update</th>
     this.renderTable();
   }
 
-  setStorageFilter(filter) {
-    this.storageFilter = filter;
-
-    // Update button states
-    const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
-    buttons.forEach(btn => btn.classList.remove('active'));
-
-    const activeButton = this.shadowRoot.getElementById(`storage-filter-${filter.replace('_', '-')}`);
-    if (activeButton) {
-      activeButton.classList.add('active');
-    }
-
-    this.renderStorageOverview();
-  }
-
   filterByStatus(statusType, statusValue) {
     // Reset filters first
     this.registryStatusFilter = null;
@@ -1979,31 +1926,6 @@ Update</th>
     } else if (statusType === 'advanced') {
       // Advanced filter
       this.storageAdvancedFilter = statusValue;
-    }
-
-    // Update button states
-    const buttons = this.shadowRoot.querySelectorAll('.storage-filter-buttons .filter-button');
-    buttons.forEach(btn => btn.classList.remove('active'));
-
-    // Activate appropriate button
-    if (this.storageFilter === 'in_registry') {
-      const btn = this.shadowRoot.getElementById('storage-filter-registry');
-      if (btn) btn.classList.add('active');
-    } else if (this.storageFilter === 'not_in_registry') {
-      const btn = this.shadowRoot.getElementById('storage-filter-not-registry');
-      if (btn) btn.classList.add('active');
-    } else if (this.storageFilter === 'deleted') {
-      const btn = this.shadowRoot.getElementById('storage-filter-deleted');
-      if (btn) btn.classList.add('active');
-    } else {
-      const btn = this.shadowRoot.getElementById('storage-filter-all');
-      if (btn) btn.classList.add('active');
-    }
-
-    // Update advanced filter dropdown
-    if (this.storageAdvancedFilter !== 'all') {
-      const dropdown = this.shadowRoot.getElementById('storage-advanced-filter');
-      if (dropdown) dropdown.value = this.storageAdvancedFilter;
     }
 
     this.renderStorageOverview();
