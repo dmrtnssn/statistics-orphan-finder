@@ -555,6 +555,8 @@ class StatisticsOrphanPanel extends HTMLElement {
       filtered = filtered.filter(e => e.in_entity_registry);
     } else if (this.storageFilter === 'not_in_registry') {
       filtered = filtered.filter(e => !e.in_entity_registry);
+    } else if (this.storageFilter === 'in_state') {
+      filtered = filtered.filter(e => e.in_state_machine);
     } else if (this.storageFilter === 'deleted') {
       filtered = filtered.filter(e => !e.in_entity_registry && !e.in_state_machine);
     }
@@ -635,7 +637,8 @@ class StatisticsOrphanPanel extends HTMLElement {
     const isRegistryFilterActive = this.storageFilter === 'in_registry' && !this.registryStatusFilter;
     const isEnabledActive = this.registryStatusFilter === 'Enabled';
     const isDisabledActive = this.registryStatusFilter === 'Disabled';
-    const isStateFilterActive = this.stateStatusFilter !== null && this.storageFilter === 'all';
+    const isStateMachineFilterActive = this.storageFilter === 'in_state' && !this.stateStatusFilter;
+    const isStateFilterActive = this.stateStatusFilter !== null;
     const isAvailableActive = this.stateStatusFilter === 'Available';
     const isUnavailableActive = this.stateStatusFilter === 'Unavailable';
     const isDeletedActive = this.storageFilter === 'deleted';
@@ -657,9 +660,9 @@ class StatisticsOrphanPanel extends HTMLElement {
             <span class="stats-subtitle-link ${isDisabledActive ? 'active' : ''}" data-filter-type="registry" data-filter-value="Disabled" style="color: ${isDisabledActive ? 'inherit' : 'var(--warning-color, #FF9800)'};">⊘ Disabled: ${(this.storageOverviewSummary.registry_disabled || 0).toLocaleString()}</span>
           </div>
         </div>
-        <div class="stats-card ${(isStateFilterActive || isAvailableActive || isUnavailableActive) ? 'active-filter' : ''}">
+        <div class="stats-card ${(isStateMachineFilterActive || isAvailableActive || isUnavailableActive) ? 'active-filter' : ''}">
           <h2>In State Machine</h2>
-          <div class="stats-value stats-value-link" data-filter-type="basic" data-filter-value="in_state">${(this.storageOverviewSummary.in_state_machine || 0).toLocaleString()}</div>
+          <div class="stats-value stats-value-link ${isStateMachineFilterActive ? 'active' : ''}" data-filter-type="basic" data-filter-value="in_state">${(this.storageOverviewSummary.in_state_machine || 0).toLocaleString()}</div>
           <div class="stats-subtitle">
             <span class="stats-subtitle-link ${isAvailableActive ? 'active' : ''}" data-filter-type="state" data-filter-value="Available" style="color: ${isAvailableActive ? 'inherit' : 'var(--success-color, #4CAF50)'};">✓ Available: ${(this.storageOverviewSummary.state_available || 0).toLocaleString()}</span><br>
             <span class="stats-subtitle-link ${isUnavailableActive ? 'active' : ''}" data-filter-type="state" data-filter-value="Unavailable" style="color: ${isUnavailableActive ? 'inherit' : 'var(--warning-color, #FF9800)'};">⚠ Unavailable: ${(this.storageOverviewSummary.state_unavailable || 0).toLocaleString()}</span>
@@ -672,21 +675,25 @@ class StatisticsOrphanPanel extends HTMLElement {
         </div>
       </div>
       <div class="stats-grid">
-        <div class="stats-card ${isOnlyStatesActive ? 'active-filter' : ''}">
+        <div class="stats-card">
           <h2>In States</h2>
-          <div class="stats-value stats-value-link" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.in_states || 0).toLocaleString()}</div>
+          <div class="stats-value">${(this.storageOverviewSummary.in_states || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">Total entities with state records</div>
         </div>
-        <div class="stats-card ${isOnlyStatsActive ? 'active-filter' : ''}">
+        <div class="stats-card">
           <h2>In Statistics</h2>
-          <div class="stats-value stats-value-link ${isOnlyStatsActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.in_statistics_meta || 0).toLocaleString()}</div>
+          <div class="stats-value">${(this.storageOverviewSummary.in_statistics_meta || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">Total entities with statistics</div>
         </div>
         <div class="stats-card ${isOnlyStatesActive ? 'active-filter' : ''}">
           <h2>Only States</h2>
           <div class="stats-value stats-value-link ${isOnlyStatesActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_states">${(this.storageOverviewSummary.only_in_states || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">In states but not statistics</div>
         </div>
         <div class="stats-card ${isOnlyStatsActive ? 'active-filter' : ''}">
           <h2>Only Statistics</h2>
           <div class="stats-value stats-value-link ${isOnlyStatsActive ? 'active' : ''}" data-filter-type="advanced" data-filter-value="only_stats">${(this.storageOverviewSummary.only_in_statistics || 0).toLocaleString()}</div>
+          <div class="stats-subtitle">In statistics but not states</div>
         </div>
       </div>
     `;
@@ -1951,6 +1958,7 @@ Update</th>
       this.registryStatusFilter = statusValue;
     } else if (statusType === 'state') {
       // Sub-category: Available or Unavailable
+      this.storageFilter = 'in_state';
       this.stateStatusFilter = statusValue;
     } else if (statusType === 'basic') {
       // Main card value
