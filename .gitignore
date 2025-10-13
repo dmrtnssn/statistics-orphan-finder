@@ -22,6 +22,14 @@ Thumbs.db
 # Logs
 *.log
 
+#GIT
+.git
+
 # Claude local configuration (not to be shared)
 CLAUDE.local.md
 .claude/
+
+# Resources
+.resources/
+
+check_hacs_compliance.sh

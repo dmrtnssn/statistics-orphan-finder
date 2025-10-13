@@ -10,6 +10,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from datetime import datetime, timezone
 
 from .const import DOMAIN, CONF_DB_URL, CONF_USERNAME, CONF_PASSWORD
 
@@ -47,6 +49,119 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             self._engine = create_engine(db_url, pool_pre_ping=True)
 
         return self._engine
+
+    def _determine_availability_reason(self, entity_id, registry_entry, state, device_registry):
+        """Determine why an entity is unavailable with user-friendly hint."""
+
+        # Entity is administratively disabled
+        if registry_entry and registry_entry.disabled:
+            reasons = {
+                "user": "Manually disabled by user",
+                "integration": "Disabled by integration",
+                "device": "Disabled because parent device is disabled",
+                "config_entry": "Disabled because integration config is disabled"
+            }
+            return reasons.get(registry_entry.disabled_by, "Disabled")
+
+        # Check device status
+        if registry_entry and registry_entry.device_id:
+            device_entry = device_registry.async_get(registry_entry.device_id)
+            if device_entry and device_entry.disabled:
+                return f"Parent device '{device_entry.name}' is disabled"
+
+        # Check config entry status
+        if registry_entry and registry_entry.config_entry_id:
+            config_entry = self.hass.config_entries.async_get_entry(
+                registry_entry.config_entry_id
+            )
+            if config_entry:
+                platform_name = registry_entry.platform or "integration"
+                if config_entry.state.name == "SETUP_ERROR":
+                    return f"Integration failed to load ({platform_name})"
+                elif config_entry.state.name == "SETUP_RETRY":
+                    return f"Integration retrying setup ({platform_name})"
+                elif config_entry.state.name == "NOT_LOADED":
+                    return f"Integration not loaded ({platform_name})"
+
+        # Check if recently unavailable (likely still loading)
+        if state and state.state in ["unavailable", "unknown"]:
+            now = datetime.now(timezone.utc)
+            duration = (now - state.last_changed).total_seconds()
+
+            if duration < 120:  # Less than 2 minutes
+                return f"Recently unavailable ({int(duration)}s) - may still be loading"
+            elif duration < 3600:  # Less than 1 hour
+                return f"Unavailable for {int(duration/60)} minutes - device likely offline or unreachable"
+            elif duration < 86400:  # Less than 1 day
+                return f"Offline for {int(duration/3600)} hours - device unplugged or unreachable"
+            else:
+                days = int(duration/86400)
+                return f"Offline for {days} day{'s' if days > 1 else ''} - device unplugged or unreachable"
+
+        # Entity doesn't exist in state machine at all
+        if not state:
+            if registry_entry:
+                return "Registered but never loaded - integration may have issues"
+            else:
+                return "Entity has been deleted - no longer exists in Home Assistant"
+
+        return "Unknown reason"
+
+    def _calculate_update_frequency(self, entity_id):
+        """Calculate update frequency from states table."""
+        engine = self._get_engine()
+
+        with engine.connect() as conn:
+            # Get last 50 state updates
+            query = text("""
+                SELECT last_updated_ts
+                FROM states s
+                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
+                WHERE sm.entity_id = :entity_id
+                ORDER BY last_updated_ts DESC
+                LIMIT 50
+            """)
+            result = conn.execute(query, {"entity_id": entity_id})
+            timestamps = [row[0] for row in result]
+
+            if len(timestamps) < 2:
+                return None
+
+            # Calculate intervals between consecutive updates
+            intervals = []
+            for i in range(len(timestamps) - 1):
+                interval = timestamps[i] - timestamps[i+1]
+                intervals.append(interval)
+
+            if not intervals:
+                return None
+
+            avg_interval = sum(intervals) / len(intervals)
+
+            # Count updates in last 24 hours
+            cutoff = datetime.now(timezone.utc).timestamp() - 86400
+            count_24h = sum(1 for ts in timestamps if ts >= cutoff)
+
+            return {
+                'avg_interval_seconds': int(avg_interval),
+                'update_count_24h': count_24h,
+                'frequency_text': self._format_frequency(int(avg_interval))
+            }
+
+    def _format_frequency(self, seconds):
+        """Format update interval as updates per minute."""
+        if seconds == 0:
+            return None
+
+        updates_per_min = 60 / seconds
+
+        # Format with appropriate precision
+        if updates_per_min >= 10:
+            return f"{updates_per_min:.1f}/min"
+        elif updates_per_min >= 1:
+            return f"{updates_per_min:.2f}/min"
+        else:
+            return f"{updates_per_min:.3f}/min"
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch orphaned entities from statistics."""
@@ -564,8 +679,9 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                        last_update > entity_map[entity_id]['last_stats_update']:
                         entity_map[entity_id]['last_stats_update'] = last_update
 
-        # Get entity registry for comparison
+        # Get entity registry and device registry for comparison
         entity_registry = er.async_get(self.hass)
+        device_registry = dr.async_get(self.hass)
 
         # Convert to list format and add registry info
         entities_list = []
@@ -593,6 +709,49 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             else:
                 state_status = "Not Present"
 
+            # Collect additional metadata for entity details
+            platform = registry_entry.platform if registry_entry else None
+            disabled_by = registry_entry.disabled_by if registry_entry else None
+
+            # Get device information
+            device_name = None
+            device_disabled = False
+            if registry_entry and registry_entry.device_id:
+                device_entry = device_registry.async_get(registry_entry.device_id)
+                if device_entry:
+                    device_name = device_entry.name
+                    device_disabled = device_entry.disabled or False
+
+            # Get config entry information
+            config_entry_state = None
+            config_entry_title = None
+            if registry_entry and registry_entry.config_entry_id:
+                config_entry = self.hass.config_entries.async_get_entry(
+                    registry_entry.config_entry_id
+                )
+                if config_entry:
+                    config_entry_state = config_entry.state.name
+                    config_entry_title = config_entry.title
+
+            # Determine availability reason
+            availability_reason = self._determine_availability_reason(
+                entity_id, registry_entry, state, device_registry
+            )
+
+            # Calculate unavailable duration
+            unavailable_duration_seconds = None
+            if state and state.state in ["unavailable", "unknown"]:
+                now = datetime.now(timezone.utc)
+                unavailable_duration_seconds = int((now - state.last_changed).total_seconds())
+
+            # Calculate update frequency (only for entities with states)
+            update_frequency_data = None
+            if info['in_states']:
+                try:
+                    update_frequency_data = self._calculate_update_frequency(entity_id)
+                except Exception as err:
+                    _LOGGER.debug("Could not calculate frequency for %s: %s", entity_id, err)
+
             entities_list.append({
                 'entity_id': entity_id,
                 'in_entity_registry': in_registry,
@@ -609,6 +768,18 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 'stats_long_count': info['stats_long_count'],
                 'last_state_update': info['last_state_update'],
                 'last_stats_update': info['last_stats_update'],
+                # Additional metadata for entity details
+                'platform': platform,
+                'disabled_by': disabled_by,
+                'device_name': device_name,
+                'device_disabled': device_disabled,
+                'config_entry_state': config_entry_state,
+                'config_entry_title': config_entry_title,
+                'availability_reason': availability_reason,
+                'unavailable_duration_seconds': unavailable_duration_seconds,
+                # Update frequency data
+                'update_frequency': update_frequency_data['frequency_text'] if update_frequency_data else None,
+                'update_count_24h': update_frequency_data['update_count_24h'] if update_frequency_data else None,
             })
 
         # Generate summary statistics

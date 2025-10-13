@@ -358,6 +358,123 @@ class StatisticsOrphanPanel extends HTMLElement {
     modal.style.display = 'none';
   }
 
+  showEntityDetails(entity) {
+    const modal = this.shadowRoot.getElementById('entity-details-modal');
+
+    // Set entity ID in header
+    this.shadowRoot.getElementById('entity-details-title').textContent = entity.entity_id;
+
+    // Current Status
+    const statusDisplay = this.shadowRoot.getElementById('entity-status-display');
+    let statusHtml = '';
+    if (entity.registry_status === 'Enabled') {
+      statusHtml += '<span class="status-icon-success">✓</span> Registered and Enabled';
+    } else if (entity.registry_status === 'Disabled') {
+      statusHtml += '<span class="status-icon-warning">⊘</span> Registered but Disabled';
+    } else {
+      statusHtml += '<span class="status-icon-error">✕</span> Not in Registry';
+    }
+    statusHtml += ' | ';
+    if (entity.state_status === 'Available') {
+      statusHtml += '<span class="status-icon-success">✓</span> Available';
+    } else if (entity.state_status === 'Unavailable') {
+      statusHtml += '<span class="status-icon-warning">⚠</span> Unavailable';
+    } else {
+      statusHtml += '<span class="status-icon-error">○</span> Not in State Machine';
+    }
+    statusDisplay.innerHTML = statusHtml;
+
+    // Availability Reason (show if unavailable or not present)
+    const availabilitySection = this.shadowRoot.getElementById('availability-section');
+    const availabilityText = this.shadowRoot.getElementById('availability-reason-text');
+    if (entity.availability_reason && entity.state_status !== 'Available') {
+      availabilityText.textContent = entity.availability_reason;
+      availabilitySection.style.display = 'block';
+    } else {
+      availabilitySection.style.display = 'none';
+    }
+
+    // Platform & Integration
+    this.shadowRoot.getElementById('detail-platform').textContent = entity.platform || 'N/A';
+    this.shadowRoot.getElementById('detail-integration').textContent = entity.config_entry_title || 'N/A';
+    this.shadowRoot.getElementById('detail-config-state').textContent = entity.config_entry_state || 'N/A';
+
+    // Device Information (conditionally show)
+    const deviceSection = this.shadowRoot.getElementById('device-section');
+    if (entity.device_name) {
+      this.shadowRoot.getElementById('detail-device-name').textContent = entity.device_name;
+      this.shadowRoot.getElementById('detail-device-status').textContent = entity.device_disabled ? 'Disabled' : 'Enabled';
+      deviceSection.style.display = 'block';
+    } else {
+      deviceSection.style.display = 'none';
+    }
+
+    // Database Statistics
+    this.shadowRoot.getElementById('detail-states-meta').innerHTML = entity.in_states_meta ?
+      '<span class="status-icon-success">✓</span> Present' : '<span class="status-icon-error">○</span> Not Present';
+    this.shadowRoot.getElementById('detail-states-count').innerHTML = entity.in_states ?
+      `<span class="status-icon-success">✓</span> ${(entity.states_count || 0).toLocaleString()} records` :
+      '<span class="status-icon-error">○</span> Not Present';
+    this.shadowRoot.getElementById('detail-stats-meta').innerHTML = entity.in_statistics_meta ?
+      '<span class="status-icon-success">✓</span> Present' : '<span class="status-icon-error">○</span> Not Present';
+    this.shadowRoot.getElementById('detail-stats-short').innerHTML = entity.in_statistics_short_term ?
+      `<span class="status-icon-success">✓</span> ${(entity.stats_short_count || 0).toLocaleString()} records` :
+      '<span class="status-icon-error">○</span> Not Present';
+    this.shadowRoot.getElementById('detail-stats-long').innerHTML = entity.in_statistics_long_term ?
+      `<span class="status-icon-success">✓</span> ${(entity.stats_long_count || 0).toLocaleString()} records` :
+      '<span class="status-icon-error">○</span> Not Present';
+
+    // Last Activity
+    this.shadowRoot.getElementById('detail-last-state').textContent = entity.last_state_update || 'Never';
+    this.shadowRoot.getElementById('detail-last-stats').textContent = entity.last_stats_update || 'Never';
+
+    // Unavailable Duration (conditionally show)
+    const unavailableDurationRow = this.shadowRoot.getElementById('unavailable-duration-row');
+    if (entity.unavailable_duration_seconds && entity.unavailable_duration_seconds > 0) {
+      const duration = entity.unavailable_duration_seconds;
+      let durationText = '';
+      if (duration < 60) {
+        durationText = `${duration} seconds`;
+      } else if (duration < 3600) {
+        durationText = `${Math.floor(duration / 60)} minutes`;
+      } else if (duration < 86400) {
+        durationText = `${Math.floor(duration / 3600)} hours`;
+      } else {
+        durationText = `${Math.floor(duration / 86400)} days`;
+      }
+      this.shadowRoot.getElementById('detail-unavailable-duration').textContent = durationText;
+      unavailableDurationRow.style.display = 'flex';
+    } else {
+      unavailableDurationRow.style.display = 'none';
+    }
+
+    // Update Frequency (only show if available)
+    const updateFrequencyRow = this.shadowRoot.getElementById('update-frequency-row');
+    if (entity.update_frequency) {
+      this.shadowRoot.getElementById('detail-update-frequency').textContent = entity.update_frequency;
+      updateFrequencyRow.style.display = 'flex';
+    } else {
+      updateFrequencyRow.style.display = 'none';
+    }
+
+    // Registry Details (conditionally show)
+    const registryDetailsSection = this.shadowRoot.getElementById('registry-details-section');
+    if (entity.disabled_by) {
+      this.shadowRoot.getElementById('detail-disabled-by').textContent = entity.disabled_by;
+      registryDetailsSection.style.display = 'block';
+    } else {
+      registryDetailsSection.style.display = 'none';
+    }
+
+    // Show modal
+    modal.classList.add('show');
+  }
+
+  closeEntityDetailsModal() {
+    const modal = this.shadowRoot.getElementById('entity-details-modal');
+    modal.classList.remove('show');
+  }
+
   showMoreInfo(entityId) {
     // Fire the hass-more-info event to show Home Assistant's entity popup dialog
     const event = new CustomEvent('hass-more-info', {
@@ -728,6 +845,11 @@ class StatisticsOrphanPanel extends HTMLElement {
           aVal = a.entity_id.toLowerCase();
           bVal = b.entity_id.toLowerCase();
           result = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else if (column === 'update_frequency') {
+          // Numeric comparison for frequency (extract number from "X.X/min" format)
+          aVal = a.update_frequency ? parseFloat(a.update_frequency.split('/')[0]) : 0;
+          bVal = b.update_frequency ? parseFloat(b.update_frequency.split('/')[0]) : 0;
+          result = aVal - bVal;
         } else if (column === 'states_count' || column === 'stats_short_count' || column === 'stats_long_count') {
           // Numeric comparison for counts
           aVal = a[column] || 0;
@@ -765,7 +887,7 @@ class StatisticsOrphanPanel extends HTMLElement {
     });
 
     if (sortedData.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="14" style="text-align: center;">No data available</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="16" style="text-align: center;">No data available</td></tr>';
     } else {
       sortedData.forEach(entity => {
         const row = document.createElement('tr');
@@ -802,6 +924,7 @@ class StatisticsOrphanPanel extends HTMLElement {
           <td class="group-border-left" style="text-align: center;">${check(entity.in_states_meta)}</td>
           <td style="text-align: center;">${check(entity.in_states)}</td>
           <td style="text-align: right;">${(entity.states_count || 0).toLocaleString()}</td>
+          <td style="text-align: right; font-size: 11px;">${entity.update_frequency || ''}</td>
           <td style="text-align: center; font-size: 11px;">${entity.last_state_update || ''}</td>
           <td class="group-border-left" style="text-align: center;">${check(entity.in_statistics_meta)}</td>
           <td style="text-align: center;">${check(entity.in_statistics_short_term)}</td>
@@ -809,6 +932,15 @@ class StatisticsOrphanPanel extends HTMLElement {
           <td style="text-align: right;">${(entity.stats_short_count || 0).toLocaleString()}</td>
           <td style="text-align: right;">${(entity.stats_long_count || 0).toLocaleString()}</td>
           <td style="text-align: center; font-size: 11px;">${entity.last_stats_update || ''}</td>
+          <td style="text-align: center;">
+            <button class="info-icon-btn" data-entity='${JSON.stringify(entity).replace(/'/g, "&apos;")}' title="Show details">
+              <svg viewBox="0 0 90 90" width="18" height="18" fill="currentColor">
+                <circle cx="45" cy="45" r="45"/>
+                <path d="M54.717 63.299c-.264-.074-.566-.011-.769.164-5.643 5.009-7.288 5.625-7.734 5.657-.056.004-.18-.048-.344-.211-.206-.201-.317-.465-.342-.807-.172-2.383 1.447-9.741 4.812-21.87 2.826-10.143 3.089-12.2 3.041-12.863-.071-.99-.563-1.759-1.46-2.287-.854-.501-2.025-.701-3.477-.596-2.448.177-5.362 1.206-8.661 3.06-.943.531-1.926 1.166-2.92 1.886-2.622 1.9-4.06 4.79-3.848 7.729.017.241.206.446.478.522.273.075.578.005.773-.177 2.602-2.419 4.335-3.902 5.153-4.409.873-.54 1.651-.837 2.315-.885.245-.018.368-.027.397.38.039.541-.047 1.188-.255 1.919-4.927 16.991-7.17 27.343-6.86 31.647.106 1.463.672 2.6 1.684 3.382 1.024.793 2.363 1.137 3.976 1.02 1.757-.127 3.866-.902 6.446-2.369 1.241-.706 2.849-1.847 4.78-3.391 2.277-1.822 3.475-4.366 3.287-6.98-.017-.241-.201-.445-.471-.523z" fill="white"/>
+                <circle cx="50.831" cy="19.591" r="6.171" fill="white"/>
+              </svg>
+            </button>
+          </td>
         `;
         tableBody.appendChild(row);
       });
@@ -818,6 +950,14 @@ class StatisticsOrphanPanel extends HTMLElement {
         link.addEventListener('click', (e) => {
           const entityId = e.target.dataset.entityId;
           this.showMoreInfo(entityId);
+        });
+      });
+
+      // Add event listeners to all info buttons
+      this.shadowRoot.querySelectorAll('.info-icon-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const entityData = JSON.parse(e.currentTarget.dataset.entity.replace(/&apos;/g, "'"));
+          this.showEntityDetails(entityData);
         });
       });
     }
@@ -838,6 +978,7 @@ class StatisticsOrphanPanel extends HTMLElement {
       'storage-header-stats-short',
       'storage-header-stats-long',
       'storage-header-states-count',
+      'storage-header-update-frequency',
       'storage-header-stats-short-count',
       'storage-header-stats-long-count',
       'storage-header-last-state-update',
@@ -867,6 +1008,7 @@ class StatisticsOrphanPanel extends HTMLElement {
       'in_statistics_short_term': 'storage-header-stats-short',
       'in_statistics_long_term': 'storage-header-stats-long',
       'states_count': 'storage-header-states-count',
+      'update_frequency': 'storage-header-update-frequency',
       'stats_short_count': 'storage-header-stats-short-count',
       'stats_long_count': 'storage-header-stats-long-count',
       'last_state_update': 'storage-header-last-state-update',
@@ -1600,6 +1742,184 @@ class StatisticsOrphanPanel extends HTMLElement {
         .modal-btn-secondary:hover {
           background: var(--divider-color);
         }
+
+        /* Info Icon Button */
+        .info-icon-btn {
+          background: none;
+          border: none;
+          color: var(--secondary-text-color);
+          cursor: pointer;
+          padding: 6px;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+
+        .info-icon-btn svg {
+          width: 18px;
+          height: 18px;
+          fill: currentColor;
+        }
+
+        .info-icon-btn:hover {
+          background: var(--secondary-background-color);
+          color: var(--primary-color);
+          transform: scale(1.15);
+        }
+
+        /* Color-coded Status Icons */
+        .status-icon-success {
+          color: var(--success-color, #4CAF50);
+          font-weight: bold;
+        }
+
+        .status-icon-error {
+          color: var(--error-color, #F44336);
+          font-weight: bold;
+        }
+
+        .status-icon-warning {
+          color: var(--warning-color, #FF9800);
+          font-weight: bold;
+        }
+
+        /* Entity Details Modal (HA-style) */
+        .entity-details-modal {
+          display: none;
+          position: fixed;
+          z-index: 1001;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(2px);
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.2s ease-in-out;
+        }
+
+        .entity-details-modal.show {
+          display: flex;
+        }
+
+        .entity-details-content {
+          background: var(--card-background-color);
+          border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          max-width: 600px;
+          width: 90%;
+          max-height: 85vh;
+          overflow: hidden;
+          animation: slideUp 0.3s ease-out;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .entity-details-header {
+          flex-shrink: 0;
+          background: var(--card-background-color);
+          padding: 20px 24px;
+          border-bottom: 1px solid var(--divider-color);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .entity-details-header h2 {
+          font-size: 16px;
+          font-weight: 500;
+          margin: 0;
+          flex: 1;
+          color: var(--primary-text-color);
+          font-family: monospace;
+          word-break: break-word;
+        }
+
+        .entity-details-body {
+          padding: 24px;
+          overflow-y: auto;
+          flex: 1;
+        }
+
+        .detail-section {
+          margin-bottom: 24px;
+          padding-bottom: 24px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+
+        .detail-section:last-child {
+          border-bottom: none;
+          margin-bottom: 0;
+          padding-bottom: 0;
+        }
+
+        .detail-section-title {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--secondary-text-color);
+          margin-bottom: 12px;
+        }
+
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          color: var(--primary-text-color);
+        }
+
+        .detail-label {
+          color: var(--secondary-text-color);
+          font-weight: 500;
+        }
+
+        .detail-value {
+          font-family: monospace;
+          text-align: right;
+          word-break: break-word;
+          max-width: 60%;
+        }
+
+        .status-display {
+          text-align: center;
+          padding: 16px;
+          border-radius: 8px;
+          background: var(--secondary-background-color);
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--primary-text-color);
+        }
+
+        .availability-reason-box {
+          background: var(--secondary-background-color);
+          padding: 16px;
+          border-radius: 8px;
+          border-left: 4px solid var(--warning-color, #FF9800);
+          color: var(--primary-text-color);
+          line-height: 1.6;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
       </style>
 
       <div class="header">
@@ -1742,6 +2062,7 @@ MACHINE</th>
 Meta</th>
                 <th id="storage-header-states" style="text-align: center; font-size: 10px;">States</th>
                 <th id="storage-header-states-count" style="text-align: right; font-size: 10px;">States #</th>
+                <th id="storage-header-update-frequency" style="text-align: right; font-size: 10px;">Frequency</th>
                 <th id="storage-header-last-state-update" style="text-align: center; font-size: 10px;">Last State
 Update</th>
                 <th id="storage-header-stats-meta" class="group-border-left" style="text-align: center; font-size: 10px;">Stats
@@ -1754,11 +2075,12 @@ Long</th>
                 <th id="storage-header-stats-long-count" style="text-align: right; font-size: 10px;">Long #</th>
                 <th id="storage-header-last-stats-update" style="text-align: center; font-size: 10px;">Last Stats
 Update</th>
+                <th style="text-align: center; font-size: 10px; width: 50px;">ACTIONS</th>
               </tr>
             </thead>
             <tbody id="storage-table-body">
               <tr>
-                <td colspan="14" style="text-align: center;">No data loaded</td>
+                <td colspan="16" style="text-align: center;">No data loaded</td>
               </tr>
             </tbody>
           </table>
@@ -1783,6 +2105,114 @@ Update</th>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" id="copy-sql-btn">Copy to Clipboard</button>
             <button class="modal-btn modal-btn-secondary" id="modal-cancel-btn">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entity Details Modal (HA-style) -->
+      <div id="entity-details-modal" class="entity-details-modal">
+        <div class="entity-details-content">
+          <div class="entity-details-header">
+            <h2 id="entity-details-title"></h2>
+            <button class="modal-close" id="entity-details-close-btn">&times;</button>
+          </div>
+          <div class="entity-details-body">
+            <!-- Current Status Section -->
+            <div class="detail-section">
+              <div class="detail-section-title">Current Status</div>
+              <div class="status-display" id="entity-status-display"></div>
+            </div>
+
+            <!-- Availability Reason Section (conditionally shown) -->
+            <div class="detail-section" id="availability-section" style="display: none;">
+              <div class="detail-section-title">Why is this entity unavailable?</div>
+              <div class="availability-reason-box" id="availability-reason-text"></div>
+            </div>
+
+            <!-- Platform & Integration Section -->
+            <div class="detail-section" id="platform-section">
+              <div class="detail-section-title">Platform & Integration</div>
+              <div class="detail-row">
+                <span class="detail-label">Platform:</span>
+                <span class="detail-value" id="detail-platform">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Integration:</span>
+                <span class="detail-value" id="detail-integration">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Config State:</span>
+                <span class="detail-value" id="detail-config-state">-</span>
+              </div>
+            </div>
+
+            <!-- Device Information Section (conditionally shown) -->
+            <div class="detail-section" id="device-section" style="display: none;">
+              <div class="detail-section-title">Device Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Device Name:</span>
+                <span class="detail-value" id="detail-device-name">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Device Status:</span>
+                <span class="detail-value" id="detail-device-status">-</span>
+              </div>
+            </div>
+
+            <!-- Database Statistics Section -->
+            <div class="detail-section">
+              <div class="detail-section-title">Database Information</div>
+              <div class="detail-row">
+                <span class="detail-label">States Meta:</span>
+                <span class="detail-value" id="detail-states-meta">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">States Records:</span>
+                <span class="detail-value" id="detail-states-count">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Statistics Meta:</span>
+                <span class="detail-value" id="detail-stats-meta">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Short-term Records:</span>
+                <span class="detail-value" id="detail-stats-short">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Long-term Records:</span>
+                <span class="detail-value" id="detail-stats-long">-</span>
+              </div>
+            </div>
+
+            <!-- Last Activity Section -->
+            <div class="detail-section">
+              <div class="detail-section-title">Last Activity</div>
+              <div class="detail-row">
+                <span class="detail-label">Last State Update:</span>
+                <span class="detail-value" id="detail-last-state">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Last Statistics Update:</span>
+                <span class="detail-value" id="detail-last-stats">-</span>
+              </div>
+              <div class="detail-row" id="unavailable-duration-row" style="display: none;">
+                <span class="detail-label">Unavailable Duration:</span>
+                <span class="detail-value" id="detail-unavailable-duration">-</span>
+              </div>
+              <div class="detail-row" id="update-frequency-row" style="display: none;">
+                <span class="detail-label">Update Frequency:</span>
+                <span class="detail-value" id="detail-update-frequency">-</span>
+              </div>
+            </div>
+
+            <!-- Registry Details Section (conditionally shown) -->
+            <div class="detail-section" id="registry-details-section" style="display: none;">
+              <div class="detail-section-title">Registry Details</div>
+              <div class="detail-row">
+                <span class="detail-label">Disabled By:</span>
+                <span class="detail-value" id="detail-disabled-by">-</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1841,6 +2271,26 @@ Update</th>
       }
     });
 
+    // Entity Details Modal event listeners
+    this.shadowRoot.getElementById('entity-details-close-btn').addEventListener('click', () => {
+      this.closeEntityDetailsModal();
+    });
+
+    // Close entity details modal when clicking on backdrop
+    this.shadowRoot.getElementById('entity-details-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'entity-details-modal') {
+        this.closeEntityDetailsModal();
+      }
+    });
+
+    // Close modals on ESC key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeDeleteModal();
+        this.closeEntityDetailsModal();
+      }
+    });
+
     // Tab navigation
     this.shadowRoot.getElementById('tab-orphans').addEventListener('click', () => {
       this.switchView('orphans');
@@ -1885,6 +2335,10 @@ Update</th>
 
     this.shadowRoot.getElementById('storage-header-states-count').addEventListener('click', (e) => {
       this.sortStorageData('states_count', e.shiftKey);
+    });
+
+    this.shadowRoot.getElementById('storage-header-update-frequency').addEventListener('click', (e) => {
+      this.sortStorageData('update_frequency', e.shiftKey);
     });
 
     this.shadowRoot.getElementById('storage-header-stats-short-count').addEventListener('click', (e) => {
