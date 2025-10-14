@@ -4,7 +4,7 @@
   "documentation": "https://github.com/dmrtnssn/statistics-orphan-finder",
   "codeowners": ["@dmrtnssn"],
   "requirements": [],
-  "version": "1.0.0-beta",
+  "version": "1.0.1-beta",
   "iot_class": "local_polling",
   "config_flow": true,
   "issue_tracker": "https://github.com/dmrtnssn/statistics-orphan-finder/issues"
