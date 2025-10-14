@@ -394,6 +394,16 @@ class StatisticsOrphanPanel extends HTMLElement {
       availabilitySection.style.display = 'none';
     }
 
+    // Statistics Eligibility (show if entity is not in statistics and has eligibility reason)
+    const statisticsEligibilitySection = this.shadowRoot.getElementById('statistics-eligibility-section');
+    const statisticsEligibilityText = this.shadowRoot.getElementById('statistics-eligibility-text');
+    if (entity.statistics_eligibility_reason && !entity.in_statistics_meta) {
+      statisticsEligibilityText.textContent = entity.statistics_eligibility_reason;
+      statisticsEligibilitySection.style.display = 'block';
+    } else {
+      statisticsEligibilitySection.style.display = 'none';
+    }
+
     // Platform & Integration
     this.shadowRoot.getElementById('detail-platform').textContent = entity.platform || 'N/A';
     this.shadowRoot.getElementById('detail-integration').textContent = entity.config_entry_title || 'N/A';
@@ -448,13 +458,13 @@ class StatisticsOrphanPanel extends HTMLElement {
       unavailableDurationRow.style.display = 'none';
     }
 
-    // Update Frequency (only show if available)
-    const updateFrequencyRow = this.shadowRoot.getElementById('update-frequency-row');
-    if (entity.update_frequency) {
-      this.shadowRoot.getElementById('detail-update-frequency').textContent = entity.update_frequency;
-      updateFrequencyRow.style.display = 'flex';
+    // Message Interval (only show if available)
+    const updateIntervalRow = this.shadowRoot.getElementById('update-interval-row');
+    if (entity.update_interval) {
+      this.shadowRoot.getElementById('detail-update-interval').textContent = entity.update_interval;
+      updateIntervalRow.style.display = 'flex';
     } else {
-      updateFrequencyRow.style.display = 'none';
+      updateIntervalRow.style.display = 'none';
     }
 
     // Registry Details (conditionally show)
@@ -845,11 +855,21 @@ class StatisticsOrphanPanel extends HTMLElement {
           aVal = a.entity_id.toLowerCase();
           bVal = b.entity_id.toLowerCase();
           result = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-        } else if (column === 'update_frequency') {
-          // Numeric comparison for frequency (extract number from "X.X/min" format)
-          aVal = a.update_frequency ? parseFloat(a.update_frequency.split('/')[0]) : 0;
-          bVal = b.update_frequency ? parseFloat(b.update_frequency.split('/')[0]) : 0;
-          result = aVal - bVal;
+        } else if (column === 'update_interval') {
+          // Numeric comparison for interval (use seconds value directly)
+          // Missing values should always sort to the end
+          aVal = a.update_interval_seconds;
+          bVal = b.update_interval_seconds;
+
+          if (!aVal && !bVal) {
+            result = 0;  // Both missing, equal
+          } else if (!aVal) {
+            result = 1;  // a is missing, should come after b
+          } else if (!bVal) {
+            result = -1;  // b is missing, a should come before b
+          } else {
+            result = aVal - bVal;  // Both have values, normal comparison
+          }
         } else if (column === 'states_count' || column === 'stats_short_count' || column === 'stats_long_count') {
           // Numeric comparison for counts
           aVal = a[column] || 0;
@@ -924,7 +944,7 @@ class StatisticsOrphanPanel extends HTMLElement {
           <td class="group-border-left" style="text-align: center;">${check(entity.in_states_meta)}</td>
           <td style="text-align: center;">${check(entity.in_states)}</td>
           <td style="text-align: right;">${(entity.states_count || 0).toLocaleString()}</td>
-          <td style="text-align: right; font-size: 11px;">${entity.update_frequency || ''}</td>
+          <td style="text-align: right; font-size: 11px;">${entity.update_interval || ''}</td>
           <td style="text-align: center; font-size: 11px;">${entity.last_state_update || ''}</td>
           <td class="group-border-left" style="text-align: center;">${check(entity.in_statistics_meta)}</td>
           <td style="text-align: center;">${check(entity.in_statistics_short_term)}</td>
@@ -978,7 +998,7 @@ class StatisticsOrphanPanel extends HTMLElement {
       'storage-header-stats-short',
       'storage-header-stats-long',
       'storage-header-states-count',
-      'storage-header-update-frequency',
+      'storage-header-update-interval',
       'storage-header-stats-short-count',
       'storage-header-stats-long-count',
       'storage-header-last-state-update',
@@ -1008,7 +1028,7 @@ class StatisticsOrphanPanel extends HTMLElement {
       'in_statistics_short_term': 'storage-header-stats-short',
       'in_statistics_long_term': 'storage-header-stats-long',
       'states_count': 'storage-header-states-count',
-      'update_frequency': 'storage-header-update-frequency',
+      'update_interval': 'storage-header-update-interval',
       'stats_short_count': 'storage-header-stats-short-count',
       'stats_long_count': 'storage-header-stats-long-count',
       'last_state_update': 'storage-header-last-state-update',
@@ -1435,7 +1455,6 @@ class StatisticsOrphanPanel extends HTMLElement {
 
         .search-filter-container {
           display: flex;
-          gap: 16px;
           margin-bottom: 16px;
           align-items: center;
           flex-wrap: wrap;
@@ -1444,6 +1463,7 @@ class StatisticsOrphanPanel extends HTMLElement {
         .search-box {
           flex: 1;
           min-width: 250px;
+          margin-right: 56px;
         }
 
         .search-box input {
@@ -1464,6 +1484,7 @@ class StatisticsOrphanPanel extends HTMLElement {
 
         .clear-filters-btn {
           padding: 10px 20px;
+          margin-right: 16px;
           background: var(--secondary-background-color);
           color: var(--primary-text-color);
           border: 2px solid var(--divider-color);
@@ -2062,7 +2083,8 @@ MACHINE</th>
 Meta</th>
                 <th id="storage-header-states" style="text-align: center; font-size: 10px;">States</th>
                 <th id="storage-header-states-count" style="text-align: right; font-size: 10px;">States #</th>
-                <th id="storage-header-update-frequency" style="text-align: right; font-size: 10px;">Frequency</th>
+                <th id="storage-header-update-interval" style="text-align: right; font-size: 10px;">Message
+Interval</th>
                 <th id="storage-header-last-state-update" style="text-align: center; font-size: 10px;">Last State
 Update</th>
                 <th id="storage-header-stats-meta" class="group-border-left" style="text-align: center; font-size: 10px;">Stats
@@ -2127,6 +2149,12 @@ Update</th>
             <div class="detail-section" id="availability-section" style="display: none;">
               <div class="detail-section-title">Why is this entity unavailable?</div>
               <div class="availability-reason-box" id="availability-reason-text"></div>
+            </div>
+
+            <!-- Statistics Eligibility Section (conditionally shown) -->
+            <div class="detail-section" id="statistics-eligibility-section" style="display: none;">
+              <div class="detail-section-title">Why isn't this in statistics?</div>
+              <div class="availability-reason-box" id="statistics-eligibility-text"></div>
             </div>
 
             <!-- Platform & Integration Section -->
@@ -2199,9 +2227,9 @@ Update</th>
                 <span class="detail-label">Unavailable Duration:</span>
                 <span class="detail-value" id="detail-unavailable-duration">-</span>
               </div>
-              <div class="detail-row" id="update-frequency-row" style="display: none;">
-                <span class="detail-label">Update Frequency:</span>
-                <span class="detail-value" id="detail-update-frequency">-</span>
+              <div class="detail-row" id="update-interval-row" style="display: none;">
+                <span class="detail-label">Message Interval:</span>
+                <span class="detail-value" id="detail-update-interval">-</span>
               </div>
             </div>
 
@@ -2337,8 +2365,8 @@ Update</th>
       this.sortStorageData('states_count', e.shiftKey);
     });
 
-    this.shadowRoot.getElementById('storage-header-update-frequency').addEventListener('click', (e) => {
-      this.sortStorageData('update_frequency', e.shiftKey);
+    this.shadowRoot.getElementById('storage-header-update-interval').addEventListener('click', (e) => {
+      this.sortStorageData('update_interval', e.shiftKey);
     });
 
     this.shadowRoot.getElementById('storage-header-stats-short-count').addEventListener('click', (e) => {

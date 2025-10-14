@@ -107,6 +107,50 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
         return "Unknown reason"
 
+    def _determine_statistics_eligibility(self, entity_id, registry_entry, state):
+        """Determine why an entity is not eligible for statistics with user-friendly explanation."""
+
+        # If entity is already in statistics, no need to check eligibility
+        # (This check should be done by the caller before calling this method)
+
+        # Check if entity is deleted or not registered
+        if not registry_entry:
+            return "Entity has been deleted from Home Assistant"
+
+        # Check if entity is disabled
+        if registry_entry.disabled:
+            return "Entity is disabled - statistics are not recorded for disabled entities"
+
+        # Check if entity has no state
+        if not state:
+            return "Entity has no state - it may not be loaded or never provided a state"
+
+        # Check if entity state is unavailable or unknown
+        if state.state in ["unavailable", "unknown"]:
+            return "Entity is currently unavailable - statistics require valid state values"
+
+        # Get state attributes
+        attributes = state.attributes or {}
+
+        # Check for state_class attribute (required for statistics)
+        state_class = attributes.get("state_class")
+        if not state_class:
+            return "Missing 'state_class' attribute - entities need state_class (measurement, total, or total_increasing) to be recorded in statistics"
+
+        # Check for unit_of_measurement (required for statistics)
+        unit = attributes.get("unit_of_measurement")
+        if not unit:
+            return "Missing 'unit_of_measurement' attribute - statistics require a unit of measurement"
+
+        # Check if state value is numeric
+        try:
+            float(state.state)
+        except (ValueError, TypeError):
+            return f"State value '{state.state}' is not numeric - statistics only work with numeric values"
+
+        # If all checks pass, entity should be eligible
+        return "Entity appears eligible for statistics - it may take time to appear, or check recorder configuration"
+
     def _calculate_update_frequency(self, entity_id):
         """Calculate update frequency from states table."""
         engine = self._get_engine()
@@ -142,26 +186,36 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             cutoff = datetime.now(timezone.utc).timestamp() - 86400
             count_24h = sum(1 for ts in timestamps if ts >= cutoff)
 
+            interval_seconds = int(avg_interval)
             return {
-                'avg_interval_seconds': int(avg_interval),
+                'interval_seconds': interval_seconds,
                 'update_count_24h': count_24h,
-                'frequency_text': self._format_frequency(int(avg_interval))
+                'interval_text': self._format_interval(interval_seconds)
             }
 
-    def _format_frequency(self, seconds):
-        """Format update interval as updates per minute."""
-        if seconds == 0:
+    def _format_interval(self, seconds):
+        """Format update interval in human-readable format."""
+        if seconds == 0 or seconds is None:
             return None
 
-        updates_per_min = 60 / seconds
-
-        # Format with appropriate precision
-        if updates_per_min >= 10:
-            return f"{updates_per_min:.1f}/min"
-        elif updates_per_min >= 1:
-            return f"{updates_per_min:.2f}/min"
+        # Format based on duration
+        if seconds < 60:
+            # Less than 60 seconds: show in seconds
+            return f"{seconds}s"
+        elif seconds < 3600:
+            # Between 60 and 3599 seconds: show in minutes
+            minutes = seconds / 60
+            if minutes >= 10:
+                return f"{minutes:.1f}min"
+            else:
+                return f"{minutes:.2f}min"
         else:
-            return f"{updates_per_min:.3f}/min"
+            # 3600 seconds or more: show in hours
+            hours = seconds / 3600
+            if hours >= 10:
+                return f"{hours:.1f}h"
+            else:
+                return f"{hours:.2f}h"
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch orphaned entities from statistics."""
@@ -752,6 +806,17 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 except Exception as err:
                     _LOGGER.debug("Could not calculate frequency for %s: %s", entity_id, err)
 
+            # Determine statistics eligibility (only for entities NOT in statistics)
+            statistics_eligibility_reason = None
+            if not info['in_statistics_meta']:
+                try:
+                    statistics_eligibility_reason = self._determine_statistics_eligibility(
+                        entity_id, registry_entry, state
+                    )
+                except Exception as err:
+                    _LOGGER.debug("Could not determine statistics eligibility for %s: %s", entity_id, err)
+                    statistics_eligibility_reason = "Unable to determine eligibility"
+
             entities_list.append({
                 'entity_id': entity_id,
                 'in_entity_registry': in_registry,
@@ -777,9 +842,12 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 'config_entry_title': config_entry_title,
                 'availability_reason': availability_reason,
                 'unavailable_duration_seconds': unavailable_duration_seconds,
-                # Update frequency data
-                'update_frequency': update_frequency_data['frequency_text'] if update_frequency_data else None,
+                # Update interval data
+                'update_interval': update_frequency_data['interval_text'] if update_frequency_data else None,
+                'update_interval_seconds': update_frequency_data['interval_seconds'] if update_frequency_data else None,
                 'update_count_24h': update_frequency_data['update_count_24h'] if update_frequency_data else None,
+                # Statistics eligibility
+                'statistics_eligibility_reason': statistics_eligibility_reason,
             })
 
         # Generate summary statistics
