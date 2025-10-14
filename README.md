@@ -4,7 +4,7 @@
 
 A Home Assistant custom component that helps you identify and manage orphaned statistics entities in your database. Over time, as you remove devices or entities, their historical statistics data can remain in the database, consuming valuable storage space. This integration helps you find and clean up these orphaned entries.
 
-> **Note**: HACS support is planned for future releases. Currently, manual installation is required.
+> **Note**: Developed for personal use, this tool is shared as-is. Use it at your own risk.
 
 ## Features
 
@@ -47,6 +47,10 @@ The integration adds a new panel to your Home Assistant sidebar with two main ta
 
 ## Installation
 
+### HACS
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=dmrtnssn&repository=https%3A%2F%2Fgithub.com%2Fdmrtnssn%2Fstatistics-orphan-finder)
+
+(As always, you should be careful with software which lets you pull random code from the Internet and run it)
 ### Manual Installation
 
 1. Download the latest release from the [GitHub releases page](https://github.com/dmrtnssn/statistics-orphan-finder/releases)
