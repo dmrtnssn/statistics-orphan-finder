@@ -48,7 +48,14 @@ The integration adds a new panel to your Home Assistant sidebar with two main ta
 ## Installation
 
 ### HACS
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=dmrtnssn&repository=https%3A%2F%2Fgithub.com%2Fdmrtnssn%2Fstatistics-orphan-finder)
+- Add this repo as a "Custom repository" with type "Integration"
+   - Click HACS in your Home Assistant
+   - Click Integrations
+   - Click the 3 dots in the top right corner and select "Custom Repositories"
+   - Add the URL to this GitHub repository and category "Integration"
+- Click "Install" in the new "OpenPlantbook" card in HACS.
+- Wait for install to complete
+- Restart Home Assistant
 
 (As always, you should be careful with software which lets you pull random code from the Internet and run it)
 ### Manual Installation
