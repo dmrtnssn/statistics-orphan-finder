@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Statistics Orphan Finder V2",
+        "description": "Configure database connection for Statistics Orphan Finder V2 (Lit + TypeScript version)",
+        "data": {
+          "db_url": "Database URL",
+          "username": "Username (optional)",
+          "password": "Password (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to database. Check your connection settings.",
+      "unknown": "An unknown error occurred."
+    }
+  }
+}

@@ -1,0 +1,228 @@
+# Statistics Orphan Finder V2
+
+Complete rewrite of Statistics Orphan Finder using **Lit + TypeScript** for better maintainability and proper architecture.
+
+## What's New in V2
+
+- ✅ **Lit 3.x** - Modern web components with reactive properties
+- ✅ **TypeScript** - Full type safety and better IDE support
+- ✅ **Modular architecture** - Clean separation of concerns
+- ✅ **Reusable components** - EntityTable used in both views
+- ✅ **Horizontal scroll** - Table width problem solved architecturally
+- ✅ **Better performance** - Only updates changed DOM nodes
+- ✅ **Same features** - 100% feature parity with V1
+
+## Project Structure
+
+```
+statistics_orphan_finder_v2/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── entity-table.ts
+│   │   ├── filter-bar.ts
+│   │   ├── summary-cards.ts
+│   │   ├── delete-sql-modal.ts
+│   │   └── entity-details-modal.ts
+│   ├── views/               # Main view components
+│   │   ├── orphan-finder-view.ts
+│   │   └── storage-overview-view.ts
+│   ├── services/            # Business logic
+│   │   ├── api-service.ts
+│   │   └── formatters.ts
+│   ├── types/               # TypeScript definitions
+│   │   └── index.ts
+│   ├── styles/              # Shared styles
+│   │   └── shared-styles.ts
+│   └── statistics-orphan-panel.ts  # Main entry point
+├── www/                     # Build output (auto-generated)
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── README.md
+```
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Home Assistant running (for testing)
+
+### Initial Setup
+
+```bash
+cd custom_components/statistics_orphan_finder_v2
+npm install
+```
+
+### Development Workflow
+
+#### Watch mode (auto-rebuild on changes):
+```bash
+npm run dev
+```
+
+This runs in the background and automatically rebuilds when you edit .ts files.
+
+#### Production build:
+```bash
+npm run build
+```
+
+Output: `www/statistics-orphan-panel.js`
+
+### Testing in Home Assistant
+
+1. Build the frontend:
+   ```bash
+   npm run build
+   ```
+
+2. Restart Home Assistant
+
+3. Add the V2 integration:
+   - Go to **Settings** → **Devices & Services**
+   - Click **+ Add Integration**
+   - Search for "Statistics Orphan Finder V2"
+   - Configure database connection
+
+4. The panel will appear in the sidebar as "Statistics Orphans V2"
+
+## V1 vs V2 Comparison
+
+Both versions can run simultaneously for comparison:
+
+| Feature | V1 | V2 |
+|---------|----|----|
+| **Architecture** | 2,457-line monolith | Modular components |
+| **Framework** | Vanilla JS | Lit + TypeScript |
+| **Type Safety** | None | Full TypeScript |
+| **Table Width** | CSS hack | Architected solution |
+| **Maintainability** | Difficult | Easy |
+| **Build Step** | No | Yes (Vite) |
+| **Features** | ✅ All | ✅ All |
+
+## Architecture Overview
+
+### Component Hierarchy
+
+```
+<statistics-orphan-panel>              # Main panel
+  ├─ <orphan-finder-view>              # Orphan finder tab
+  │  ├─ <summary-cards>                # Database stats
+  │  ├─ <filter-bar>                   # Status filters
+  │  ├─ <entity-table>                 # Reusable table
+  │  └─ <delete-sql-modal>             # SQL generation
+  └─ <storage-overview-view>           # Storage overview tab
+     ├─ <summary-cards>                # Entity stats
+     ├─ <filter-bar>                   # Multi-filter
+     ├─ <entity-table>                 # Same component!
+     └─ <entity-details-modal>         # Entity diagnostics
+```
+
+### Data Flow
+
+1. **Main panel** fetches data via ApiService
+2. **Data flows down** to child components via properties
+3. **Events bubble up** from children to parent
+4. **ApiService** handles all backend communication
+5. **Formatters** provide consistent data formatting
+
+## TypeScript Benefits
+
+### Before (V1 - JavaScript):
+```javascript
+// No type checking, errors at runtime
+function renderEntity(entity) {
+  return entity.enity_id; // Typo! Runtime error
+}
+```
+
+### After (V2 - TypeScript):
+```typescript
+// Compiler catches typos
+function renderEntity(entity: StorageEntity) {
+  return entity.enity_id; // ❌ Compile error: did you mean 'entity_id'?
+}
+```
+
+## Lit Benefits
+
+### Reactive Properties
+
+```typescript
+@property() entities: Entity[] = [];
+
+// Change triggers automatic re-render
+this.entities = [...newData];
+```
+
+### Clean Templates
+
+```typescript
+render() {
+  return html`
+    <div>${this.entity.entity_id}</div>
+    <button @click=${this.handleClick}>Click</button>
+  `;
+}
+```
+
+### Efficient Updates
+
+Only changed DOM nodes are updated, not the entire template.
+
+## Troubleshooting
+
+### Build Fails
+
+```bash
+# Clean and rebuild
+rm -rf node_modules dist www
+npm install
+npm run build
+```
+
+### TypeScript Errors
+
+Check `tsconfig.json` - decorators must be enabled:
+```json
+{
+  "experimentalDecorators": true,
+  "useDefineForClassFields": false
+}
+```
+
+### Panel Doesn't Load
+
+1. Check browser console for errors
+2. Verify `www/statistics-orphan-panel.js` exists
+3. Hard refresh browser (Ctrl+Shift+R)
+4. Check HA logs for Python errors
+
+### Table Width Still Too Wide
+
+V2 uses `overflow-x: auto` with sticky first column. If it's not working:
+- Check browser console for CSS errors
+- Verify you're looking at V2 panel, not V1
+- Try different browser
+
+## Next Steps
+
+After initial testing:
+1. ✅ Compare V1 and V2 side-by-side
+2. ✅ Verify all features work
+3. ✅ Test on different screen sizes
+4. ✅ Check browser console for errors
+5. ✅ When confident, deprecate V1
+
+## Development Tips
+
+- Use `npm run dev` during development
+- TypeScript errors show in terminal immediately
+- Browser DevTools work perfectly with source maps
+- Lit DevTools extension is helpful for debugging
+
+## Questions?
+
+See `REQUIREMENTS.md` for complete feature specifications.
