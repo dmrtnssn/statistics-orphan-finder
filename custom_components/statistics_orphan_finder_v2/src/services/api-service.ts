@@ -40,9 +40,27 @@ export class ApiService {
 
   /**
    * Generate delete SQL for an orphaned entity
+   * Supports both legacy (metadata_id + origin) and new (entity_id + flags) modes
    */
-  async generateDeleteSql(metadataId: number, origin: OrphanOrigin): Promise<GenerateSqlResponse> {
-    const url = `${API_BASE}?action=generate_delete_sql&metadata_id=${metadataId}&origin=${encodeURIComponent(origin)}`;
+  async generateDeleteSql(
+    metadataIdOrEntityId: number | string,
+    origin: OrphanOrigin,
+    inStatesMeta?: boolean,
+    inStatisticsMeta?: boolean
+  ): Promise<GenerateSqlResponse> {
+    let url = `${API_BASE}?action=generate_delete_sql`;
+
+    // New mode: pass entity_id and flags
+    if (typeof metadataIdOrEntityId === 'string' || inStatesMeta !== undefined) {
+      url += `&entity_id=${encodeURIComponent(metadataIdOrEntityId.toString())}`;
+      url += `&in_states_meta=${inStatesMeta ? 'true' : 'false'}`;
+      url += `&in_statistics_meta=${inStatisticsMeta ? 'true' : 'false'}`;
+      url += `&origin=${encodeURIComponent(origin)}`;
+    } else {
+      // Legacy mode: metadata_id + origin (for backwards compatibility)
+      url += `&metadata_id=${metadataIdOrEntityId}&origin=${encodeURIComponent(origin)}`;
+    }
+
     return this.hass.callApi<GenerateSqlResponse>('GET', url);
   }
 

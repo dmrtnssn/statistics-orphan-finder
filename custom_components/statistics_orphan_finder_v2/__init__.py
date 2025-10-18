@@ -133,21 +133,58 @@ class StatisticsOrphanView(HomeAssistantView):
             overview = await self.coordinator.async_get_entity_storage_overview()
             return web.json_response(overview)
         elif action == "generate_delete_sql":
-            metadata_id = request.query.get("metadata_id")
             origin = request.query.get("origin")
+            entity_id = request.query.get("entity_id")
 
-            if not metadata_id or not origin:
-                return web.json_response({"error": "Missing metadata_id or origin"}, status=400)
+            if not origin:
+                return web.json_response({"error": "Missing origin"}, status=400)
 
             try:
-                metadata_id = int(metadata_id)
-                sql = self.coordinator.generate_delete_sql(metadata_id, origin)
-                storage_saved = self.coordinator._calculate_entity_storage(metadata_id, origin)
+                # New mode: entity_id + flags (from Storage Overview)
+                if entity_id:
+                    in_states_meta = request.query.get("in_states_meta", "false").lower() == "true"
+                    in_statistics_meta = request.query.get("in_statistics_meta", "false").lower() == "true"
+
+                    sql = self.coordinator.generate_delete_sql(
+                        entity_id=entity_id,
+                        origin=origin,
+                        in_states_meta=in_states_meta,
+                        in_statistics_meta=in_statistics_meta
+                    )
+                    storage_saved = self.coordinator._calculate_entity_storage(
+                        entity_id=entity_id,
+                        origin=origin,
+                        in_states_meta=in_states_meta,
+                        in_statistics_meta=in_statistics_meta
+                    )
+                else:
+                    # Legacy mode: metadata_id + origin (from Orphan Finder)
+                    metadata_id = request.query.get("metadata_id")
+                    if not metadata_id:
+                        return web.json_response({"error": "Missing entity_id or metadata_id"}, status=400)
+
+                    metadata_id = int(metadata_id)
+                    # Legacy mode assumes statistics only
+                    sql = self.coordinator.generate_delete_sql(
+                        entity_id=str(metadata_id),  # Will be looked up in backend
+                        origin=origin,
+                        in_states_meta=False,
+                        in_statistics_meta=True,
+                        metadata_id_statistics=metadata_id
+                    )
+                    storage_saved = self.coordinator._calculate_entity_storage(
+                        entity_id=str(metadata_id),
+                        origin=origin,
+                        in_states_meta=False,
+                        in_statistics_meta=True,
+                        metadata_id_statistics=metadata_id
+                    )
+
                 return web.json_response({
                     "sql": sql,
                     "storage_saved": storage_saved
                 })
-            except ValueError:
-                return web.json_response({"error": "Invalid metadata_id"}, status=400)
+            except ValueError as err:
+                return web.json_response({"error": f"Invalid parameters: {err}"}, status=400)
 
         return web.json_response({"error": "Invalid action"}, status=400)

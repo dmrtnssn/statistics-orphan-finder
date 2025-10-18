@@ -13,12 +13,14 @@ import type {
   DatabaseSize,
   ColumnConfig,
   SortState,
+  DeleteModalData,
   HomeAssistant
 } from '../types';
 import '../components/storage-health-summary';
 import '../components/filter-bar';
 import '../components/entity-table';
 import '../components/entity-details-modal';
+import '../components/delete-sql-modal';
 
 @customElement('storage-overview-view')
 export class StorageOverviewView extends LitElement {
@@ -34,6 +36,9 @@ export class StorageOverviewView extends LitElement {
   @state() private advancedFilter: string | null = null;
   @state() private sortStack: SortState[] = [{ column: 'entity_id', direction: 'asc' }];
   @state() private selectedEntity: StorageEntity | null = null;
+  @state() private deleteModalData: DeleteModalData | null = null;
+  @state() private deleteSql = '';
+  @state() private deleteStorageSaved = 0;
 
   static styles = [
     sharedStyles,
@@ -271,20 +276,38 @@ export class StorageOverviewView extends LitElement {
         label: 'ACTIONS',
         sortable: false,
         align: 'center',
-        width: '50px',
+        width: '80px',
         className: 'group-border-left',
-        render: (entity: StorageEntity) => html`
-          <button
-            class="info-icon-btn"
-            @click=${() => this.handleEntityClick(entity)}
-            title="Show details"
-            style="background: none; border: none; cursor: pointer; padding: 4px;"
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z" />
-            </svg>
-          </button>
-        `
+        render: (entity: StorageEntity) => {
+          const isDeleted = !entity.in_entity_registry && !entity.in_state_machine && (entity.in_states_meta || entity.in_statistics_meta);
+
+          return html`
+            <div style="display: flex; gap: 4px; justify-content: center;">
+              <button
+                class="info-icon-btn"
+                @click=${() => this.handleEntityClick(entity)}
+                title="Show details"
+                style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--secondary-text-color);"
+              >
+                <svg viewBox="0 0 90 90" width="18" height="18" fill="currentColor">
+                  <circle cx="45" cy="45" r="45"/>
+                  <path d="M54.717 63.299c-.264-.074-.566-.011-.769.164-5.643 5.009-7.288 5.625-7.734 5.657-.056.004-.18-.048-.344-.211-.206-.201-.317-.465-.342-.807-.172-2.383 1.447-9.741 4.812-21.87 2.826-10.143 3.089-12.2 3.041-12.863-.071-.99-.563-1.759-1.46-2.287-.854-.501-2.025-.701-3.477-.596-2.448.177-5.362 1.206-8.661 3.06-.943.531-1.926 1.166-2.92 1.886-2.622 1.9-4.06 4.79-3.848 7.729.017.241.206.446.478.522.273.075.578.005.773-.177 2.602-2.419 4.335-3.902 5.153-4.409.873-.54 1.651-.837 2.315-.885.245-.018.368-.027.397.38.039.541-.047 1.188-.255 1.919-4.927 16.991-7.17 27.343-6.86 31.647.106 1.463.672 2.6 1.684 3.382 1.024.793 2.363 1.137 3.976 1.02 1.757-.127 3.866-.902 6.446-2.369 1.241-.706 2.849-1.847 4.78-3.391 2.277-1.822 3.475-4.366 3.287-6.98-.017-.241-.201-.445-.471-.523z" fill="white"/>
+                  <circle cx="50.831" cy="19.591" r="6.171" fill="white"/>
+                </svg>
+              </button>
+              ${isDeleted ? html`
+                <button
+                  class="secondary-button"
+                  @click=${() => this.handleGenerateSql(entity)}
+                  title="Generate SQL to delete this entity"
+                  style="padding: 4px 8px; font-size: 11px;"
+                >
+                  <svg width="18" height="18" viewBox="0 0 90 90" fill="currentColor"><path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#0D0D0D"/></svg>
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }
       }
     ];
   }
@@ -351,6 +374,75 @@ export class StorageOverviewView extends LitElement {
     this.dispatchEvent(event);
   }
 
+  private handleGenerateSql(entity: StorageEntity) {
+    // Determine origin based on which tables the entity is in
+    let origin: string;
+    let count: number;
+
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
+
+    if (inStates && inStatistics) {
+      // In both states and statistics
+      origin = 'States+Statistics';
+      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+    } else if (inStates) {
+      // Only in states
+      origin = 'States';
+      count = entity.states_count;
+    } else if (inStatistics) {
+      // Only in statistics - use existing logic
+      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+        origin = 'Both';
+      } else if (entity.in_statistics_long_term) {
+        origin = 'Long-term';
+      } else {
+        origin = 'Short-term';
+      }
+      count = entity.stats_short_count + entity.stats_long_count;
+    } else {
+      // Not in any table - shouldn't happen
+      return;
+    }
+
+    // Convert StorageEntity to DeleteModalData format
+    const modalData: DeleteModalData = {
+      entityId: entity.entity_id,
+      metadataId: entity.metadata_id || 0, // Will be looked up by backend for states_meta
+      origin: origin as any,
+      status: 'deleted',
+      count: count
+    };
+
+    // Dispatch event to parent to fetch SQL
+    // Pass flags so backend knows which tables to query
+    this.dispatchEvent(new CustomEvent('generate-sql', {
+      detail: {
+        entity_id: entity.entity_id,
+        in_states_meta: inStates,
+        in_statistics_meta: inStatistics,
+        metadata_id: entity.metadata_id,
+        origin: origin,
+        entity: modalData
+      },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  // Called by parent when SQL is ready
+  showDeleteModal(data: DeleteModalData, sql: string, storageSaved: number) {
+    this.deleteModalData = data;
+    this.deleteSql = sql;
+    this.deleteStorageSaved = storageSaved;
+  }
+
+  private handleCloseDeleteModal() {
+    this.deleteModalData = null;
+    this.deleteSql = '';
+    this.deleteStorageSaved = 0;
+  }
+
   render() {
     const hasActiveFilters =
       this.searchQuery ||
@@ -403,6 +495,15 @@ export class StorageOverviewView extends LitElement {
           @close-modal=${this.handleCloseModal}
           @open-more-info=${this.handleOpenMoreInfo}
         ></entity-details-modal>
+      ` : ''}
+
+      ${this.deleteModalData ? html`
+        <delete-sql-modal
+          .data=${this.deleteModalData}
+          .sql=${this.deleteSql}
+          .storageSaved=${this.deleteStorageSaved}
+          @close-modal=${this.handleCloseDeleteModal}
+        ></delete-sql-modal>
       ` : ''}
     `;
   }

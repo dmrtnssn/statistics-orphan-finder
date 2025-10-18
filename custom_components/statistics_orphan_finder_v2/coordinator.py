@@ -511,8 +511,23 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 "other_size": 0
             }
 
-    def _calculate_entity_storage(self, metadata_id: int, origin: str) -> int:
-        """Calculate estimated storage size for an entity's statistics."""
+    def _calculate_entity_storage(
+        self,
+        entity_id: str,
+        origin: str,
+        in_states_meta: bool = False,
+        in_statistics_meta: bool = False,
+        metadata_id_statistics: int | None = None
+    ) -> int:
+        """Calculate estimated storage size for an entity's data.
+
+        Args:
+            entity_id: The entity_id
+            origin: Origin indicator (States, Short-term, Long-term, Both, States+Statistics)
+            in_states_meta: Whether entity is in states_meta table
+            in_statistics_meta: Whether entity is in statistics_meta table
+            metadata_id_statistics: Optional metadata_id for statistics (if known)
+        """
         engine = self._get_engine()
         total_size = 0
 
@@ -524,61 +539,104 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             is_postgres = "postgresql" in db_url or "postgres" in db_url
 
             try:
-                # Calculate size for long-term statistics
-                if origin in ["Long-term", "Both"]:
-                    count_query = text("SELECT COUNT(*) FROM statistics WHERE metadata_id = :metadata_id")
-                    count_result = conn.execute(count_query, {"metadata_id": metadata_id})
-                    row_count = count_result.fetchone()[0]
+                # Calculate size for states table
+                if in_states_meta or origin == "States" or origin == "States+Statistics":
+                    # Look up metadata_id from states_meta
+                    query = text("SELECT metadata_id FROM states_meta WHERE entity_id = :entity_id")
+                    result = conn.execute(query, {"entity_id": entity_id})
+                    row = result.fetchone()
 
-                    if is_mysql:
-                        # Get average row length from information_schema
-                        size_query = text("""
-                            SELECT avg_row_length
-                            FROM information_schema.tables
-                            WHERE table_schema = DATABASE() AND table_name = 'statistics'
-                        """)
-                        size_result = conn.execute(size_query)
-                        avg_row_length = size_result.fetchone()[0] or 100
-                        total_size += row_count * avg_row_length
-                    elif is_postgres:
-                        # Estimate based on table size / total rows
-                        size_query = text("""
-                            SELECT pg_total_relation_size('statistics') / NULLIF((SELECT COUNT(*) FROM statistics), 0) as avg_row_size
-                        """)
-                        size_result = conn.execute(size_query)
-                        avg_row_size = size_result.fetchone()[0] or 100
-                        total_size += row_count * int(avg_row_size)
-                    else:  # SQLite
-                        # Estimate ~100 bytes per row (conservative estimate)
-                        total_size += row_count * 100
+                    if row:
+                        states_metadata_id = row[0]
+                        count_query = text("SELECT COUNT(*) FROM states WHERE metadata_id = :metadata_id")
+                        count_result = conn.execute(count_query, {"metadata_id": states_metadata_id})
+                        row_count = count_result.fetchone()[0]
 
-                # Calculate size for short-term statistics
-                if origin in ["Short-term", "Both"]:
-                    count_query = text("SELECT COUNT(*) FROM statistics_short_term WHERE metadata_id = :metadata_id")
-                    count_result = conn.execute(count_query, {"metadata_id": metadata_id})
-                    row_count = count_result.fetchone()[0]
+                        if is_mysql:
+                            size_query = text("""
+                                SELECT avg_row_length
+                                FROM information_schema.tables
+                                WHERE table_schema = DATABASE() AND table_name = 'states'
+                            """)
+                            size_result = conn.execute(size_query)
+                            avg_row_length = size_result.fetchone()[0] or 150
+                            total_size += row_count * avg_row_length
+                        elif is_postgres:
+                            size_query = text("""
+                                SELECT pg_total_relation_size('states') / NULLIF((SELECT COUNT(*) FROM states), 0) as avg_row_size
+                            """)
+                            size_result = conn.execute(size_query)
+                            avg_row_size = size_result.fetchone()[0] or 150
+                            total_size += row_count * int(avg_row_size)
+                        else:  # SQLite
+                            total_size += row_count * 150
 
-                    if is_mysql:
-                        size_query = text("""
-                            SELECT avg_row_length
-                            FROM information_schema.tables
-                            WHERE table_schema = DATABASE() AND table_name = 'statistics_short_term'
-                        """)
-                        size_result = conn.execute(size_query)
-                        avg_row_length = size_result.fetchone()[0] or 100
-                        total_size += row_count * avg_row_length
-                    elif is_postgres:
-                        size_query = text("""
-                            SELECT pg_total_relation_size('statistics_short_term') / NULLIF((SELECT COUNT(*) FROM statistics_short_term), 0) as avg_row_size
-                        """)
-                        size_result = conn.execute(size_query)
-                        avg_row_size = size_result.fetchone()[0] or 100
-                        total_size += row_count * int(avg_row_size)
-                    else:  # SQLite
-                        total_size += row_count * 100
+                        # Add states_meta row size
+                        total_size += 100
 
-                # Add metadata row size (typically small, ~200 bytes)
-                total_size += 200
+                # Calculate size for statistics tables
+                if in_statistics_meta or origin in ["Short-term", "Long-term", "Both", "States+Statistics"]:
+                    # Look up metadata_id from statistics_meta if not provided
+                    if metadata_id_statistics is None:
+                        query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
+                        result = conn.execute(query, {"entity_id": entity_id})
+                        row = result.fetchone()
+                        if row:
+                            metadata_id_statistics = row[0]
+
+                    if metadata_id_statistics:
+                        # Calculate size for long-term statistics
+                        if origin in ["Long-term", "Both", "States+Statistics"]:
+                            count_query = text("SELECT COUNT(*) FROM statistics WHERE metadata_id = :metadata_id")
+                            count_result = conn.execute(count_query, {"metadata_id": metadata_id_statistics})
+                            row_count = count_result.fetchone()[0]
+
+                            if is_mysql:
+                                size_query = text("""
+                                    SELECT avg_row_length
+                                    FROM information_schema.tables
+                                    WHERE table_schema = DATABASE() AND table_name = 'statistics'
+                                """)
+                                size_result = conn.execute(size_query)
+                                avg_row_length = size_result.fetchone()[0] or 100
+                                total_size += row_count * avg_row_length
+                            elif is_postgres:
+                                size_query = text("""
+                                    SELECT pg_total_relation_size('statistics') / NULLIF((SELECT COUNT(*) FROM statistics), 0) as avg_row_size
+                                """)
+                                size_result = conn.execute(size_query)
+                                avg_row_size = size_result.fetchone()[0] or 100
+                                total_size += row_count * int(avg_row_size)
+                            else:  # SQLite
+                                total_size += row_count * 100
+
+                        # Calculate size for short-term statistics
+                        if origin in ["Short-term", "Both", "States+Statistics"]:
+                            count_query = text("SELECT COUNT(*) FROM statistics_short_term WHERE metadata_id = :metadata_id")
+                            count_result = conn.execute(count_query, {"metadata_id": metadata_id_statistics})
+                            row_count = count_result.fetchone()[0]
+
+                            if is_mysql:
+                                size_query = text("""
+                                    SELECT avg_row_length
+                                    FROM information_schema.tables
+                                    WHERE table_schema = DATABASE() AND table_name = 'statistics_short_term'
+                                """)
+                                size_result = conn.execute(size_query)
+                                avg_row_length = size_result.fetchone()[0] or 100
+                                total_size += row_count * avg_row_length
+                            elif is_postgres:
+                                size_query = text("""
+                                    SELECT pg_total_relation_size('statistics_short_term') / NULLIF((SELECT COUNT(*) FROM statistics_short_term), 0) as avg_row_size
+                                """)
+                                size_result = conn.execute(size_query)
+                                avg_row_size = size_result.fetchone()[0] or 100
+                                total_size += row_count * int(avg_row_size)
+                            else:  # SQLite
+                                total_size += row_count * 100
+
+                        # Add statistics_meta row size
+                        total_size += 200
 
             except Exception as err:
                 _LOGGER.warning("Could not calculate entity storage: %s", err)
@@ -592,7 +650,14 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         unavailable_storage = 0
 
         for entity_id, data in orphaned_data.items():
-            storage = self._calculate_entity_storage(data['metadata_id'], data['origin'])
+            # Orphan finder data only contains statistics entities
+            storage = self._calculate_entity_storage(
+                entity_id=entity_id,
+                origin=data['origin'],
+                in_states_meta=False,
+                in_statistics_meta=True,
+                metadata_id_statistics=data['metadata_id']
+            )
             if data['status'] == 'deleted':
                 deleted_storage += storage
             else:  # unavailable
@@ -603,8 +668,25 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             "unavailable_storage": unavailable_storage
         }
 
-    def generate_delete_sql(self, metadata_id: int, origin: str) -> str:
-        """Generate SQL DELETE statement for removing orphaned entity."""
+    def generate_delete_sql(
+        self,
+        entity_id: str,
+        origin: str,
+        in_states_meta: bool = False,
+        in_statistics_meta: bool = False,
+        metadata_id_statistics: int | None = None
+    ) -> str:
+        """Generate SQL DELETE statement for removing orphaned entity.
+
+        Args:
+            entity_id: The entity_id to delete
+            origin: Origin indicator (States, Short-term, Long-term, Both, States+Statistics)
+            in_states_meta: Whether entity is in states_meta table
+            in_statistics_meta: Whether entity is in statistics_meta table
+            metadata_id_statistics: Optional metadata_id for statistics (if known)
+        """
+        engine = self._get_engine()
+
         # Determine database type
         db_url = self.entry.data[CONF_DB_URL]
         is_sqlite = db_url.startswith("sqlite")
@@ -619,21 +701,62 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             begin_stmt = "BEGIN;"
             commit_stmt = "COMMIT;"
 
-        # Build DELETE statements based on origin
+        # Build DELETE statements
         delete_statements = []
 
-        if origin == "Long-term":
-            delete_statements.append(f"DELETE FROM statistics WHERE metadata_id = {metadata_id};")
-        elif origin == "Short-term":
-            delete_statements.append(f"DELETE FROM statistics_short_term WHERE metadata_id = {metadata_id};")
-        elif origin == "Both":
-            delete_statements.append(f"DELETE FROM statistics WHERE metadata_id = {metadata_id};")
-            delete_statements.append(f"DELETE FROM statistics_short_term WHERE metadata_id = {metadata_id};")
+        with engine.connect() as conn:
+            # Handle states_meta deletion
+            if in_states_meta or origin == "States" or origin == "States+Statistics":
+                try:
+                    # Look up metadata_id from states_meta
+                    query = text("SELECT metadata_id FROM states_meta WHERE entity_id = :entity_id")
+                    result = conn.execute(query, {"entity_id": entity_id})
+                    row = result.fetchone()
 
-        # Always delete from metadata table last
-        delete_statements.append(f"DELETE FROM statistics_meta WHERE id = {metadata_id};")
+                    if row:
+                        states_metadata_id = row[0]
+                        # Delete from states table first
+                        delete_statements.append(f"DELETE FROM states WHERE metadata_id = {states_metadata_id};")
+                        # Then delete from states_meta
+                        delete_statements.append(f"DELETE FROM states_meta WHERE metadata_id = {states_metadata_id};")
+                except Exception as err:
+                    _LOGGER.warning("Could not look up states_meta metadata_id for %s: %s", entity_id, err)
+
+            # Handle statistics_meta deletion
+            if in_statistics_meta or origin in ["Short-term", "Long-term", "Both", "States+Statistics"]:
+                try:
+                    # Look up metadata_id from statistics_meta if not provided
+                    if metadata_id_statistics is None:
+                        query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
+                        result = conn.execute(query, {"entity_id": entity_id})
+                        row = result.fetchone()
+
+                        if row:
+                            metadata_id_statistics = row[0]
+
+                    if metadata_id_statistics:
+                        # Determine which statistics tables to delete from based on origin
+                        if origin == "Long-term":
+                            delete_statements.append(f"DELETE FROM statistics WHERE metadata_id = {metadata_id_statistics};")
+                        elif origin == "Short-term":
+                            delete_statements.append(f"DELETE FROM statistics_short_term WHERE metadata_id = {metadata_id_statistics};")
+                        elif origin == "Both":
+                            delete_statements.append(f"DELETE FROM statistics WHERE metadata_id = {metadata_id_statistics};")
+                            delete_statements.append(f"DELETE FROM statistics_short_term WHERE metadata_id = {metadata_id_statistics};")
+                        elif origin == "States+Statistics":
+                            # For combined origin, delete from both statistics tables
+                            delete_statements.append(f"DELETE FROM statistics WHERE metadata_id = {metadata_id_statistics};")
+                            delete_statements.append(f"DELETE FROM statistics_short_term WHERE metadata_id = {metadata_id_statistics};")
+
+                        # Always delete from statistics_meta last
+                        delete_statements.append(f"DELETE FROM statistics_meta WHERE id = {metadata_id_statistics};")
+                except Exception as err:
+                    _LOGGER.warning("Could not look up statistics_meta metadata_id for %s: %s", entity_id, err)
 
         # Combine into transaction block
+        if not delete_statements:
+            return "-- No data found to delete"
+
         sql = begin_stmt + "\n"
         sql += "\n".join(delete_statements) + "\n"
         sql += commit_stmt
@@ -817,6 +940,18 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Could not determine statistics eligibility for %s: %s", entity_id, err)
                     statistics_eligibility_reason = "Unable to determine eligibility"
 
+            # Get metadata_id and origin for Generate SQL functionality (only for entities in statistics)
+            metadata_id = None
+            origin = None
+            if info['in_statistics_meta']:
+                # metadata_id will be fetched later for deleted entities, but we can set origin now
+                if info['in_statistics_long_term'] and info['in_statistics_short_term']:
+                    origin = "Both"
+                elif info['in_statistics_long_term']:
+                    origin = "Long-term"
+                elif info['in_statistics_short_term']:
+                    origin = "Short-term"
+
             entities_list.append({
                 'entity_id': entity_id,
                 'in_entity_registry': in_registry,
@@ -848,43 +983,109 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 'update_count_24h': update_frequency_data['update_count_24h'] if update_frequency_data else None,
                 # Statistics eligibility
                 'statistics_eligibility_reason': statistics_eligibility_reason,
+                # For Generate SQL functionality (only present for entities with statistics)
+                'metadata_id': metadata_id,
+                'origin': origin,
             })
 
-        # Calculate storage for deleted entities (those in statistics but not in registry or state machine)
+        # Calculate storage for deleted entities (those not in registry or state machine but in states_meta or statistics_meta)
         deleted_storage_bytes = 0
         _LOGGER.info("Calculating storage for deleted entities...")
 
         with engine.connect() as conn:
             for entity in entities_list:
-                # Only calculate for truly deleted entities that are in statistics
+                # Only calculate for truly deleted entities that are in states_meta OR statistics_meta
                 if (not entity['in_entity_registry'] and
                     not entity['in_state_machine'] and
-                    entity['in_statistics_meta']):
+                    (entity['in_states_meta'] or entity['in_statistics_meta'])):
                     try:
-                        # Get metadata_id from statistics_meta
-                        meta_query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
-                        meta_result = conn.execute(meta_query, {"entity_id": entity['entity_id']})
-                        meta_row = meta_result.fetchone()
+                        metadata_id = None
 
-                        if meta_row:
-                            metadata_id = meta_row[0]
+                        # Get metadata_id from statistics_meta if entity is in statistics
+                        if entity['in_statistics_meta']:
+                            meta_query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
+                            meta_result = conn.execute(meta_query, {"entity_id": entity['entity_id']})
+                            meta_row = meta_result.fetchone()
 
-                            # Determine origin
-                            if entity['in_statistics_long_term'] and entity['in_statistics_short_term']:
-                                origin = "Both"
-                            elif entity['in_statistics_long_term']:
-                                origin = "Long-term"
-                            else:
-                                origin = "Short-term"
+                            if meta_row:
+                                metadata_id = meta_row[0]
+                                entity['metadata_id'] = metadata_id
 
-                            # Calculate storage using existing method
-                            storage = self._calculate_entity_storage(metadata_id, origin)
-                            deleted_storage_bytes += storage
+                        # Determine origin based on which tables entity is in
+                        if entity['in_states_meta'] and entity['in_statistics_meta']:
+                            origin = "States+Statistics"
+                        elif entity['in_states_meta']:
+                            origin = "States"
+                        elif entity['in_statistics_long_term'] and entity['in_statistics_short_term']:
+                            origin = "Both"
+                        elif entity['in_statistics_long_term']:
+                            origin = "Long-term"
+                        else:
+                            origin = "Short-term"
+                        entity['origin'] = origin
+
+                        # Calculate storage using existing method
+                        storage = self._calculate_entity_storage(
+                            entity_id=entity['entity_id'],
+                            origin=origin,
+                            in_states_meta=entity['in_states_meta'],
+                            in_statistics_meta=entity['in_statistics_meta'],
+                            metadata_id_statistics=metadata_id
+                        )
+                        deleted_storage_bytes += storage
                     except Exception as err:
                         _LOGGER.debug("Could not calculate storage for %s: %s", entity['entity_id'], err)
 
         _LOGGER.info("Calculated deleted entity storage: %d bytes (%.2f MB)",
                     deleted_storage_bytes, deleted_storage_bytes / (1024 * 1024))
+
+        # Calculate storage for disabled entities (those in registry but disabled, with data in states or statistics)
+        disabled_storage_bytes = 0
+        _LOGGER.info("Calculating storage for disabled entities...")
+
+        with engine.connect() as conn:
+            for entity in entities_list:
+                # Only calculate for disabled entities that have data in states or statistics
+                if (entity['registry_status'] == 'Disabled' and
+                    (entity['in_states_meta'] or entity['in_statistics_meta'])):
+                    try:
+                        metadata_id = None
+
+                        # Get metadata_id from statistics_meta if entity is in statistics
+                        if entity['in_statistics_meta']:
+                            meta_query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
+                            meta_result = conn.execute(meta_query, {"entity_id": entity['entity_id']})
+                            meta_row = meta_result.fetchone()
+
+                            if meta_row:
+                                metadata_id = meta_row[0]
+
+                        # Determine origin based on which tables entity is in
+                        if entity['in_states_meta'] and entity['in_statistics_meta']:
+                            origin = "States+Statistics"
+                        elif entity['in_states_meta']:
+                            origin = "States"
+                        elif entity['in_statistics_long_term'] and entity['in_statistics_short_term']:
+                            origin = "Both"
+                        elif entity['in_statistics_long_term']:
+                            origin = "Long-term"
+                        else:
+                            origin = "Short-term"
+
+                        # Calculate storage using existing method
+                        storage = self._calculate_entity_storage(
+                            entity_id=entity['entity_id'],
+                            origin=origin,
+                            in_states_meta=entity['in_states_meta'],
+                            in_statistics_meta=entity['in_statistics_meta'],
+                            metadata_id_statistics=metadata_id
+                        )
+                        disabled_storage_bytes += storage
+                    except Exception as err:
+                        _LOGGER.debug("Could not calculate storage for disabled entity %s: %s", entity['entity_id'], err)
+
+        _LOGGER.info("Calculated disabled entity storage: %d bytes (%.2f MB)",
+                    disabled_storage_bytes, disabled_storage_bytes / (1024 * 1024))
 
         # Generate summary statistics
         summary = {
@@ -907,6 +1108,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             'orphaned_statistics_meta': sum(1 for e in entities_list if e['in_statistics_meta'] and not (e['in_statistics_short_term'] or e['in_statistics_long_term'])),
             'deleted_from_registry': sum(1 for e in entities_list if not e['in_entity_registry'] and not e['in_state_machine']),
             'deleted_storage_bytes': deleted_storage_bytes,
+            'disabled_storage_bytes': disabled_storage_bytes,
         }
 
         _LOGGER.info(

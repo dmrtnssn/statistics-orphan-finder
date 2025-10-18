@@ -18,6 +18,7 @@ import type {
 import './views/orphan-finder-view';
 import './views/storage-overview-view';
 import type { OrphanFinderView } from './views/orphan-finder-view';
+import type { StorageOverviewView } from './views/storage-overview-view';
 
 @customElement('statistics-orphan-panel-v2')
 export class StatisticsOrphanPanelV2 extends LitElement {
@@ -41,6 +42,7 @@ export class StatisticsOrphanPanelV2 extends LitElement {
   @state() private storageSummary: StorageSummary | null = null;
 
   @query('orphan-finder-view') private orphanView?: OrphanFinderView;
+  @query('storage-overview-view') private storageView?: StorageOverviewView;
 
   private apiService!: ApiService;
 
@@ -321,25 +323,35 @@ export class StatisticsOrphanPanelV2 extends LitElement {
   }
 
   private async handleGenerateSql(e: CustomEvent) {
-    const { metadataId, origin, entity } = e.detail;
+    const { entity_id, in_states_meta, in_statistics_meta, metadataId, origin, entity } = e.detail;
 
     this.loading = true;
     this.loadingMessage = 'Generating SQL...';
 
     try {
-      const result = await this.apiService.generateDeleteSql(metadataId, origin);
+      let result;
+
+      // Use new API if entity_id is provided (from Storage Overview)
+      if (entity_id !== undefined && in_states_meta !== undefined) {
+        result = await this.apiService.generateDeleteSql(entity_id, origin, in_states_meta, in_statistics_meta);
+      } else {
+        // Legacy API for Orphan Finder view (metadata_id + origin)
+        result = await this.apiService.generateDeleteSql(metadataId, origin);
+      }
 
       const modalData: DeleteModalData = {
-        entityId: entity.entity_id,
-        metadataId,
+        entityId: entity.entityId || entity.entity_id || entity_id,
+        metadataId: metadataId || 0,
         origin,
-        status: entity.status,
+        status: entity.status || 'deleted',
         count: entity.count
       };
 
-      // Show modal in orphan view
-      if (this.orphanView) {
+      // Show modal in the active view
+      if (this.currentView === 'orphans' && this.orphanView) {
         this.orphanView.showDeleteModal(modalData, result.sql, result.storage_saved);
+      } else if (this.currentView === 'storage' && this.storageView) {
+        this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Failed to generate SQL';
@@ -394,6 +406,7 @@ export class StatisticsOrphanPanelV2 extends LitElement {
           .entities=${this.storageEntities}
           .summary=${this.storageSummary}
           .databaseSize=${this.databaseSize}
+          @generate-sql=${this.handleGenerateSql}
         ></storage-overview-view>
       `}
 

@@ -40,7 +40,7 @@ export interface HomeAssistant {
 // ============================================================================
 
 export type OrphanStatus = 'deleted' | 'unavailable';
-export type OrphanOrigin = 'Long-term' | 'Short-term' | 'Both';
+export type OrphanOrigin = 'States' | 'Long-term' | 'Short-term' | 'Both' | 'States+Statistics';
 
 export interface OrphanEntity {
   entity_id: string;
@@ -109,6 +109,9 @@ export interface StorageEntity {
   update_interval_seconds: number | null;
   update_count_24h: number | null;
   statistics_eligibility_reason: string | null;
+  // For Generate SQL functionality (only present for entities with statistics)
+  metadata_id: number | null;
+  origin: OrphanOrigin | null;
 }
 
 export interface StorageSummary {
@@ -131,6 +134,7 @@ export interface StorageSummary {
   orphaned_statistics_meta: number;
   deleted_from_registry: number;
   deleted_storage_bytes: number;
+  disabled_storage_bytes: number;
 }
 
 export interface EntityStorageOverviewResponse {

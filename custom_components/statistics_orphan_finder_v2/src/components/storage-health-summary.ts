@@ -435,11 +435,11 @@ export class StorageHealthSummary extends LitElement {
 
     // Warning: Disabled entities
     if (disabled > 0) {
-      const potentialMB = this.estimateStorageMB(disabled);
+      const potentialMB = this.getActualStorageMB(this.summary.disabled_storage_bytes, disabled);
       actions.push({
         priority: 'warning',
         icon: '⚠️',
-        text: `${formatNumber(disabled)} disabled entities tracked (-${potentialMB}MB potential)`,
+        text: `${formatNumber(disabled)} disabled entities using ${potentialMB}MB`,
         action: 'review_disabled',
         button: 'Review'
       });
