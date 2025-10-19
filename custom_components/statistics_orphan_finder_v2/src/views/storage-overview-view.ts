@@ -40,6 +40,20 @@ export class StorageOverviewView extends LitElement {
   @state() private deleteSql = '';
   @state() private deleteStorageSaved = 0;
 
+  // Memoization for filtered entities
+  private _cachedFilteredEntities: StorageEntity[] = [];
+  private _lastFilterKey = '';
+
+  protected willUpdate(changedProperties: Map<string, any>) {
+    super.willUpdate(changedProperties);
+
+    // Clear cache when entities array changes
+    if (changedProperties.has('entities')) {
+      this._lastFilterKey = '';
+      this._cachedFilteredEntities = [];
+    }
+  }
+
   static styles = [
     sharedStyles,
     css`
@@ -60,6 +74,15 @@ export class StorageOverviewView extends LitElement {
   ];
 
   private get filteredEntities(): StorageEntity[] {
+    // Create a cache key from all filter parameters
+    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.sortStack.map(s => `${s.column}:${s.direction}`).join(',')}`;
+
+    // Return cached result if filters haven't changed
+    if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
+      return this._cachedFilteredEntities;
+    }
+
+    // Filters changed - recompute
     let filtered = [...this.entities];
 
     // Search filter
@@ -94,7 +117,11 @@ export class StorageOverviewView extends LitElement {
       filtered = filtered.filter(e => e.in_statistics_meta && !e.in_states);
     }
 
-    return this.sortEntities(filtered);
+    // Cache the result
+    this._lastFilterKey = filterKey;
+    this._cachedFilteredEntities = this.sortEntities(filtered);
+
+    return this._cachedFilteredEntities;
   }
 
   private sortEntities(entities: StorageEntity[]): StorageEntity[] {

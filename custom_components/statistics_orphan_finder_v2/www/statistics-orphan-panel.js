@@ -716,6 +716,9 @@ const sharedStyles = i$3`
     left: 0;
     z-index: 1;
     background: var(--card-background-color);
+    /* Performance optimizations for sticky positioning */
+    will-change: transform;      /* Hint browser to optimize */
+    transform: translateZ(0);    /* Force GPU acceleration */
   }
 
   .sticky-column::after {
@@ -1867,6 +1870,15 @@ EntityTable.styles = [
       .table-scroll {
         overflow-x: auto;
         overflow-y: visible;
+        /* Performance optimizations */
+        overflow-scrolling: touch;  /* Smooth scrolling on mobile */
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* CSS containment for better paint performance */
+      tbody tr {
+        contain: layout style paint;  /* Isolate layout calculations */
+        content-visibility: auto;     /* Browser lazy-paints off-screen rows */
       }
 
       .sort-indicator {
@@ -2362,8 +2374,21 @@ let StorageOverviewView = class extends i {
     this.deleteModalData = null;
     this.deleteSql = "";
     this.deleteStorageSaved = 0;
+    this._cachedFilteredEntities = [];
+    this._lastFilterKey = "";
+  }
+  willUpdate(changedProperties) {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has("entities")) {
+      this._lastFilterKey = "";
+      this._cachedFilteredEntities = [];
+    }
   }
   get filteredEntities() {
+    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.sortStack.map((s2) => `${s2.column}:${s2.direction}`).join(",")}`;
+    if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
+      return this._cachedFilteredEntities;
+    }
     let filtered = [...this.entities];
     if (this.searchQuery) {
       const query = this.searchQuery.toLowerCase();
@@ -2387,7 +2412,9 @@ let StorageOverviewView = class extends i {
     } else if (this.advancedFilter === "only_stats") {
       filtered = filtered.filter((e2) => e2.in_statistics_meta && !e2.in_states);
     }
-    return this.sortEntities(filtered);
+    this._lastFilterKey = filterKey;
+    this._cachedFilteredEntities = this.sortEntities(filtered);
+    return this._cachedFilteredEntities;
   }
   sortEntities(entities) {
     return [...entities].sort((a2, b2) => {
@@ -2589,7 +2616,7 @@ let StorageOverviewView = class extends i {
                 style="background: none; border: none; cursor: pointer; padding: 4px; color: #f44336;"
                 >
 <svg width="18" height="18" viewBox="0.045500002801418304 0.04500000178813934 0.45000001788139343 0.4500001072883606" fill="currentColor" style="color: #f44336">
-  <path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#0D0D0D"/>
+  <path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#f44336"/>
 </svg>                </button>
               ` : ""}
             </div>

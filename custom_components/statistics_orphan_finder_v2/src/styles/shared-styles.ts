@@ -133,6 +133,9 @@ export const sharedStyles = css`
     left: 0;
     z-index: 1;
     background: var(--card-background-color);
+    /* Performance optimizations for sticky positioning */
+    will-change: transform;      /* Hint browser to optimize */
+    transform: translateZ(0);    /* Force GPU acceleration */
   }
 
   .sticky-column::after {

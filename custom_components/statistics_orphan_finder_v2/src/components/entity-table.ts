@@ -31,6 +31,15 @@ export class EntityTable extends LitElement {
       .table-scroll {
         overflow-x: auto;
         overflow-y: visible;
+        /* Performance optimizations */
+        overflow-scrolling: touch;  /* Smooth scrolling on mobile */
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* CSS containment for better paint performance */
+      tbody tr {
+        contain: layout style paint;  /* Isolate layout calculations */
+        content-visibility: auto;     /* Browser lazy-paints off-screen rows */
       }
 
       .sort-indicator {
