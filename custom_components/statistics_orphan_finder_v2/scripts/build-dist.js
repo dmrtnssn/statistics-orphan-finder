@@ -5,7 +5,7 @@
  * Creates a dist/ folder with only the files needed by HA
  */
 
-import { copyFileSync, mkdirSync, existsSync, rmSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, rmSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,6 +13,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 const distDir = join(rootDir, 'dist');
+
+/**
+ * Recursively copy directory contents
+ */
+function copyDirectoryRecursive(source, target) {
+  if (!existsSync(source)) {
+    return 0;
+  }
+
+  mkdirSync(target, { recursive: true });
+
+  let fileCount = 0;
+  const entries = readdirSync(source);
+
+  for (const entry of entries) {
+    // Skip __pycache__ directories
+    if (entry === '__pycache__') {
+      continue;
+    }
+
+    const sourcePath = join(source, entry);
+    const targetPath = join(target, entry);
+
+    if (statSync(sourcePath).isDirectory()) {
+      fileCount += copyDirectoryRecursive(sourcePath, targetPath);
+    } else {
+      copyFileSync(sourcePath, targetPath);
+      fileCount++;
+    }
+  }
+
+  return fileCount;
+}
 
 // Files to copy (relative to root)
 const FILES_TO_COPY = [
@@ -27,6 +60,12 @@ const FILES_TO_COPY = [
   // Frontend (built)
   'www/statistics-orphan-panel.js',
   'www/statistics-orphan-panel.js.map'
+];
+
+// Directories to copy recursively
+const DIRS_TO_COPY = [
+  'services',      // Backend service modules
+  'www/chunks'     // Code-split frontend chunks
 ];
 
 console.log('🚀 Building distribution package...\n');
@@ -58,6 +97,23 @@ for (const file of FILES_TO_COPY) {
     copiedCount++;
   } else {
     console.log(`  ⚠️  ${file} (not found, skipped)`);
+    skippedCount++;
+  }
+}
+
+// Copy directories
+console.log('\n📁 Copying directories:\n');
+
+for (const dir of DIRS_TO_COPY) {
+  const sourcePath = join(rootDir, dir);
+  const targetPath = join(distDir, dir);
+
+  if (existsSync(sourcePath)) {
+    const fileCount = copyDirectoryRecursive(sourcePath, targetPath);
+    console.log(`  ✅ ${dir}/ (${fileCount} files)`);
+    copiedCount += fileCount;
+  } else {
+    console.log(`  ⚠️  ${dir}/ (not found, skipped)`);
     skippedCount++;
   }
 }
