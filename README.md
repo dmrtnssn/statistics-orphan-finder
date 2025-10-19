@@ -235,10 +235,46 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### Development Setup
 
-1. Clone the repository
-2. Make your changes
-3. Test thoroughly with different database types if possible
-4. Submit a pull request
+This project separates development files from runtime files for a clean HACS-compliant structure.
+
+**Project Structure:**
+```
+statistics-orphan-finder/
+├── frontend/                   # TypeScript development
+│   ├── src/                   # Source code
+│   ├── scripts/               # Build scripts
+│   ├── package.json           # Dependencies
+│   ├── tsconfig.json          # TypeScript config
+│   └── vite.config.ts         # Build config
+├── docs/                      # Documentation
+└── custom_components/
+    └── statistics_orphan_finder_v2/  # Runtime files only
+        ├── *.py               # Python backend
+        ├── services/          # Service modules
+        └── www/               # Built frontend (auto-generated)
+```
+
+**Frontend Development:**
+```bash
+cd frontend
+npm install              # Install dependencies
+npm run dev             # Watch mode for development
+npm run build           # Build for production
+```
+
+The build process automatically outputs to `custom_components/statistics_orphan_finder_v2/www/`.
+
+**Testing:**
+1. Make your changes in `frontend/src/` (TypeScript) or `custom_components/statistics_orphan_finder_v2/` (Python)
+2. Build frontend: `cd frontend && npm run build`
+3. Copy `custom_components/statistics_orphan_finder_v2/` to your HA instance
+4. Restart Home Assistant
+5. Test thoroughly with different database types if possible
+
+**Submitting Changes:**
+1. Ensure frontend builds without errors
+2. Test with real Home Assistant instance
+3. Submit a pull request with clear description
 
 ## License
 
