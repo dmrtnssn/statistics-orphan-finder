@@ -58,6 +58,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             shutil.copy(source_map, target_map)
             _LOGGER.info("Copied source map to %s", target_map)
 
+        # Copy chunks directory (for code-split bundles)
+        source_chunks = Path(__file__).parent / "www" / "chunks"
+        target_chunks = www_path / "chunks"
+
+        if source_chunks.exists() and source_chunks.is_dir():
+            # Remove old chunks directory if exists
+            if target_chunks.exists():
+                shutil.rmtree(target_chunks)
+            # Copy entire chunks directory
+            shutil.copytree(source_chunks, target_chunks)
+            _LOGGER.info("Copied %d chunk files to %s", len(list(source_chunks.glob("*"))), target_chunks)
+        else:
+            _LOGGER.warning("Chunks directory not found at %s", source_chunks)
+
         return True
 
     await hass.async_add_executor_job(copy_frontend_file)
