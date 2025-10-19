@@ -287,7 +287,7 @@ export class StorageOverviewView extends LitElement {
                 class="info-icon-btn"
                 @click=${() => this.handleEntityClick(entity)}
                 title="Show details"
-                style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--secondary-text-color);"
+                style="background: none; border: none; cursor: pointer; padding: 4px; color: #3288cb;"
               >
                 <svg viewBox="0 0 90 90" width="18" height="18" fill="currentColor">
                   <circle cx="45" cy="45" r="45"/>
@@ -300,10 +300,11 @@ export class StorageOverviewView extends LitElement {
                   class="secondary-button"
                   @click=${() => this.handleGenerateSql(entity)}
                   title="Generate SQL to delete this entity"
-                  style="padding: 4px 8px; font-size: 11px;"
+                style="background: none; border: none; cursor: pointer; padding: 4px; color: #f44336;"
                 >
-                  <svg width="18" height="18" viewBox="0 0 90 90" fill="currentColor"><path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#0D0D0D"/></svg>
-                </button>
+<svg width="18" height="18" viewBox="0.045500002801418304 0.04500000178813934 0.45000001788139343 0.4500001072883606" fill="currentColor" style="color: #f44336">
+  <path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#f44336"/>
+</svg>                </button>
               ` : ''}
             </div>
           `;

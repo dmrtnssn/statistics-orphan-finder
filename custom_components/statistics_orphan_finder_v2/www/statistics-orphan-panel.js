@@ -1014,12 +1014,6 @@ class ApiService {
     this.hass = hass;
   }
   /**
-   * Fetch orphaned entities list
-   */
-  async fetchOrphansList() {
-    return this.hass.callApi("GET", `${API_BASE}?action=list`);
-  }
-  /**
    * Fetch database size information
    */
   async fetchDatabaseSize() {
@@ -1032,19 +1026,10 @@ class ApiService {
     return this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview`);
   }
   /**
-   * Generate delete SQL for an orphaned entity
-   * Supports both legacy (metadata_id + origin) and new (entity_id + flags) modes
+   * Generate delete SQL for an entity
    */
-  async generateDeleteSql(metadataIdOrEntityId, origin, inStatesMeta, inStatisticsMeta) {
-    let url = `${API_BASE}?action=generate_delete_sql`;
-    if (typeof metadataIdOrEntityId === "string" || inStatesMeta !== void 0) {
-      url += `&entity_id=${encodeURIComponent(metadataIdOrEntityId.toString())}`;
-      url += `&in_states_meta=${inStatesMeta ? "true" : "false"}`;
-      url += `&in_statistics_meta=${inStatisticsMeta ? "true" : "false"}`;
-      url += `&origin=${encodeURIComponent(origin)}`;
-    } else {
-      url += `&metadata_id=${metadataIdOrEntityId}&origin=${encodeURIComponent(origin)}`;
-    }
+  async generateDeleteSql(entityId, origin, inStatesMeta, inStatisticsMeta) {
+    const url = `${API_BASE}?action=generate_delete_sql&entity_id=${encodeURIComponent(entityId)}&in_states_meta=${inStatesMeta ? "true" : "false"}&in_statistics_meta=${inStatisticsMeta ? "true" : "false"}&origin=${encodeURIComponent(origin)}`;
     return this.hass.callApi("GET", url);
   }
   /**
@@ -1077,15 +1062,6 @@ function formatBytes(bytes) {
 }
 function formatNumber(num) {
   return num.toLocaleString();
-}
-function formatDate(isoString) {
-  if (!isoString) return "";
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString();
-  } catch {
-    return isoString;
-  }
 }
 function formatDuration(seconds) {
   if (seconds < 60) {
@@ -1131,255 +1107,6 @@ function debounce(func, wait) {
     }, wait);
   };
 }
-var __defProp$8 = Object.defineProperty;
-var __getOwnPropDesc$8 = Object.getOwnPropertyDescriptor;
-var __decorateClass$8 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$8(target, key) : target;
-  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
-    if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$8(target, key, result);
-  return result;
-};
-let SummaryCards = class extends i {
-  constructor() {
-    super(...arguments);
-    this.cards = [];
-    this.columns = 4;
-  }
-  handleCardClick(cardId) {
-    const card = this.cards.find((c2) => c2.id === cardId);
-    if (card?.clickable) {
-      this.dispatchEvent(new CustomEvent("card-clicked", {
-        detail: { cardId },
-        bubbles: true,
-        composed: true
-      }));
-    }
-  }
-  handleSubtotalClick(cardId, subtotalLabel) {
-    this.dispatchEvent(new CustomEvent("subtotal-clicked", {
-      detail: { cardId, subtotalLabel },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  render() {
-    return x`
-      <div class="cards-container cols-${this.columns}">
-        ${this.cards.map((card) => x`
-          <div class="stats-card ${card.active ? "active" : ""}">
-            <h2>${card.title}</h2>
-            <div
-              class="stats-value ${card.clickable ? "clickable" : ""}"
-              @click=${() => card.clickable && this.handleCardClick(card.id)}
-            >
-              ${card.value}
-            </div>
-            ${card.subtitle ? x`
-              <div class="stats-subtitle">${card.subtitle}</div>
-            ` : ""}
-            ${card.subtotals && card.subtotals.length > 0 ? x`
-              <div class="card-subtotals">
-                ${card.subtotals.map((subtotal) => x`
-                  <div
-                    class="card-subtotal ${subtotal.clickable ? "clickable" : ""} ${subtotal.active ? "active" : ""}"
-                    style=${subtotal.color ? `color: ${subtotal.color}` : ""}
-                    @click=${() => subtotal.clickable && this.handleSubtotalClick(card.id, subtotal.label)}
-                  >
-                    ${subtotal.label}: ${subtotal.value}
-                  </div>
-                `)}
-              </div>
-            ` : ""}
-          </div>
-        `)}
-      </div>
-    `;
-  }
-};
-SummaryCards.styles = [
-  sharedStyles,
-  i$3`
-      :host {
-        display: block;
-      }
-
-      .cards-container {
-        display: grid;
-        gap: 16px;
-        margin-bottom: 16px;
-      }
-
-      .cards-container.cols-2 {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      }
-
-      .cards-container.cols-4 {
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      }
-
-      .card-value {
-        cursor: default;
-      }
-
-      .card-value.clickable {
-        cursor: pointer;
-        color: var(--primary-color);
-      }
-
-      .card-value.clickable:hover {
-        text-decoration: underline;
-      }
-
-      .card-subtotals {
-        margin-top: 8px;
-        font-size: 12px;
-      }
-
-      .card-subtotal {
-        cursor: default;
-      }
-
-      .card-subtotal.clickable {
-        cursor: pointer;
-      }
-
-      .card-subtotal.clickable:hover {
-        text-decoration: underline;
-      }
-
-      .card-subtotal.active {
-        font-weight: 600;
-      }
-    `
-];
-__decorateClass$8([
-  n2({ type: Array })
-], SummaryCards.prototype, "cards", 2);
-__decorateClass$8([
-  n2({ type: Number })
-], SummaryCards.prototype, "columns", 2);
-SummaryCards = __decorateClass$8([
-  t("summary-cards")
-], SummaryCards);
-var __defProp$7 = Object.defineProperty;
-var __getOwnPropDesc$7 = Object.getOwnPropertyDescriptor;
-var __decorateClass$7 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$7(target, key) : target;
-  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
-    if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$7(target, key, result);
-  return result;
-};
-let FilterBar = class extends i {
-  constructor() {
-    super(...arguments);
-    this.filters = [];
-    this.showSearch = false;
-    this.searchPlaceholder = "Search entities...";
-    this.searchValue = "";
-    this.showClearButton = false;
-    this.debouncedSearch = debounce((value) => {
-      this.dispatchEvent(new CustomEvent("search-changed", {
-        detail: { query: value },
-        bubbles: true,
-        composed: true
-      }));
-    }, 300);
-  }
-  handleFilterClick(filterId) {
-    this.dispatchEvent(new CustomEvent("filter-clicked", {
-      detail: { filterId },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  handleSearchInput(e2) {
-    const input = e2.target;
-    this.searchValue = input.value;
-    this.debouncedSearch(this.searchValue);
-  }
-  handleClearFilters() {
-    this.searchValue = "";
-    this.dispatchEvent(new CustomEvent("clear-filters", {
-      bubbles: true,
-      composed: true
-    }));
-  }
-  render() {
-    return x`
-      <div class="filter-container">
-        ${this.filters.map((filter) => x`
-          <button
-            class="filter-button ${filter.active ? "active" : ""}"
-            @click=${() => this.handleFilterClick(filter.id)}
-          >
-            ${filter.label}
-          </button>
-        `)}
-
-        ${this.showSearch ? x`
-          <div class="search-box">
-            <input
-              type="search"
-              placeholder=${this.searchPlaceholder}
-              .value=${this.searchValue}
-              @input=${this.handleSearchInput}
-            />
-          </div>
-        ` : ""}
-
-        ${this.showClearButton ? x`
-          <button
-            class="secondary-button clear-button"
-            @click=${this.handleClearFilters}
-          >
-            Clear Filters
-          </button>
-        ` : ""}
-      </div>
-    `;
-  }
-};
-FilterBar.styles = [
-  sharedStyles,
-  i$3`
-      :host {
-        display: block;
-      }
-
-      .filter-container {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-      }
-
-      .clear-button {
-        margin-left: auto;
-      }
-    `
-];
-__decorateClass$7([
-  n2({ type: Array })
-], FilterBar.prototype, "filters", 2);
-__decorateClass$7([
-  n2({ type: Boolean })
-], FilterBar.prototype, "showSearch", 2);
-__decorateClass$7([
-  n2({ type: String })
-], FilterBar.prototype, "searchPlaceholder", 2);
-__decorateClass$7([
-  n2({ type: String })
-], FilterBar.prototype, "searchValue", 2);
-__decorateClass$7([
-  n2({ type: Boolean })
-], FilterBar.prototype, "showClearButton", 2);
-FilterBar = __decorateClass$7([
-  t("filter-bar")
-], FilterBar);
 var __defProp$6 = Object.defineProperty;
 var __getOwnPropDesc$6 = Object.getOwnPropertyDescriptor;
 var __decorateClass$6 = (decorators, target, key, kind) => {
@@ -1388,644 +1115,6 @@ var __decorateClass$6 = (decorators, target, key, kind) => {
     if (decorator = decorators[i2])
       result = (kind ? decorator(target, key, result) : decorator(result)) || result;
   if (kind && result) __defProp$6(target, key, result);
-  return result;
-};
-let EntityTable = class extends i {
-  constructor() {
-    super(...arguments);
-    this.entities = [];
-    this.columns = [];
-    this.sortable = true;
-    this.stickyFirstColumn = false;
-    this.sortStack = [{ column: "", direction: "asc" }];
-    this.emptyMessage = "No data available";
-  }
-  handleSort(columnId) {
-    if (!this.sortable) return;
-    const column = this.columns.find((c2) => c2.id === columnId);
-    if (!column?.sortable) return;
-    const currentSort = this.sortStack[0];
-    if (currentSort && currentSort.column === columnId) {
-      const newDirection = currentSort.direction === "asc" ? "desc" : "asc";
-      this.sortStack = [{ column: columnId, direction: newDirection }];
-    } else {
-      this.sortStack = [{ column: columnId, direction: "asc" }];
-    }
-    this.dispatchEvent(new CustomEvent("sort-changed", {
-      detail: { sortStack: this.sortStack },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  getSortIndicator(columnId) {
-    const sortIndex = this.sortStack.findIndex((s2) => s2.column === columnId);
-    if (sortIndex < 0) return "";
-    const sort = this.sortStack[sortIndex];
-    const arrow = sort.direction === "asc" ? "▲" : "▼";
-    return x`
-      <span class="sort-indicator">${arrow}</span>
-    `;
-  }
-  handleEntityClick(entityId) {
-    this.dispatchEvent(new CustomEvent("entity-clicked", {
-      detail: { entityId },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  handleRowAction(entity, action) {
-    this.dispatchEvent(new CustomEvent("row-action", {
-      detail: { entity, action },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  renderCell(entity, column) {
-    if (column.render) {
-      const content = column.render(entity);
-      if (typeof content === "string") {
-        return x`${content}`;
-      }
-      return content;
-    }
-    const value = column.getValue ? column.getValue(entity) : entity[column.id];
-    return x`${value ?? ""}`;
-  }
-  render() {
-    if (this.entities.length === 0) {
-      return x`
-        <div class="table-container">
-          <div class="empty-state">
-            <div class="empty-state-icon">📊</div>
-            <div>${this.emptyMessage}</div>
-          </div>
-        </div>
-      `;
-    }
-    return x`
-      <div class="table-wrapper">
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                ${this.columns.map((column, index) => {
-      const isSticky = this.stickyFirstColumn && index === 0;
-      const isSortable = column.sortable !== false && this.sortable;
-      const classes = [
-        isSticky ? "sticky-column" : "",
-        isSortable ? "sortable" : "",
-        column.className || "",
-        column.align ? `align-${column.align}` : ""
-      ].filter(Boolean).join(" ");
-      return x`
-                    <th
-                      class=${classes}
-                      style=${column.width ? `width: ${column.width}` : ""}
-                      @click=${() => isSortable && this.handleSort(column.id)}
-                    >
-                      ${column.label}
-                      ${isSortable ? this.getSortIndicator(column.id) : ""}
-                    </th>
-                  `;
-    })}
-              </tr>
-            </thead>
-            <tbody>
-              ${this.entities.map((entity) => x`
-                <tr>
-                  ${this.columns.map((column, index) => {
-      const isSticky = this.stickyFirstColumn && index === 0;
-      const classes = [
-        isSticky ? "sticky-column" : "",
-        column.className || "",
-        column.align ? `align-${column.align}` : ""
-      ].filter(Boolean).join(" ");
-      return x`
-                      <td class=${classes}>
-                        ${this.renderCell(entity, column)}
-                      </td>
-                    `;
-    })}
-                </tr>
-              `)}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-};
-EntityTable.styles = [
-  sharedStyles,
-  i$3`
-      :host {
-        display: block;
-      }
-
-      .table-wrapper {
-        position: relative;
-      }
-
-      .table-scroll {
-        overflow-x: auto;
-        overflow-y: visible;
-      }
-
-      .sort-indicator {
-        margin-left: 4px;
-        font-size: 10px;
-        color: var(--primary-color);
-      }
-
-      .sort-order {
-        font-size: 9px;
-        vertical-align: super;
-        margin-left: 2px;
-      }
-
-      .align-right {
-        text-align: right;
-      }
-
-      .align-center {
-        text-align: center;
-      }
-    `
-];
-__decorateClass$6([
-  n2({ type: Array })
-], EntityTable.prototype, "entities", 2);
-__decorateClass$6([
-  n2({ type: Array })
-], EntityTable.prototype, "columns", 2);
-__decorateClass$6([
-  n2({ type: Boolean })
-], EntityTable.prototype, "sortable", 2);
-__decorateClass$6([
-  n2({ type: Boolean })
-], EntityTable.prototype, "stickyFirstColumn", 2);
-__decorateClass$6([
-  n2({ type: Array })
-], EntityTable.prototype, "sortStack", 2);
-__decorateClass$6([
-  n2({ type: String })
-], EntityTable.prototype, "emptyMessage", 2);
-EntityTable = __decorateClass$6([
-  t("entity-table")
-], EntityTable);
-var __defProp$5 = Object.defineProperty;
-var __getOwnPropDesc$5 = Object.getOwnPropertyDescriptor;
-var __decorateClass$5 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$5(target, key) : target;
-  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
-    if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$5(target, key, result);
-  return result;
-};
-let DeleteSqlModal = class extends i {
-  constructor() {
-    super(...arguments);
-    this.data = null;
-    this.sql = "";
-    this.storageSaved = 0;
-    this.copyButtonText = "Copy to Clipboard";
-  }
-  handleClose() {
-    this.dispatchEvent(new CustomEvent("close-modal", {
-      bubbles: true,
-      composed: true
-    }));
-  }
-  async handleCopy() {
-    try {
-      await copyToClipboard(this.sql);
-      this.copyButtonText = "✓ Copied!";
-      setTimeout(() => {
-        this.copyButtonText = "Copy to Clipboard";
-      }, 2e3);
-    } catch (error) {
-      this.copyButtonText = "✗ Failed to copy";
-      setTimeout(() => {
-        this.copyButtonText = "Copy to Clipboard";
-      }, 2e3);
-    }
-  }
-  render() {
-    if (!this.data) return x``;
-    return x`
-      <div class="modal-overlay" @click=${this.handleClose}>
-        <div class="modal-content" @click=${(e2) => e2.stopPropagation()} style="max-width: 700px;">
-          <div class="modal-header">
-            <h2>Remove Entity: ${this.data.entityId}</h2>
-            <button class="modal-close" @click=${this.handleClose}>&times;</button>
-          </div>
-
-          <div class="modal-body">
-            <div class="warning">
-              <strong>⚠️ Warning:</strong> This action will permanently delete statistics data from your database.
-              Always backup your database before performing deletions!
-            </div>
-
-            <div class="info-grid">
-              <span class="info-label">Entity ID:</span>
-              <span class="info-value">${this.data.entityId}</span>
-
-              <span class="info-label">Status:</span>
-              <span class="info-value">${this.data.status}</span>
-
-              <span class="info-label">Origin:</span>
-              <span class="info-value">${this.data.origin}</span>
-
-              <span class="info-label">Record Count:</span>
-              <span class="info-value">${this.data.count.toLocaleString()}</span>
-
-              <span class="info-label">Storage Saved:</span>
-              <span class="info-value">${formatBytes(this.storageSaved)}</span>
-            </div>
-
-            <h3>SQL Deletion Statement:</h3>
-            <div class="sql-container">${this.sql}</div>
-
-            <button
-              class="copy-button ${this.copyButtonText.includes("Copied") ? "copied" : ""}"
-              @click=${this.handleCopy}
-            >
-              ${this.copyButtonText}
-            </button>
-          </div>
-
-          <div class="modal-footer">
-            <button class="secondary-button" @click=${this.handleClose}>Close</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-};
-DeleteSqlModal.styles = [
-  sharedStyles,
-  i$3`
-      .sql-container {
-        background: var(--secondary-background-color);
-        padding: 16px;
-        border-radius: 4px;
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        overflow-x: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        margin: 16px 0;
-      }
-
-      .warning {
-        background: rgba(255, 152, 0, 0.1);
-        border-left: 4px solid var(--warning-color, #FF9800);
-        padding: 12px;
-        margin-bottom: 16px;
-        border-radius: 4px;
-      }
-
-      .info-grid {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 8px 16px;
-        margin-bottom: 16px;
-      }
-
-      .info-label {
-        font-weight: 500;
-        color: var(--secondary-text-color);
-      }
-
-      .info-value {
-        color: var(--primary-text-color);
-      }
-
-      .copy-button {
-        width: 100%;
-        margin-top: 8px;
-      }
-
-      .copy-button.copied {
-        background: var(--success-color, #4CAF50);
-      }
-    `
-];
-__decorateClass$5([
-  n2({ type: Object })
-], DeleteSqlModal.prototype, "data", 2);
-__decorateClass$5([
-  n2({ type: String })
-], DeleteSqlModal.prototype, "sql", 2);
-__decorateClass$5([
-  n2({ type: Number })
-], DeleteSqlModal.prototype, "storageSaved", 2);
-__decorateClass$5([
-  r()
-], DeleteSqlModal.prototype, "copyButtonText", 2);
-DeleteSqlModal = __decorateClass$5([
-  t("delete-sql-modal")
-], DeleteSqlModal);
-var __defProp$4 = Object.defineProperty;
-var __getOwnPropDesc$4 = Object.getOwnPropertyDescriptor;
-var __decorateClass$4 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$4(target, key) : target;
-  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
-    if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$4(target, key, result);
-  return result;
-};
-let OrphanFinderView = class extends i {
-  constructor() {
-    super(...arguments);
-    this.orphans = [];
-    this.databaseSize = null;
-    this.deletedStorage = 0;
-    this.unavailableStorage = 0;
-    this.filter = "all";
-    this.sortStack = [{ column: "entity_id", direction: "asc" }];
-    this.deleteModalData = null;
-    this.deleteSql = "";
-    this.deleteStorageSaved = 0;
-  }
-  get filteredOrphans() {
-    let filtered = [...this.orphans];
-    if (this.filter === "deleted") {
-      filtered = filtered.filter((o2) => o2.status === "deleted");
-    } else if (this.filter === "unavailable") {
-      filtered = filtered.filter((o2) => o2.status === "unavailable");
-    }
-    return this.sortOrphans(filtered);
-  }
-  sortOrphans(orphans) {
-    return [...orphans].sort((a2, b2) => {
-      for (const { column, direction } of this.sortStack) {
-        let result = 0;
-        switch (column) {
-          case "entity_id":
-            result = a2.entity_id.localeCompare(b2.entity_id);
-            break;
-          case "status":
-            result = a2.status.localeCompare(b2.status);
-            break;
-          case "origin":
-            result = a2.origin.localeCompare(b2.origin);
-            break;
-          case "last_update":
-            const aTime = a2.last_update ? new Date(a2.last_update).getTime() : 0;
-            const bTime = b2.last_update ? new Date(b2.last_update).getTime() : 0;
-            result = aTime - bTime;
-            break;
-          case "count":
-            result = a2.count - b2.count;
-            break;
-        }
-        if (direction === "desc") result = -result;
-        if (result !== 0) return result;
-      }
-      return 0;
-    });
-  }
-  get summaryCards() {
-    const cards = [];
-    if (this.databaseSize) {
-      cards.push(
-        {
-          id: "states",
-          title: "States Table",
-          value: formatNumber(this.databaseSize.states),
-          subtitle: formatBytes(this.databaseSize.states_size)
-        },
-        {
-          id: "statistics",
-          title: "Statistics",
-          value: formatNumber(this.databaseSize.statistics),
-          subtitle: formatBytes(this.databaseSize.statistics_size)
-        },
-        {
-          id: "statistics_short_term",
-          title: "Statistics Short-term",
-          value: formatNumber(this.databaseSize.statistics_short_term),
-          subtitle: formatBytes(this.databaseSize.statistics_short_term_size)
-        },
-        {
-          id: "other",
-          title: "Other Tables",
-          value: formatNumber(this.databaseSize.other),
-          subtitle: formatBytes(this.databaseSize.other_size)
-        }
-      );
-    }
-    return cards;
-  }
-  get storageCards() {
-    return [
-      {
-        id: "deleted_storage",
-        title: "Deleted Entities Storage",
-        value: formatBytes(this.deletedStorage),
-        subtitle: `${this.orphans.filter((o2) => o2.status === "deleted").length} entities`
-      },
-      {
-        id: "unavailable_storage",
-        title: "Unavailable Entities Storage",
-        value: formatBytes(this.unavailableStorage),
-        subtitle: `${this.orphans.filter((o2) => o2.status === "unavailable").length} entities`
-      }
-    ];
-  }
-  get tableColumns() {
-    return [
-      {
-        id: "entity_id",
-        label: "Entity ID",
-        sortable: true,
-        render: (entity) => x`
-          <span class="entity-id-link" @click=${() => this.handleEntityClick(entity.entity_id)}>
-            ${entity.entity_id}
-          </span>
-        `
-      },
-      {
-        id: "status",
-        label: "Status",
-        sortable: true,
-        align: "center",
-        render: (entity) => {
-          const badgeClass = entity.status === "deleted" ? "status-deleted" : "status-unavailable";
-          const icon = entity.status === "deleted" ? "✕" : "⚠";
-          return x`<span class="status-badge ${badgeClass}">${icon} ${entity.status}</span>`;
-        }
-      },
-      {
-        id: "origin",
-        label: "Origin",
-        sortable: true,
-        align: "center",
-        getValue: (entity) => entity.origin
-      },
-      {
-        id: "last_update",
-        label: "Last Updated",
-        sortable: true,
-        align: "center",
-        render: (entity) => entity.last_update ? formatDate(entity.last_update) : ""
-      },
-      {
-        id: "count",
-        label: "Statistics Count",
-        sortable: true,
-        align: "right",
-        render: (entity) => formatNumber(entity.count)
-      },
-      {
-        id: "actions",
-        label: "Actions",
-        sortable: false,
-        align: "center",
-        render: (entity) => x`
-          <button @click=${() => this.handleGenerateSql(entity)}>Generate SQL</button>
-        `
-      }
-    ];
-  }
-  handleFilterClick(filterId) {
-    this.filter = filterId;
-  }
-  handleClearFilters() {
-    this.filter = "all";
-  }
-  handleSortChanged(e2) {
-    this.sortStack = e2.detail.sortStack;
-  }
-  handleEntityClick(entityId) {
-    const event = new Event("hass-more-info", { bubbles: true, composed: true });
-    event.detail = { entityId };
-    this.dispatchEvent(event);
-  }
-  async handleGenerateSql(entity) {
-    this.dispatchEvent(new CustomEvent("generate-sql", {
-      detail: {
-        metadataId: entity.metadata_id,
-        origin: entity.origin,
-        entity
-      },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  // Called by parent when SQL is ready
-  showDeleteModal(data, sql, storageSaved) {
-    this.deleteModalData = data;
-    this.deleteSql = sql;
-    this.deleteStorageSaved = storageSaved;
-  }
-  handleCloseModal() {
-    this.deleteModalData = null;
-    this.deleteSql = "";
-    this.deleteStorageSaved = 0;
-  }
-  render() {
-    const filterButtons = [
-      { id: "all", label: "All", active: this.filter === "all" },
-      { id: "deleted", label: "Deleted Only", active: this.filter === "deleted" },
-      { id: "unavailable", label: "Unavailable Only", active: this.filter === "unavailable" }
-    ];
-    return x`
-      <div class="description">
-        Find and remove orphaned statistics entities that no longer exist in Home Assistant.
-      </div>
-
-      <h2>Database Overview</h2>
-      <summary-cards .cards=${this.summaryCards} .columns=${4}></summary-cards>
-
-      <h2>Orphaned Entities Storage</h2>
-      <summary-cards .cards=${this.storageCards} .columns=${2}></summary-cards>
-
-      <h2>Orphaned Entities</h2>
-      <filter-bar
-        .filters=${filterButtons}
-        .showClearButton=${this.filter !== "all"}
-        @filter-clicked=${(e2) => this.handleFilterClick(e2.detail.filterId)}
-        @clear-filters=${this.handleClearFilters}
-      ></filter-bar>
-
-      <entity-table
-        .entities=${this.filteredOrphans}
-        .columns=${this.tableColumns}
-        .sortStack=${this.sortStack}
-        .stickyFirstColumn=${false}
-        .emptyMessage=${"No orphaned entities found"}
-        @sort-changed=${this.handleSortChanged}
-      ></entity-table>
-
-      ${this.deleteModalData ? x`
-        <delete-sql-modal
-          .data=${this.deleteModalData}
-          .sql=${this.deleteSql}
-          .storageSaved=${this.deleteStorageSaved}
-          @close-modal=${this.handleCloseModal}
-        ></delete-sql-modal>
-      ` : ""}
-    `;
-  }
-};
-OrphanFinderView.styles = [
-  sharedStyles,
-  i$3`
-      :host {
-        display: block;
-      }
-
-      .description {
-        margin-bottom: 16px;
-        color: var(--secondary-text-color);
-      }
-    `
-];
-__decorateClass$4([
-  n2({ type: Object })
-], OrphanFinderView.prototype, "hass", 2);
-__decorateClass$4([
-  n2({ type: Array })
-], OrphanFinderView.prototype, "orphans", 2);
-__decorateClass$4([
-  n2({ type: Object })
-], OrphanFinderView.prototype, "databaseSize", 2);
-__decorateClass$4([
-  n2({ type: Number })
-], OrphanFinderView.prototype, "deletedStorage", 2);
-__decorateClass$4([
-  n2({ type: Number })
-], OrphanFinderView.prototype, "unavailableStorage", 2);
-__decorateClass$4([
-  r()
-], OrphanFinderView.prototype, "filter", 2);
-__decorateClass$4([
-  r()
-], OrphanFinderView.prototype, "sortStack", 2);
-__decorateClass$4([
-  r()
-], OrphanFinderView.prototype, "deleteModalData", 2);
-__decorateClass$4([
-  r()
-], OrphanFinderView.prototype, "deleteSql", 2);
-__decorateClass$4([
-  r()
-], OrphanFinderView.prototype, "deleteStorageSaved", 2);
-OrphanFinderView = __decorateClass$4([
-  t("orphan-finder-view")
-], OrphanFinderView);
-var __defProp$3 = Object.defineProperty;
-var __getOwnPropDesc$3 = Object.getOwnPropertyDescriptor;
-var __decorateClass$3 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$3(target, key) : target;
-  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
-    if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$3(target, key, result);
   return result;
 };
 let StorageHealthSummary = class extends i {
@@ -2497,29 +1586,339 @@ StorageHealthSummary.styles = [
       }
     `
 ];
-__decorateClass$3([
+__decorateClass$6([
   n2({ type: Object })
 ], StorageHealthSummary.prototype, "summary", 2);
-__decorateClass$3([
+__decorateClass$6([
   n2({ type: Array })
 ], StorageHealthSummary.prototype, "entities", 2);
-__decorateClass$3([
+__decorateClass$6([
   n2({ type: Object })
 ], StorageHealthSummary.prototype, "databaseSize", 2);
-__decorateClass$3([
+__decorateClass$6([
   n2({ type: String })
 ], StorageHealthSummary.prototype, "activeFilter", 2);
-StorageHealthSummary = __decorateClass$3([
+StorageHealthSummary = __decorateClass$6([
   t("storage-health-summary")
 ], StorageHealthSummary);
-var __defProp$2 = Object.defineProperty;
-var __getOwnPropDesc$2 = Object.getOwnPropertyDescriptor;
-var __decorateClass$2 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$2(target, key) : target;
+var __defProp$5 = Object.defineProperty;
+var __getOwnPropDesc$5 = Object.getOwnPropertyDescriptor;
+var __decorateClass$5 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$5(target, key) : target;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$2(target, key, result);
+  if (kind && result) __defProp$5(target, key, result);
+  return result;
+};
+let FilterBar = class extends i {
+  constructor() {
+    super(...arguments);
+    this.filters = [];
+    this.showSearch = false;
+    this.searchPlaceholder = "Search entities...";
+    this.searchValue = "";
+    this.showClearButton = false;
+    this.debouncedSearch = debounce((value) => {
+      this.dispatchEvent(new CustomEvent("search-changed", {
+        detail: { query: value },
+        bubbles: true,
+        composed: true
+      }));
+    }, 300);
+  }
+  handleFilterClick(filterId) {
+    this.dispatchEvent(new CustomEvent("filter-clicked", {
+      detail: { filterId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleSearchInput(e2) {
+    const input = e2.target;
+    this.searchValue = input.value;
+    this.debouncedSearch(this.searchValue);
+  }
+  handleClearFilters() {
+    this.searchValue = "";
+    this.dispatchEvent(new CustomEvent("clear-filters", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  render() {
+    return x`
+      <div class="filter-container">
+        ${this.filters.map((filter) => x`
+          <button
+            class="filter-button ${filter.active ? "active" : ""}"
+            @click=${() => this.handleFilterClick(filter.id)}
+          >
+            ${filter.label}
+          </button>
+        `)}
+
+        ${this.showSearch ? x`
+          <div class="search-box">
+            <input
+              type="search"
+              placeholder=${this.searchPlaceholder}
+              .value=${this.searchValue}
+              @input=${this.handleSearchInput}
+            />
+          </div>
+        ` : ""}
+
+        ${this.showClearButton ? x`
+          <button
+            class="secondary-button clear-button"
+            @click=${this.handleClearFilters}
+          >
+            Clear Filters
+          </button>
+        ` : ""}
+      </div>
+    `;
+  }
+};
+FilterBar.styles = [
+  sharedStyles,
+  i$3`
+      :host {
+        display: block;
+      }
+
+      .filter-container {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .clear-button {
+        margin-left: auto;
+      }
+    `
+];
+__decorateClass$5([
+  n2({ type: Array })
+], FilterBar.prototype, "filters", 2);
+__decorateClass$5([
+  n2({ type: Boolean })
+], FilterBar.prototype, "showSearch", 2);
+__decorateClass$5([
+  n2({ type: String })
+], FilterBar.prototype, "searchPlaceholder", 2);
+__decorateClass$5([
+  n2({ type: String })
+], FilterBar.prototype, "searchValue", 2);
+__decorateClass$5([
+  n2({ type: Boolean })
+], FilterBar.prototype, "showClearButton", 2);
+FilterBar = __decorateClass$5([
+  t("filter-bar")
+], FilterBar);
+var __defProp$4 = Object.defineProperty;
+var __getOwnPropDesc$4 = Object.getOwnPropertyDescriptor;
+var __decorateClass$4 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$4(target, key) : target;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp$4(target, key, result);
+  return result;
+};
+let EntityTable = class extends i {
+  constructor() {
+    super(...arguments);
+    this.entities = [];
+    this.columns = [];
+    this.sortable = true;
+    this.stickyFirstColumn = false;
+    this.sortStack = [{ column: "", direction: "asc" }];
+    this.emptyMessage = "No data available";
+  }
+  handleSort(columnId) {
+    if (!this.sortable) return;
+    const column = this.columns.find((c2) => c2.id === columnId);
+    if (!column?.sortable) return;
+    const currentSort = this.sortStack[0];
+    if (currentSort && currentSort.column === columnId) {
+      const newDirection = currentSort.direction === "asc" ? "desc" : "asc";
+      this.sortStack = [{ column: columnId, direction: newDirection }];
+    } else {
+      this.sortStack = [{ column: columnId, direction: "asc" }];
+    }
+    this.dispatchEvent(new CustomEvent("sort-changed", {
+      detail: { sortStack: this.sortStack },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  getSortIndicator(columnId) {
+    const sortIndex = this.sortStack.findIndex((s2) => s2.column === columnId);
+    if (sortIndex < 0) return "";
+    const sort = this.sortStack[sortIndex];
+    const arrow = sort.direction === "asc" ? "▲" : "▼";
+    return x`
+      <span class="sort-indicator">${arrow}</span>
+    `;
+  }
+  handleEntityClick(entityId) {
+    this.dispatchEvent(new CustomEvent("entity-clicked", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleRowAction(entity, action) {
+    this.dispatchEvent(new CustomEvent("row-action", {
+      detail: { entity, action },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  renderCell(entity, column) {
+    if (column.render) {
+      const content = column.render(entity);
+      if (typeof content === "string") {
+        return x`${content}`;
+      }
+      return content;
+    }
+    const value = column.getValue ? column.getValue(entity) : entity[column.id];
+    return x`${value ?? ""}`;
+  }
+  render() {
+    if (this.entities.length === 0) {
+      return x`
+        <div class="table-container">
+          <div class="empty-state">
+            <div class="empty-state-icon">📊</div>
+            <div>${this.emptyMessage}</div>
+          </div>
+        </div>
+      `;
+    }
+    return x`
+      <div class="table-wrapper">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                ${this.columns.map((column, index) => {
+      const isSticky = this.stickyFirstColumn && index === 0;
+      const isSortable = column.sortable !== false && this.sortable;
+      const classes = [
+        isSticky ? "sticky-column" : "",
+        isSortable ? "sortable" : "",
+        column.className || "",
+        column.align ? `align-${column.align}` : ""
+      ].filter(Boolean).join(" ");
+      return x`
+                    <th
+                      class=${classes}
+                      style=${column.width ? `width: ${column.width}` : ""}
+                      @click=${() => isSortable && this.handleSort(column.id)}
+                    >
+                      ${column.label}
+                      ${isSortable ? this.getSortIndicator(column.id) : ""}
+                    </th>
+                  `;
+    })}
+              </tr>
+            </thead>
+            <tbody>
+              ${this.entities.map((entity) => x`
+                <tr>
+                  ${this.columns.map((column, index) => {
+      const isSticky = this.stickyFirstColumn && index === 0;
+      const classes = [
+        isSticky ? "sticky-column" : "",
+        column.className || "",
+        column.align ? `align-${column.align}` : ""
+      ].filter(Boolean).join(" ");
+      return x`
+                      <td class=${classes}>
+                        ${this.renderCell(entity, column)}
+                      </td>
+                    `;
+    })}
+                </tr>
+              `)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+};
+EntityTable.styles = [
+  sharedStyles,
+  i$3`
+      :host {
+        display: block;
+      }
+
+      .table-wrapper {
+        position: relative;
+      }
+
+      .table-scroll {
+        overflow-x: auto;
+        overflow-y: visible;
+      }
+
+      .sort-indicator {
+        margin-left: 4px;
+        font-size: 10px;
+        color: var(--primary-color);
+      }
+
+      .sort-order {
+        font-size: 9px;
+        vertical-align: super;
+        margin-left: 2px;
+      }
+
+      .align-right {
+        text-align: right;
+      }
+
+      .align-center {
+        text-align: center;
+      }
+    `
+];
+__decorateClass$4([
+  n2({ type: Array })
+], EntityTable.prototype, "entities", 2);
+__decorateClass$4([
+  n2({ type: Array })
+], EntityTable.prototype, "columns", 2);
+__decorateClass$4([
+  n2({ type: Boolean })
+], EntityTable.prototype, "sortable", 2);
+__decorateClass$4([
+  n2({ type: Boolean })
+], EntityTable.prototype, "stickyFirstColumn", 2);
+__decorateClass$4([
+  n2({ type: Array })
+], EntityTable.prototype, "sortStack", 2);
+__decorateClass$4([
+  n2({ type: String })
+], EntityTable.prototype, "emptyMessage", 2);
+EntityTable = __decorateClass$4([
+  t("entity-table")
+], EntityTable);
+var __defProp$3 = Object.defineProperty;
+var __getOwnPropDesc$3 = Object.getOwnPropertyDescriptor;
+var __decorateClass$3 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$3(target, key) : target;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp$3(target, key, result);
   return result;
 };
 let EntityDetailsModal = class extends i {
@@ -2777,12 +2176,166 @@ EntityDetailsModal.styles = [
       }
     `
 ];
-__decorateClass$2([
+__decorateClass$3([
   n2({ type: Object })
 ], EntityDetailsModal.prototype, "entity", 2);
-EntityDetailsModal = __decorateClass$2([
+EntityDetailsModal = __decorateClass$3([
   t("entity-details-modal")
 ], EntityDetailsModal);
+var __defProp$2 = Object.defineProperty;
+var __getOwnPropDesc$2 = Object.getOwnPropertyDescriptor;
+var __decorateClass$2 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$2(target, key) : target;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp$2(target, key, result);
+  return result;
+};
+let DeleteSqlModal = class extends i {
+  constructor() {
+    super(...arguments);
+    this.data = null;
+    this.sql = "";
+    this.storageSaved = 0;
+    this.copyButtonText = "Copy to Clipboard";
+  }
+  handleClose() {
+    this.dispatchEvent(new CustomEvent("close-modal", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  async handleCopy() {
+    try {
+      await copyToClipboard(this.sql);
+      this.copyButtonText = "✓ Copied!";
+      setTimeout(() => {
+        this.copyButtonText = "Copy to Clipboard";
+      }, 2e3);
+    } catch (error) {
+      this.copyButtonText = "✗ Failed to copy";
+      setTimeout(() => {
+        this.copyButtonText = "Copy to Clipboard";
+      }, 2e3);
+    }
+  }
+  render() {
+    if (!this.data) return x``;
+    return x`
+      <div class="modal-overlay" @click=${this.handleClose}>
+        <div class="modal-content" @click=${(e2) => e2.stopPropagation()} style="max-width: 700px;">
+          <div class="modal-header">
+            <h2>Remove Entity: ${this.data.entityId}</h2>
+            <button class="modal-close" @click=${this.handleClose}>&times;</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="warning">
+              <strong>⚠️ Warning:</strong> This action will permanently delete statistics data from your database.
+              Always backup your database before performing deletions!
+            </div>
+
+            <div class="info-grid">
+              <span class="info-label">Entity ID:</span>
+              <span class="info-value">${this.data.entityId}</span>
+
+              <span class="info-label">Status:</span>
+              <span class="info-value">${this.data.status}</span>
+
+              <span class="info-label">Origin:</span>
+              <span class="info-value">${this.data.origin}</span>
+
+              <span class="info-label">Record Count:</span>
+              <span class="info-value">${this.data.count.toLocaleString()}</span>
+
+              <span class="info-label">Storage Saved:</span>
+              <span class="info-value">${formatBytes(this.storageSaved)}</span>
+            </div>
+
+            <h3>SQL Deletion Statement:</h3>
+            <div class="sql-container">${this.sql}</div>
+
+            <button
+              class="copy-button ${this.copyButtonText.includes("Copied") ? "copied" : ""}"
+              @click=${this.handleCopy}
+            >
+              ${this.copyButtonText}
+            </button>
+          </div>
+
+          <div class="modal-footer">
+            <button class="secondary-button" @click=${this.handleClose}>Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+};
+DeleteSqlModal.styles = [
+  sharedStyles,
+  i$3`
+      .sql-container {
+        background: var(--secondary-background-color);
+        padding: 16px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        margin: 16px 0;
+      }
+
+      .warning {
+        background: rgba(255, 152, 0, 0.1);
+        border-left: 4px solid var(--warning-color, #FF9800);
+        padding: 12px;
+        margin-bottom: 16px;
+        border-radius: 4px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 16px;
+        margin-bottom: 16px;
+      }
+
+      .info-label {
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+
+      .info-value {
+        color: var(--primary-text-color);
+      }
+
+      .copy-button {
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .copy-button.copied {
+        background: var(--success-color, #4CAF50);
+      }
+    `
+];
+__decorateClass$2([
+  n2({ type: Object })
+], DeleteSqlModal.prototype, "data", 2);
+__decorateClass$2([
+  n2({ type: String })
+], DeleteSqlModal.prototype, "sql", 2);
+__decorateClass$2([
+  n2({ type: Number })
+], DeleteSqlModal.prototype, "storageSaved", 2);
+__decorateClass$2([
+  r()
+], DeleteSqlModal.prototype, "copyButtonText", 2);
+DeleteSqlModal = __decorateClass$2([
+  t("delete-sql-modal")
+], DeleteSqlModal);
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -3020,7 +2573,7 @@ let StorageOverviewView = class extends i {
                 class="info-icon-btn"
                 @click=${() => this.handleEntityClick(entity)}
                 title="Show details"
-                style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--secondary-text-color);"
+                style="background: none; border: none; cursor: pointer; padding: 4px; color: #3288cb;"
               >
                 <svg viewBox="0 0 90 90" width="18" height="18" fill="currentColor">
                   <circle cx="45" cy="45" r="45"/>
@@ -3033,10 +2586,11 @@ let StorageOverviewView = class extends i {
                   class="secondary-button"
                   @click=${() => this.handleGenerateSql(entity)}
                   title="Generate SQL to delete this entity"
-                  style="padding: 4px 8px; font-size: 11px;"
+                style="background: none; border: none; cursor: pointer; padding: 4px; color: #f44336;"
                 >
-                  <svg width="18" height="18" viewBox="0 0 90 90" fill="currentColor"><path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#0D0D0D"/></svg>
-                </button>
+<svg width="18" height="18" viewBox="0.045500002801418304 0.04500000178813934 0.45000001788139343 0.4500001072883606" fill="currentColor" style="color: #f44336">
+  <path d="M.158.09A.045.045 0 0 1 .203.045h.135A.045.045 0 0 1 .383.09v.045h.09a.022.022 0 1 1 0 .045H.449l-.02.273a.045.045 0 0 1-.045.042H.156A.045.045 0 0 1 .111.453L.092.18H.068a.022.022 0 0 1 0-.045h.09zm.045.045h.135V.09H.202zM.137.18l.019.27h.228L.403.18zm.088.045a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .224.225m.09 0a.02.02 0 0 1 .022.022v.135a.022.022 0 1 1-.045 0V.247A.02.02 0 0 1 .313.225" fill="#0D0D0D"/>
+</svg>                </button>
               ` : ""}
             </div>
           `;
@@ -3284,16 +2838,12 @@ var __decorateClass = (decorators, target, key, kind) => {
 let StatisticsOrphanPanelV2 = class extends i {
   constructor() {
     super(...arguments);
-    this.currentView = "orphans";
     this.loading = false;
     this.loadingMessage = "";
     this.loadingSteps = [];
     this.currentStepIndex = 0;
     this.error = null;
-    this.orphans = [];
     this.databaseSize = null;
-    this.deletedStorage = 0;
-    this.unavailableStorage = 0;
     this.storageEntities = [];
     this.storageSummary = null;
   }
@@ -3316,49 +2866,6 @@ let StatisticsOrphanPanelV2 = class extends i {
         this.loadingSteps[this.currentStepIndex].status = "active";
       }
       this.requestUpdate();
-    }
-  }
-  async loadOrphanFinderData() {
-    this.loading = true;
-    this.error = null;
-    this.initLoadingSteps([
-      "Reading entity registry",
-      "Reading state machine",
-      "Scanning states_meta table",
-      "Scanning statistics_meta table",
-      "Identifying deleted entities",
-      "Identifying unavailable entities",
-      "Calculating storage usage",
-      "Fetching database statistics"
-    ]);
-    try {
-      this.loadingMessage = "Analyzing orphaned entities...";
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      const orphanData = await this.apiService.fetchOrphansList();
-      this.orphans = orphanData.orphans;
-      this.deletedStorage = orphanData.deleted_storage;
-      this.unavailableStorage = orphanData.unavailable_storage;
-      this.completeCurrentStep();
-      this.completeCurrentStep();
-      this.loadingMessage = "Fetching database statistics...";
-      this.databaseSize = await this.apiService.fetchDatabaseSize();
-      this.completeCurrentStep();
-      this.loadingMessage = "Complete!";
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : "Unknown error occurred";
-      console.error("Error loading orphan finder data:", err);
-    } finally {
-      this.loading = false;
-      this.loadingSteps = [];
     }
   }
   async loadStorageOverviewData() {
@@ -3403,37 +2910,28 @@ let StatisticsOrphanPanelV2 = class extends i {
       this.loadingSteps = [];
     }
   }
-  handleTabChange(view) {
-    this.currentView = view;
-  }
   handleRefresh() {
-    if (this.currentView === "orphans") {
-      this.loadOrphanFinderData();
-    } else {
-      this.loadStorageOverviewData();
-    }
+    this.loadStorageOverviewData();
   }
   async handleGenerateSql(e2) {
-    const { entity_id, in_states_meta, in_statistics_meta, metadataId, origin, entity } = e2.detail;
+    const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e2.detail;
     this.loading = true;
     this.loadingMessage = "Generating SQL...";
     try {
-      let result;
-      if (entity_id !== void 0 && in_states_meta !== void 0) {
-        result = await this.apiService.generateDeleteSql(entity_id, origin, in_states_meta, in_statistics_meta);
-      } else {
-        result = await this.apiService.generateDeleteSql(metadataId, origin);
-      }
+      const result = await this.apiService.generateDeleteSql(
+        entity_id,
+        origin,
+        in_states_meta,
+        in_statistics_meta
+      );
       const modalData = {
         entityId: entity.entityId || entity.entity_id || entity_id,
-        metadataId: metadataId || 0,
+        metadataId: entity.metadata_id || 0,
         origin,
         status: entity.status || "deleted",
         count: entity.count
       };
-      if (this.currentView === "orphans" && this.orphanView) {
-        this.orphanView.showDeleteModal(modalData, result.sql, result.storage_saved);
-      } else if (this.currentView === "storage" && this.storageView) {
+      if (this.storageView) {
         this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
     } catch (err) {
@@ -3458,39 +2956,13 @@ let StatisticsOrphanPanelV2 = class extends i {
         </div>
       ` : ""}
 
-      <div class="tab-navigation">
-        <button
-          class="tab-button ${this.currentView === "orphans" ? "active" : ""}"
-          @click=${() => this.handleTabChange("orphans")}
-        >
-          Orphaned Entities
-        </button>
-        <button
-          class="tab-button ${this.currentView === "storage" ? "active" : ""}"
-          @click=${() => this.handleTabChange("storage")}
-        >
-          Storage Overview
-        </button>
-      </div>
-
-      ${this.currentView === "orphans" ? x`
-        <orphan-finder-view
-          .hass=${this.hass}
-          .orphans=${this.orphans}
-          .databaseSize=${this.databaseSize}
-          .deletedStorage=${this.deletedStorage}
-          .unavailableStorage=${this.unavailableStorage}
-          @generate-sql=${this.handleGenerateSql}
-        ></orphan-finder-view>
-      ` : x`
-        <storage-overview-view
-          .hass=${this.hass}
-          .entities=${this.storageEntities}
-          .summary=${this.storageSummary}
-          .databaseSize=${this.databaseSize}
-          @generate-sql=${this.handleGenerateSql}
-        ></storage-overview-view>
-      `}
+      <storage-overview-view
+        .hass=${this.hass}
+        .entities=${this.storageEntities}
+        .summary=${this.storageSummary}
+        .databaseSize=${this.databaseSize}
+        @generate-sql=${this.handleGenerateSql}
+      ></storage-overview-view>
 
       ${this.loading ? x`
         <div class="loading-overlay">
@@ -3541,33 +3013,6 @@ StatisticsOrphanPanelV2.styles = [
         margin-bottom: 16px;
         padding-bottom: 16px;
         border-bottom: 1px solid var(--divider-color);
-      }
-
-      .tab-navigation {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 24px;
-      }
-
-      .tab-button {
-        padding: 8px 24px;
-        background: var(--secondary-background-color);
-        border: none;
-        border-radius: 4px 4px 0 0;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--primary-text-color);
-        transition: background 0.3s;
-      }
-
-      .tab-button:hover {
-        background: var(--divider-color);
-      }
-
-      .tab-button.active {
-        background: var(--primary-color);
-        color: var(--text-primary-color);
       }
 
       .loading-overlay {
@@ -3666,9 +3111,6 @@ __decorateClass([
 ], StatisticsOrphanPanelV2.prototype, "hass", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "currentView", 2);
-__decorateClass([
-  r()
 ], StatisticsOrphanPanelV2.prototype, "loading", 2);
 __decorateClass([
   r()
@@ -3684,25 +3126,13 @@ __decorateClass([
 ], StatisticsOrphanPanelV2.prototype, "error", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "orphans", 2);
-__decorateClass([
-  r()
 ], StatisticsOrphanPanelV2.prototype, "databaseSize", 2);
-__decorateClass([
-  r()
-], StatisticsOrphanPanelV2.prototype, "deletedStorage", 2);
-__decorateClass([
-  r()
-], StatisticsOrphanPanelV2.prototype, "unavailableStorage", 2);
 __decorateClass([
   r()
 ], StatisticsOrphanPanelV2.prototype, "storageEntities", 2);
 __decorateClass([
   r()
 ], StatisticsOrphanPanelV2.prototype, "storageSummary", 2);
-__decorateClass([
-  e("orphan-finder-view")
-], StatisticsOrphanPanelV2.prototype, "orphanView", 2);
 __decorateClass([
   e("storage-overview-view")
 ], StatisticsOrphanPanelV2.prototype, "storageView", 2);

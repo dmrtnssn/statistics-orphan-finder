@@ -4,7 +4,6 @@
  */
 
 import type {
-  OrphanListResponse,
   DatabaseSize,
   EntityStorageOverviewResponse,
   GenerateSqlResponse,
@@ -16,13 +15,6 @@ const API_BASE = 'statistics_orphan_finder_v2';
 
 export class ApiService {
   constructor(private hass: HomeAssistant) {}
-
-  /**
-   * Fetch orphaned entities list
-   */
-  async fetchOrphansList(): Promise<OrphanListResponse> {
-    return this.hass.callApi<OrphanListResponse>('GET', `${API_BASE}?action=list`);
-  }
 
   /**
    * Fetch database size information
@@ -39,27 +31,19 @@ export class ApiService {
   }
 
   /**
-   * Generate delete SQL for an orphaned entity
-   * Supports both legacy (metadata_id + origin) and new (entity_id + flags) modes
+   * Generate delete SQL for an entity
    */
   async generateDeleteSql(
-    metadataIdOrEntityId: number | string,
+    entityId: string,
     origin: OrphanOrigin,
-    inStatesMeta?: boolean,
-    inStatisticsMeta?: boolean
+    inStatesMeta: boolean,
+    inStatisticsMeta: boolean
   ): Promise<GenerateSqlResponse> {
-    let url = `${API_BASE}?action=generate_delete_sql`;
-
-    // New mode: pass entity_id and flags
-    if (typeof metadataIdOrEntityId === 'string' || inStatesMeta !== undefined) {
-      url += `&entity_id=${encodeURIComponent(metadataIdOrEntityId.toString())}`;
-      url += `&in_states_meta=${inStatesMeta ? 'true' : 'false'}`;
-      url += `&in_statistics_meta=${inStatisticsMeta ? 'true' : 'false'}`;
-      url += `&origin=${encodeURIComponent(origin)}`;
-    } else {
-      // Legacy mode: metadata_id + origin (for backwards compatibility)
-      url += `&metadata_id=${metadataIdOrEntityId}&origin=${encodeURIComponent(origin)}`;
-    }
+    const url = `${API_BASE}?action=generate_delete_sql` +
+      `&entity_id=${encodeURIComponent(entityId)}` +
+      `&in_states_meta=${inStatesMeta ? 'true' : 'false'}` +
+      `&in_statistics_meta=${inStatisticsMeta ? 'true' : 'false'}` +
+      `&origin=${encodeURIComponent(origin)}`;
 
     return this.hass.callApi<GenerateSqlResponse>('GET', url);
   }

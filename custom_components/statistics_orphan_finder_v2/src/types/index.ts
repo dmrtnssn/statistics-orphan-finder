@@ -36,26 +36,11 @@ export interface HomeAssistant {
 }
 
 // ============================================================================
-// Orphan Finder Types
+// SQL Generation Types
 // ============================================================================
 
 export type OrphanStatus = 'deleted' | 'unavailable';
 export type OrphanOrigin = 'States' | 'Long-term' | 'Short-term' | 'Both' | 'States+Statistics';
-
-export interface OrphanEntity {
-  entity_id: string;
-  count: number;
-  status: OrphanStatus;
-  last_update: string | null;
-  origin: OrphanOrigin;
-  metadata_id: number;
-}
-
-export interface OrphanListResponse {
-  orphans: OrphanEntity[];
-  deleted_storage: number;
-  unavailable_storage: number;
-}
 
 export interface DatabaseSize {
   states: number;
@@ -172,14 +157,12 @@ export type BasicFilterValue = 'all' | 'in_registry' | 'in_state' | 'deleted';
 export type RegistryFilterValue = 'Enabled' | 'Disabled';
 export type StateFilterValue = 'Available' | 'Unavailable';
 export type AdvancedFilterValue = 'all' | 'only_states' | 'only_stats';
-export type OrphanFilterValue = 'all' | 'deleted' | 'unavailable';
 
 export interface FilterState {
   basicFilter: BasicFilterValue;
   registryFilter: RegistryFilterValue | null;
   stateFilter: StateFilterValue | null;
   advancedFilter: AdvancedFilterValue;
-  orphanFilter: OrphanFilterValue;
   searchQuery: string;
 }
 
@@ -206,7 +189,7 @@ export interface EntityClickedEvent extends CustomEvent {
 
 export interface EntityDetailsEvent extends CustomEvent {
   detail: {
-    entity: StorageEntity | OrphanEntity;
+    entity: StorageEntity;
   };
 }
 
@@ -230,7 +213,7 @@ export interface EntityDetailsModalData {
 // API Action Types
 // ============================================================================
 
-export type ApiAction = 'list' | 'database_size' | 'entity_storage_overview' | 'generate_delete_sql';
+export type ApiAction = 'database_size' | 'entity_storage_overview' | 'generate_delete_sql';
 
 export interface ApiParams {
   action: ApiAction;

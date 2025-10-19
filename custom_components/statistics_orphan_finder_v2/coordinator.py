@@ -31,7 +31,6 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         )
         self.entry = entry
         self._engine = None
-        self._categorized_storage = {"deleted_storage": 0, "unavailable_storage": 0}
 
     def _get_engine(self):
         """Get or create database engine."""
@@ -216,153 +215,6 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 return f"{hours:.1f}h"
             else:
                 return f"{hours:.2f}h"
-
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch orphaned entities from statistics."""
-        try:
-            # Get entity registry
-            entity_registry = er.async_get(self.hass)
-            return await self.hass.async_add_executor_job(
-                self._fetch_orphaned_entities, entity_registry
-            )
-        except SQLAlchemyError as err:
-            raise UpdateFailed(f"Error communicating with database: {err}") from err
-
-    def _fetch_orphaned_entities(self, entity_registry) -> dict[str, Any]:
-        """Fetch orphaned entities (blocking I/O)."""
-        engine = self._get_engine()
-
-        with engine.connect() as conn:
-            # Get all unique metadata_ids from statistics (long-term)
-            query = text("""
-                SELECT DISTINCT metadata_id
-                FROM statistics
-            """)
-            result = conn.execute(query)
-            stats_metadata_ids = {row[0] for row in result}
-
-            # Get all unique metadata_ids from statistics_short_term
-            query_short = text("""
-                SELECT DISTINCT metadata_id
-                FROM statistics_short_term
-            """)
-            try:
-                result_short = conn.execute(query_short)
-                stats_short_term_metadata_ids = {row[0] for row in result_short}
-            except Exception:
-                # Table might not exist in older HA versions
-                stats_short_term_metadata_ids = set()
-
-            # Combine all metadata IDs
-            all_metadata_ids = stats_metadata_ids | stats_short_term_metadata_ids
-
-            # Get metadata for these IDs
-            if not all_metadata_ids:
-                return {}
-
-            placeholders = ",".join([":id" + str(i) for i in range(len(all_metadata_ids))])
-            query = text(f"""
-                SELECT id, statistic_id
-                FROM statistics_meta
-                WHERE id IN ({placeholders})
-            """)
-
-            params = {f"id{i}": mid for i, mid in enumerate(all_metadata_ids)}
-            result = conn.execute(query, params)
-
-            metadata_map = {row[0]: row[1] for row in result}
-
-            # Check which entities exist in Home Assistant
-            orphaned_data = {}
-
-            for metadata_id, entity_id in metadata_map.items():
-                # Check state machine (currently active entities)
-                state = self.hass.states.get(entity_id)
-
-                # Check entity registry (persisted entities, even if unavailable)
-                registry_entry = entity_registry.async_get(entity_id)
-
-                # Determine status
-                status = None
-                if registry_entry is not None:
-                    # Entity exists in registry
-                    if state is None:
-                        status = "unavailable"  # Registered but no state
-                    # else: entity exists and has state (not orphaned, skip)
-                elif state is None:
-                    # Not in registry and no state = truly deleted
-                    status = "deleted"
-                # else: has state but not in registry (unusual, but skip)
-
-                # Only include if truly deleted or unavailable
-                if status:
-                    # Determine origin (which table(s) contain this entity)
-                    in_long_term = metadata_id in stats_metadata_ids
-                    in_short_term = metadata_id in stats_short_term_metadata_ids
-
-                    if in_long_term and in_short_term:
-                        origin = "Both"
-                    elif in_long_term:
-                        origin = "Long-term"
-                    else:
-                        origin = "Short-term"
-
-                    # Count statistics entries and get the most recent statistic timestamp
-                    # The 'start_ts' column contains Unix timestamps
-                    count = 0
-                    last_update_ts = None
-
-                    if in_long_term:
-                        stats_query = text("""
-                            SELECT COUNT(*) as count,
-                                   MAX(start_ts) as last_update_ts
-                            FROM statistics
-                            WHERE metadata_id = :metadata_id
-                        """)
-                        stats_result = conn.execute(stats_query, {"metadata_id": metadata_id})
-                        row = stats_result.fetchone()
-                        count += row[0]
-                        if row[1] and (not last_update_ts or row[1] > last_update_ts):
-                            last_update_ts = row[1]
-
-                    if in_short_term:
-                        stats_short_query = text("""
-                            SELECT COUNT(*) as count,
-                                   MAX(start_ts) as last_update_ts
-                            FROM statistics_short_term
-                            WHERE metadata_id = :metadata_id
-                        """)
-                        stats_short_result = conn.execute(stats_short_query, {"metadata_id": metadata_id})
-                        row = stats_short_result.fetchone()
-                        count += row[0]
-                        if row[1] and (not last_update_ts or row[1] > last_update_ts):
-                            last_update_ts = row[1]
-
-                    # Convert Unix timestamp to datetime
-                    last_update = None
-                    if last_update_ts:
-                        from datetime import datetime
-                        last_update = datetime.fromtimestamp(last_update_ts)
-
-                    orphaned_data[entity_id] = {
-                        "count": count,
-                        "status": status,
-                        "last_update": last_update.isoformat() if last_update else None,
-                        "origin": origin,
-                        "metadata_id": metadata_id
-                    }
-
-            _LOGGER.info(
-                "Found %d orphaned entities in statistics (%d deleted, %d unavailable)",
-                len(orphaned_data),
-                sum(1 for v in orphaned_data.values() if v["status"] == "deleted"),
-                sum(1 for v in orphaned_data.values() if v["status"] == "unavailable")
-            )
-
-            # Calculate categorized storage
-            self._categorized_storage = self._calculate_categorized_storage(orphaned_data)
-
-            return orphaned_data
 
     def _fetch_database_size(self) -> dict[str, Any]:
         """Fetch database size information (blocking I/O)."""
@@ -643,30 +495,6 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 total_size = 0
 
         return total_size
-
-    def _calculate_categorized_storage(self, orphaned_data: dict) -> dict:
-        """Calculate total storage categorized by status."""
-        deleted_storage = 0
-        unavailable_storage = 0
-
-        for entity_id, data in orphaned_data.items():
-            # Orphan finder data only contains statistics entities
-            storage = self._calculate_entity_storage(
-                entity_id=entity_id,
-                origin=data['origin'],
-                in_states_meta=False,
-                in_statistics_meta=True,
-                metadata_id_statistics=data['metadata_id']
-            )
-            if data['status'] == 'deleted':
-                deleted_storage += storage
-            else:  # unavailable
-                unavailable_storage += storage
-
-        return {
-            "deleted_storage": deleted_storage,
-            "unavailable_storage": unavailable_storage
-        }
 
     def generate_delete_sql(
         self,

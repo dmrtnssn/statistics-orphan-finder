@@ -8,40 +8,30 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { sharedStyles } from './styles/shared-styles';
 import { ApiService } from './services/api-service';
 import type {
-  OrphanEntity,
   DatabaseSize,
   StorageEntity,
   StorageSummary,
   HomeAssistant,
   DeleteModalData
 } from './types';
-import './views/orphan-finder-view';
 import './views/storage-overview-view';
-import type { OrphanFinderView } from './views/orphan-finder-view';
 import type { StorageOverviewView } from './views/storage-overview-view';
 
 @customElement('statistics-orphan-panel-v2')
 export class StatisticsOrphanPanelV2 extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
 
-  @state() private currentView: 'orphans' | 'storage' = 'orphans';
   @state() private loading = false;
   @state() private loadingMessage = '';
   @state() private loadingSteps: Array<{label: string, status: 'pending' | 'active' | 'complete'}> = [];
   @state() private currentStepIndex = 0;
   @state() private error: string | null = null;
 
-  // Orphan Finder data
-  @state() private orphans: OrphanEntity[] = [];
-  @state() private databaseSize: DatabaseSize | null = null;
-  @state() private deletedStorage = 0;
-  @state() private unavailableStorage = 0;
-
   // Storage Overview data
+  @state() private databaseSize: DatabaseSize | null = null;
   @state() private storageEntities: StorageEntity[] = [];
   @state() private storageSummary: StorageSummary | null = null;
 
-  @query('orphan-finder-view') private orphanView?: OrphanFinderView;
   @query('storage-overview-view') private storageView?: StorageOverviewView;
 
   private apiService!: ApiService;
@@ -61,33 +51,6 @@ export class StatisticsOrphanPanelV2 extends LitElement {
         margin-bottom: 16px;
         padding-bottom: 16px;
         border-bottom: 1px solid var(--divider-color);
-      }
-
-      .tab-navigation {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 24px;
-      }
-
-      .tab-button {
-        padding: 8px 24px;
-        background: var(--secondary-background-color);
-        border: none;
-        border-radius: 4px 4px 0 0;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--primary-text-color);
-        transition: background 0.3s;
-      }
-
-      .tab-button:hover {
-        background: var(--divider-color);
-      }
-
-      .tab-button.active {
-        background: var(--primary-color);
-        color: var(--text-primary-color);
       }
 
       .loading-overlay {
@@ -210,56 +173,6 @@ export class StatisticsOrphanPanelV2 extends LitElement {
     }
   }
 
-  private async loadOrphanFinderData() {
-    this.loading = true;
-    this.error = null;
-
-    this.initLoadingSteps([
-      'Reading entity registry',
-      'Reading state machine',
-      'Scanning states_meta table',
-      'Scanning statistics_meta table',
-      'Identifying deleted entities',
-      'Identifying unavailable entities',
-      'Calculating storage usage',
-      'Fetching database statistics'
-    ]);
-
-    try {
-      this.loadingMessage = 'Analyzing orphaned entities...';
-      // Simulate backend steps (in reality, backend does all at once)
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // entity registry
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // state machine
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // states_meta
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // statistics_meta
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // deleted entities
-
-      const orphanData = await this.apiService.fetchOrphansList();
-      this.orphans = orphanData.orphans;
-      this.deletedStorage = orphanData.deleted_storage;
-      this.unavailableStorage = orphanData.unavailable_storage;
-      this.completeCurrentStep(); // unavailable entities
-      this.completeCurrentStep(); // storage usage
-
-      this.loadingMessage = 'Fetching database statistics...';
-      this.databaseSize = await this.apiService.fetchDatabaseSize();
-      this.completeCurrentStep(); // database stats
-
-      this.loadingMessage = 'Complete!';
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error loading orphan finder data:', err);
-    } finally {
-      this.loading = false;
-      this.loadingSteps = [];
-    }
-  }
-
   private async loadStorageOverviewData() {
     this.loading = true;
     this.error = null;
@@ -309,48 +222,34 @@ export class StatisticsOrphanPanelV2 extends LitElement {
     }
   }
 
-  private handleTabChange(view: 'orphans' | 'storage') {
-    this.currentView = view;
-    // Don't auto-load data - user must click Refresh button
-  }
-
   private handleRefresh() {
-    if (this.currentView === 'orphans') {
-      this.loadOrphanFinderData();
-    } else {
-      this.loadStorageOverviewData();
-    }
+    this.loadStorageOverviewData();
   }
 
   private async handleGenerateSql(e: CustomEvent) {
-    const { entity_id, in_states_meta, in_statistics_meta, metadataId, origin, entity } = e.detail;
+    const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e.detail;
 
     this.loading = true;
     this.loadingMessage = 'Generating SQL...';
 
     try {
-      let result;
-
-      // Use new API if entity_id is provided (from Storage Overview)
-      if (entity_id !== undefined && in_states_meta !== undefined) {
-        result = await this.apiService.generateDeleteSql(entity_id, origin, in_states_meta, in_statistics_meta);
-      } else {
-        // Legacy API for Orphan Finder view (metadata_id + origin)
-        result = await this.apiService.generateDeleteSql(metadataId, origin);
-      }
+      const result = await this.apiService.generateDeleteSql(
+        entity_id,
+        origin,
+        in_states_meta,
+        in_statistics_meta
+      );
 
       const modalData: DeleteModalData = {
         entityId: entity.entityId || entity.entity_id || entity_id,
-        metadataId: metadataId || 0,
+        metadataId: entity.metadata_id || 0,
         origin,
         status: entity.status || 'deleted',
         count: entity.count
       };
 
-      // Show modal in the active view
-      if (this.currentView === 'orphans' && this.orphanView) {
-        this.orphanView.showDeleteModal(modalData, result.sql, result.storage_saved);
-      } else if (this.currentView === 'storage' && this.storageView) {
+      // Show modal in the storage overview view
+      if (this.storageView) {
         this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
     } catch (err) {
@@ -376,39 +275,13 @@ export class StatisticsOrphanPanelV2 extends LitElement {
         </div>
       ` : ''}
 
-      <div class="tab-navigation">
-        <button
-          class="tab-button ${this.currentView === 'orphans' ? 'active' : ''}"
-          @click=${() => this.handleTabChange('orphans')}
-        >
-          Orphaned Entities
-        </button>
-        <button
-          class="tab-button ${this.currentView === 'storage' ? 'active' : ''}"
-          @click=${() => this.handleTabChange('storage')}
-        >
-          Storage Overview
-        </button>
-      </div>
-
-      ${this.currentView === 'orphans' ? html`
-        <orphan-finder-view
-          .hass=${this.hass}
-          .orphans=${this.orphans}
-          .databaseSize=${this.databaseSize}
-          .deletedStorage=${this.deletedStorage}
-          .unavailableStorage=${this.unavailableStorage}
-          @generate-sql=${this.handleGenerateSql}
-        ></orphan-finder-view>
-      ` : html`
-        <storage-overview-view
-          .hass=${this.hass}
-          .entities=${this.storageEntities}
-          .summary=${this.storageSummary}
-          .databaseSize=${this.databaseSize}
-          @generate-sql=${this.handleGenerateSql}
-        ></storage-overview-view>
-      `}
+      <storage-overview-view
+        .hass=${this.hass}
+        .entities=${this.storageEntities}
+        .summary=${this.storageSummary}
+        .databaseSize=${this.databaseSize}
+        @generate-sql=${this.handleGenerateSql}
+      ></storage-overview-view>
 
       ${this.loading ? html`
         <div class="loading-overlay">
