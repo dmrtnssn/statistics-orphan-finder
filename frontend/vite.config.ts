@@ -8,7 +8,7 @@ export default defineConfig({
       formats: ['es'],
       fileName: () => 'statistics-orphan-panel.js'
     },
-    outDir: 'www',
+    outDir: '../custom_components/statistics_orphan_finder_v2/www',
     emptyOutDir: true,
     sourcemap: true,
     target: 'es2020',
