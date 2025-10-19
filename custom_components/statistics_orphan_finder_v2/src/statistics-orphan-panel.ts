@@ -250,7 +250,7 @@ export class StatisticsOrphanPanelV2 extends LitElement {
 
       // Show modal in the storage overview view
       if (this.storageView) {
-        this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
+        await this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Failed to generate SQL';

@@ -15,7 +15,13 @@ export default defineConfig({
     rollupOptions: {
       external: [],
       output: {
-        inlineDynamicImports: true
+        // Enable code splitting by removing inlineDynamicImports
+        manualChunks: {
+          // Separate Lit library into its own chunk for better caching
+          'lit-core': ['lit', 'lit/decorators.js', 'lit-element', 'lit-html']
+        },
+        // Optimize chunk file names
+        chunkFileNames: 'chunks/[name]-[hash].js'
       }
     },
     minify: 'terser',

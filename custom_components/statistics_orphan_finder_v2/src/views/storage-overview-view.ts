@@ -19,8 +19,7 @@ import type {
 import '../components/storage-health-summary';
 import '../components/filter-bar';
 import '../components/entity-table';
-import '../components/entity-details-modal';
-import '../components/delete-sql-modal';
+// Modals are lazy-loaded to reduce initial bundle size
 
 @customElement('storage-overview-view')
 export class StorageOverviewView extends LitElement {
@@ -43,6 +42,30 @@ export class StorageOverviewView extends LitElement {
   // Memoization for filtered entities
   private _cachedFilteredEntities: StorageEntity[] = [];
   private _lastFilterKey = '';
+
+  // Lazy loading flags for modal components
+  private _entityDetailsModalLoaded = false;
+  private _deleteSqlModalLoaded = false;
+
+  /**
+   * Lazy load the entity details modal component
+   */
+  private async _loadEntityDetailsModal() {
+    if (!this._entityDetailsModalLoaded) {
+      await import('../components/entity-details-modal');
+      this._entityDetailsModalLoaded = true;
+    }
+  }
+
+  /**
+   * Lazy load the delete SQL modal component
+   */
+  private async _loadDeleteSqlModal() {
+    if (!this._deleteSqlModalLoaded) {
+      await import('../components/delete-sql-modal');
+      this._deleteSqlModalLoaded = true;
+    }
+  }
 
   protected willUpdate(changedProperties: Map<string, any>) {
     super.willUpdate(changedProperties);
@@ -388,7 +411,8 @@ export class StorageOverviewView extends LitElement {
     this.sortStack = [{ column: 'entity_id', direction: 'asc' }];
   }
 
-  private handleEntityClick(entity: StorageEntity) {
+  private async handleEntityClick(entity: StorageEntity) {
+    await this._loadEntityDetailsModal();
     this.selectedEntity = entity;
   }
 
@@ -459,7 +483,8 @@ export class StorageOverviewView extends LitElement {
   }
 
   // Called by parent when SQL is ready
-  showDeleteModal(data: DeleteModalData, sql: string, storageSaved: number) {
+  async showDeleteModal(data: DeleteModalData, sql: string, storageSaved: number) {
+    await this._loadDeleteSqlModal();
     this.deleteModalData = data;
     this.deleteSql = sql;
     this.deleteStorageSaved = storageSaved;
