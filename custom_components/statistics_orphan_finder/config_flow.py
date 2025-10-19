@@ -1,4 +1,4 @@
-"""Config flow for Statistics Orphan Finder V2 integration."""
+"""Config flow for Statistics Orphan Finder integration."""
 import logging
 import voluptuous as vol
 from typing import Any
@@ -37,7 +37,7 @@ async def validate_db_connection(hass: HomeAssistant, data: dict[str, Any]) -> d
             result = conn.execute(text("SELECT COUNT(*) FROM statistics LIMIT 1"))
             result.fetchone()
         engine.dispose()
-        return {"title": "Statistics Orphan Finder V2"}
+        return {"title": "Statistics Orphan Finder"}
     except SQLAlchemyError as err:
         _LOGGER.error("Database connection failed: %s", err)
         raise ValueError("cannot_connect") from err
@@ -46,8 +46,8 @@ async def validate_db_connection(hass: HomeAssistant, data: dict[str, Any]) -> d
         raise ValueError("unknown") from err
 
 
-class StatisticsOrphanFinderV2ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Statistics Orphan Finder V2."""
+class StatisticsOrphanFinderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Statistics Orphan Finder."""
 
     VERSION = 1
 

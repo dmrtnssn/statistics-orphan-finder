@@ -1,6 +1,6 @@
-# Statistics Orphan Finder V2 - Functional Requirements
+# Statistics Orphan Finder - Functional Requirements
 
-Extracted from V1 implementation on 2025-10-15
+Functional requirements for the integration
 
 ## Overview
 Home Assistant custom integration that identifies and manages orphaned statistics entities in the database.

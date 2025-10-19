@@ -1,8 +1,8 @@
-# Statistics Orphan Finder V2
+# Statistics Orphan Finder
 
-Complete rewrite of Statistics Orphan Finder using **Lit + TypeScript** for better maintainability and proper architecture.
+Built with **Lit + TypeScript** for better maintainability and proper architecture.
 
-## What's New in V2
+## Key Features
 
 - ✅ **Lit 3.x** - Modern web components with reactive properties
 - ✅ **TypeScript** - Full type safety and better IDE support
@@ -82,27 +82,13 @@ Output: `www/statistics-orphan-panel.js`
 
 2. Restart Home Assistant
 
-3. Add the V2 integration:
+3. Add the integration:
    - Go to **Settings** → **Devices & Services**
    - Click **+ Add Integration**
-   - Search for "Statistics Orphan Finder V2"
+   - Search for "Statistics Orphan Finder"
    - Configure database connection
 
-4. The panel will appear in the sidebar as "Statistics Orphans V2"
-
-## V1 vs V2 Comparison
-
-Both versions can run simultaneously for comparison:
-
-| Feature | V1 | V2 |
-|---------|----|----|
-| **Architecture** | 2,457-line monolith | Modular components |
-| **Framework** | Vanilla JS | Lit + TypeScript |
-| **Type Safety** | None | Full TypeScript |
-| **Table Width** | CSS hack | Architected solution |
-| **Maintainability** | Difficult | Easy |
-| **Build Step** | No | Yes (Vite) |
-| **Features** | ✅ All | ✅ All |
+4. The panel will appear in the sidebar as "Statistics Orphans"
 
 ## Architecture Overview
 

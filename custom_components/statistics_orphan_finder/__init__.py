@@ -1,4 +1,4 @@
-"""Statistics Orphan Finder V2 integration."""
+"""Statistics Orphan Finder integration."""
 import logging
 from pathlib import Path
 
@@ -18,13 +18,13 @@ PLATFORMS = []
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Statistics Orphan Finder V2 component."""
+    """Set up the Statistics Orphan Finder component."""
     hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Statistics Orphan Finder V2 from a config entry."""
+    """Set up Statistics Orphan Finder from a config entry."""
     coordinator = StatisticsOrphanCoordinator(hass, entry)
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -34,7 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Copy frontend files to www synchronously
     def copy_frontend_file():
-        www_path = Path(hass.config.path("www/community/statistics_orphan_finder_v2"))
+        www_path = Path(hass.config.path("www/community/statistics_orphan_finder"))
         www_path.mkdir(parents=True, exist_ok=True)
 
         import shutil
@@ -106,8 +106,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class StatisticsOrphanView(HomeAssistantView):
     """View to handle statistics orphan requests."""
 
-    url = "/api/statistics_orphan_finder_v2"
-    name = "api:statistics_orphan_finder_v2"
+    url = "/api/statistics_orphan_finder"
+    name = "api:statistics_orphan_finder"
     requires_auth = True
 
     def __init__(self, coordinator: StatisticsOrphanCoordinator):
