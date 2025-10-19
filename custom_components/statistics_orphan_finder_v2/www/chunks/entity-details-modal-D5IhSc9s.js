@@ -1,5 +1,5 @@
 import { i, n, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-C8wK6sZm.js";
+import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-DT6BPbQS.js";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -44,7 +44,7 @@ let EntityDetailsModal = class extends i$1 {
     if (!this.entity) return x``;
     return x`
       <div class="modal-overlay" @click=${this.handleClose}>
-        <div class="modal-content" @click=${(e) => e.stopPropagation()} style="max-width: 600px;">
+        <div class="modal-content" @click=${(e) => e.stopPropagation()} style="max-width: 580px;">
           <div class="modal-header">
             <h2>Entity Details</h2>
             <button class="modal-close" @click=${this.handleClose}>&times;</button>
@@ -225,6 +225,7 @@ EntityDetailsModal.styles = [
 
       .detail-value {
         color: var(--primary-text-color);
+        text-align: right;
       }
 
       .detail-value.clickable {
@@ -274,4 +275,4 @@ EntityDetailsModal = __decorateClass([
 export {
   EntityDetailsModal
 };
-//# sourceMappingURL=entity-details-modal-Bgwf6bUr.js.map
+//# sourceMappingURL=entity-details-modal-D5IhSc9s.js.map

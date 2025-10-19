@@ -46,6 +46,7 @@ export class EntityDetailsModal extends LitElement {
 
       .detail-value {
         color: var(--primary-text-color);
+        text-align: right;
       }
 
       .detail-value.clickable {
@@ -126,7 +127,7 @@ export class EntityDetailsModal extends LitElement {
 
     return html`
       <div class="modal-overlay" @click=${this.handleClose}>
-        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()} style="max-width: 600px;">
+        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()} style="max-width: 580px;">
           <div class="modal-header">
             <h2>Entity Details</h2>
             <button class="modal-close" @click=${this.handleClose}>&times;</button>
