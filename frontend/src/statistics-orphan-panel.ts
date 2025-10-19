@@ -1,5 +1,5 @@
 /**
- * Statistics Orphan Finder V2 - Main Panel Component
+ * Statistics Orphan Finder - Main Panel Component
  * Built with Lit + TypeScript for better maintainability
  */
 
@@ -17,8 +17,8 @@ import type {
 import './views/storage-overview-view';
 import type { StorageOverviewView } from './views/storage-overview-view';
 
-@customElement('statistics-orphan-panel-v2')
-export class StatisticsOrphanPanelV2 extends LitElement {
+@customElement('statistics-orphan-panel')
+export class StatisticsOrphanPanel extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
 
   @state() private loading = false;
@@ -322,6 +322,6 @@ export class StatisticsOrphanPanelV2 extends LitElement {
 // Register the custom element
 declare global {
   interface HTMLElementTagNameMap {
-    'statistics-orphan-panel-v2': StatisticsOrphanPanelV2;
+    'statistics-orphan-panel': StatisticsOrphanPanel;
   }
 }

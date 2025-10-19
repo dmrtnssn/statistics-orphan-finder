@@ -80,13 +80,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom",
-        sidebar_title="Statistics Orphans V2",
+        sidebar_title="Statistics Orphans",
         sidebar_icon="mdi:database-search",
-        frontend_url_path="statistics-orphans-v2",
+        frontend_url_path="statistics-orphans",
         config={
             "_panel_custom": {
-                "name": "statistics-orphan-panel-v2",
-                "module_url": "/local/community/statistics_orphan_finder_v2/statistics-orphan-panel.js",
+                "name": "statistics-orphan-panel",
+                "module_url": "/local/community/statistics_orphan_finder/statistics-orphan-panel.js",
             }
         },
         require_admin=True,

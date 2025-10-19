@@ -1370,7 +1370,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-83kJw4yR.js");
+      await import("./entity-details-modal-Dxvgz76D.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1379,7 +1379,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-B5KU_EZX.js");
+      await import("./delete-sql-modal-BZgYM-zX.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -1870,7 +1870,7 @@ var __decorateClass = (decorators, target, key, kind) => {
   if (kind && result) __defProp(target, key, result);
   return result;
 };
-let StatisticsOrphanPanelV2 = class extends i$1 {
+let StatisticsOrphanPanel = class extends i$1 {
   constructor() {
     super(...arguments);
     this.loading = false;
@@ -2033,7 +2033,7 @@ let StatisticsOrphanPanelV2 = class extends i$1 {
     `;
   }
 };
-StatisticsOrphanPanelV2.styles = [
+StatisticsOrphanPanel.styles = [
   sharedStyles,
   i`
       :host {
@@ -2143,43 +2143,43 @@ StatisticsOrphanPanelV2.styles = [
 ];
 __decorateClass([
   n({ type: Object })
-], StatisticsOrphanPanelV2.prototype, "hass", 2);
+], StatisticsOrphanPanel.prototype, "hass", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "loading", 2);
+], StatisticsOrphanPanel.prototype, "loading", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "loadingMessage", 2);
+], StatisticsOrphanPanel.prototype, "loadingMessage", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "loadingSteps", 2);
+], StatisticsOrphanPanel.prototype, "loadingSteps", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "currentStepIndex", 2);
+], StatisticsOrphanPanel.prototype, "currentStepIndex", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "error", 2);
+], StatisticsOrphanPanel.prototype, "error", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "databaseSize", 2);
+], StatisticsOrphanPanel.prototype, "databaseSize", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "storageEntities", 2);
+], StatisticsOrphanPanel.prototype, "storageEntities", 2);
 __decorateClass([
   r()
-], StatisticsOrphanPanelV2.prototype, "storageSummary", 2);
+], StatisticsOrphanPanel.prototype, "storageSummary", 2);
 __decorateClass([
   e("storage-overview-view")
-], StatisticsOrphanPanelV2.prototype, "storageView", 2);
-StatisticsOrphanPanelV2 = __decorateClass([
-  t("statistics-orphan-panel-v2")
-], StatisticsOrphanPanelV2);
+], StatisticsOrphanPanel.prototype, "storageView", 2);
+StatisticsOrphanPanel = __decorateClass([
+  t("statistics-orphan-panel")
+], StatisticsOrphanPanel);
 export {
-  StatisticsOrphanPanelV2 as S,
+  StatisticsOrphanPanel as S,
   formatDuration as a,
   formatBytes as b,
   copyToClipboard as c,
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BrBdbBaw.js.map
+//# sourceMappingURL=statistics-orphan-panel-ckjaNJ1Y.js.map

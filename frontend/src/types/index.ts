@@ -1,5 +1,5 @@
 /**
- * TypeScript type definitions for Statistics Orphan Finder V2
+ * TypeScript type definitions for Statistics Orphan Finder
  */
 
 import type { TemplateResult } from 'lit';
