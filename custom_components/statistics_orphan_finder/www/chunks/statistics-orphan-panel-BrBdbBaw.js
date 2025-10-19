@@ -422,7 +422,7 @@ const sharedStyles = i`
     display: none;
   }
 `;
-const API_BASE = "statistics_orphan_finder_v2";
+const API_BASE = "statistics_orphan_finder";
 class ApiService {
   constructor(hass) {
     this.hass = hass;
@@ -1370,7 +1370,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DiU4Y27c.js");
+      await import("./entity-details-modal-83kJw4yR.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1379,7 +1379,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-C7UqBqtK.js");
+      await import("./delete-sql-modal-B5KU_EZX.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2182,4 +2182,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DidpJICv.js.map
+//# sourceMappingURL=statistics-orphan-panel-BrBdbBaw.js.map

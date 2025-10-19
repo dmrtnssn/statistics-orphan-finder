@@ -248,7 +248,7 @@ statistics-orphan-finder/
 │   └── vite.config.ts         # Build config
 ├── docs/                      # Documentation
 └── custom_components/
-    └── statistics_orphan_finder_v2/  # Runtime files only
+    └── statistics_orphan_finder/  # Runtime files only
         ├── *.py               # Python backend
         ├── services/          # Service modules
         └── www/               # Built frontend (auto-generated)
@@ -262,12 +262,12 @@ npm run dev             # Watch mode for development
 npm run build           # Build for production
 ```
 
-The build process automatically outputs to `custom_components/statistics_orphan_finder_v2/www/`.
+The build process automatically outputs to `custom_components/statistics_orphan_finder/www/`.
 
 **Testing:**
-1. Make your changes in `frontend/src/` (TypeScript) or `custom_components/statistics_orphan_finder_v2/` (Python)
+1. Make your changes in `frontend/src/` (TypeScript) or `custom_components/statistics_orphan_finder/` (Python)
 2. Build frontend: `cd frontend && npm run build`
-3. Copy `custom_components/statistics_orphan_finder_v2/` to your HA instance
+3. Copy `custom_components/statistics_orphan_finder/` to your HA instance
 4. Restart Home Assistant
 5. Test thoroughly with different database types if possible
 

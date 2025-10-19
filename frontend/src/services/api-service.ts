@@ -11,7 +11,7 @@ import type {
   HomeAssistant
 } from '../types';
 
-const API_BASE = 'statistics_orphan_finder_v2';
+const API_BASE = 'statistics_orphan_finder';
 
 export class ApiService {
   constructor(private hass: HomeAssistant) {}

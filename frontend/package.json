@@ -1,7 +1,7 @@
 {
-  "name": "statistics-orphan-finder-v2",
-  "version": "2.0.0-alpha",
-  "description": "Statistics Orphan Finder V2 - Lit + TypeScript rewrite",
+  "name": "statistics-orphan-finder",
+  "version": "2.0.0-beta.1",
+  "description": "Statistics Orphan Finder - Lit + TypeScript",
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode development",

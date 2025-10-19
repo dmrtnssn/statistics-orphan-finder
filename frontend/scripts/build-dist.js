@@ -124,4 +124,4 @@ console.log(`   ✅ Copied: ${copiedCount} files`);
 if (skippedCount > 0) {
   console.log(`   ⚠️  Skipped: ${skippedCount} files`);
 }
-console.log(`\n💡 To deploy: Copy contents of dist/ to Home Assistant's custom_components/statistics_orphan_finder_v2/`);
+console.log(`\n💡 To deploy: Copy contents of dist/ to Home Assistant's custom_components/statistics_orphan_finder/`);

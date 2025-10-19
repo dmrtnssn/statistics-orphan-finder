@@ -1,9 +1,9 @@
-# Build Instructions for V2
+# Build Instructions
 
 ## Quick Start
 
 ```bash
-cd custom_components/statistics_orphan_finder_v2
+cd frontend
 npm install
 npm run build
 ```
@@ -49,12 +49,12 @@ Output: `www/statistics-orphan-panel.js` (this is what Home Assistant loads)
 1. Restart Home Assistant
 2. Go to **Settings** → **Devices & Services**
 3. Click **+ Add Integration**
-4. Search for "Statistics Orphan Finder V2"
+4. Search for "Statistics Orphan Finder"
 5. Enter database connection details
 
 ### 4. Access the Panel
 
-Look for "Statistics Orphans V2" in the sidebar (database-search icon).
+Look for "Statistics Orphans" in the sidebar (database-search icon).
 
 ## Development Workflow
 
@@ -114,13 +114,6 @@ Check `tsconfig.json` has:
 }
 ```
 
-## Comparing V1 and V2
-
-Run both side-by-side:
-- V1: "Statistics Orphans" panel
-- V2: "Statistics Orphans V2" panel
-
-Same features, better code!
 
 ## Next Steps
 
