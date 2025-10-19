@@ -85,6 +85,26 @@ export class EntityDetailsModal extends LitElement {
         margin-top: 8px;
         font-size: 13px;
       }
+
+      /* Desktop: 580px centered modal */
+      .entity-details-content {
+        max-width: 580px;
+      }
+
+      /* Mobile: Fullscreen modal */
+      @media (max-width: 500px) {
+        .entity-details-content {
+          max-width: 100%;
+          width: 100%;
+          max-height: 100vh;
+          border-radius: 0;
+          margin: 0;
+        }
+
+        .modal-body {
+          padding: 16px;
+        }
+      }
     `
   ];
 
@@ -127,7 +147,7 @@ export class EntityDetailsModal extends LitElement {
 
     return html`
       <div class="modal-overlay" @click=${this.handleClose}>
-        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()} style="max-width: 580px;">
+        <div class="modal-content entity-details-content" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
             <h2>Entity Details</h2>
             <button class="modal-close" @click=${this.handleClose}>&times;</button>

@@ -1370,7 +1370,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-D5IhSc9s.js");
+      await import("./entity-details-modal-DiU4Y27c.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1379,7 +1379,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CcDUKusY.js");
+      await import("./delete-sql-modal-C7UqBqtK.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2182,4 +2182,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DT6BPbQS.js.map
+//# sourceMappingURL=statistics-orphan-panel-DidpJICv.js.map

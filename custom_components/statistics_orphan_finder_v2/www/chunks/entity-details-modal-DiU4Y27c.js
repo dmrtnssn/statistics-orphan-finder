@@ -1,5 +1,5 @@
 import { i, n, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-DT6BPbQS.js";
+import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-DidpJICv.js";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -44,7 +44,7 @@ let EntityDetailsModal = class extends i$1 {
     if (!this.entity) return x``;
     return x`
       <div class="modal-overlay" @click=${this.handleClose}>
-        <div class="modal-content" @click=${(e) => e.stopPropagation()} style="max-width: 580px;">
+        <div class="modal-content entity-details-content" @click=${(e) => e.stopPropagation()}>
           <div class="modal-header">
             <h2>Entity Details</h2>
             <button class="modal-close" @click=${this.handleClose}>&times;</button>
@@ -264,6 +264,26 @@ EntityDetailsModal.styles = [
         margin-top: 8px;
         font-size: 13px;
       }
+
+      /* Desktop: 580px centered modal */
+      .entity-details-content {
+        max-width: 580px;
+      }
+
+      /* Mobile: Fullscreen modal */
+      @media (max-width: 500px) {
+        .entity-details-content {
+          max-width: 100%;
+          width: 100%;
+          max-height: 100vh;
+          border-radius: 0;
+          margin: 0;
+        }
+
+        .modal-body {
+          padding: 16px;
+        }
+      }
     `
 ];
 __decorateClass([
@@ -275,4 +295,4 @@ EntityDetailsModal = __decorateClass([
 export {
   EntityDetailsModal
 };
-//# sourceMappingURL=entity-details-modal-D5IhSc9s.js.map
+//# sourceMappingURL=entity-details-modal-DiU4Y27c.js.map
