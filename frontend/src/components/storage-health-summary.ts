@@ -30,7 +30,7 @@ export class StorageHealthSummary extends LitElement {
 
       .summary-container {
         display: grid;
-        grid-template-columns: 520px 1fr 300px;
+        grid-template-columns: 520px 1fr 325px;
         gap: 20px;
         margin-bottom: 24px;
       }
@@ -259,6 +259,15 @@ export class StorageHealthSummary extends LitElement {
         border-color: rgba(255, 193, 7, 0.8);
       }
 
+      .filter-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .filter-btn:disabled:hover {
+        background: var(--secondary-background-color);
+      }
+
       @media (max-width: 1200px) {
         .filter-panel-column {
           display: none;
@@ -298,6 +307,83 @@ export class StorageHealthSummary extends LitElement {
     }
     // Fallback to estimation
     return this.estimateStorageMB(entityCount);
+  }
+
+  private getFilterCount(group: string, value: string): number {
+    if (!this.entities || this.entities.length === 0) {
+      return 0;
+    }
+
+    switch (group) {
+      case 'registry':
+        switch (value) {
+          case 'Enabled':
+            return this.entities.filter(e => e.registry_status === 'Enabled').length;
+          case 'Disabled':
+            return this.entities.filter(e => e.registry_status === 'Disabled').length;
+          case 'Not in Registry':
+            return this.entities.filter(e => e.registry_status === 'Not in Registry').length;
+        }
+        break;
+
+      case 'state':
+        switch (value) {
+          case 'Available':
+            return this.entities.filter(e => e.state_status === 'Available').length;
+          case 'Unavailable':
+            return this.entities.filter(e => e.state_status === 'Unavailable').length;
+          case 'Not Present':
+            return this.entities.filter(e => e.state_status === 'Not Present').length;
+        }
+        break;
+
+      case 'states':
+        switch (value) {
+          case 'in_states':
+            return this.entities.filter(e => e.in_states).length;
+          case 'not_in_states':
+            return this.entities.filter(e => !e.in_states).length;
+        }
+        break;
+
+      case 'statistics':
+        switch (value) {
+          case 'in_statistics':
+            return this.entities.filter(e => e.in_statistics_meta).length;
+          case 'not_in_statistics':
+            return this.entities.filter(e => !e.in_statistics_meta).length;
+        }
+        break;
+    }
+
+    return 0;
+  }
+
+  private isFilterDisabled(group: string, value: string): boolean {
+    // Check if this filter is currently active
+    let isActive = false;
+    switch (group) {
+      case 'registry':
+        isActive = this.activeRegistry === value;
+        break;
+      case 'state':
+        isActive = this.activeState === value;
+        break;
+      case 'states':
+        isActive = this.activeStates === value;
+        break;
+      case 'statistics':
+        isActive = this.activeStatistics === value;
+        break;
+    }
+
+    // If filter is active, never disable it (allow toggling off)
+    if (isActive) {
+      return false;
+    }
+
+    // Otherwise, disable if count is 0
+    return this.getFilterCount(group, value) === 0;
   }
 
   private handleAction(action: string) {
@@ -582,14 +668,17 @@ export class StorageHealthSummary extends LitElement {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeRegistry === 'Enabled' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('registry', 'Enabled')}
                 @click=${() => this.handleFilterClick('registry', 'Enabled')}
               >Enabled</button>
               <button
                 class="filter-btn ${this.activeRegistry === 'Disabled' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('registry', 'Disabled')}
                 @click=${() => this.handleFilterClick('registry', 'Disabled')}
               >Disabled</button>
               <button
                 class="filter-btn ${this.activeRegistry === 'Not in Registry' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('registry', 'Not in Registry')}
                 @click=${() => this.handleFilterClick('registry', 'Not in Registry')}
               >Not present</button>
             </div>
@@ -600,14 +689,17 @@ export class StorageHealthSummary extends LitElement {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeState === 'Available' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('state', 'Available')}
                 @click=${() => this.handleFilterClick('state', 'Available')}
               >Available</button>
               <button
                 class="filter-btn ${this.activeState === 'Unavailable' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('state', 'Unavailable')}
                 @click=${() => this.handleFilterClick('state', 'Unavailable')}
               >Unavailable</button>
               <button
                 class="filter-btn ${this.activeState === 'Not Present' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('state', 'Not Present')}
                 @click=${() => this.handleFilterClick('state', 'Not Present')}
               >Not present</button>
             </div>
@@ -618,10 +710,12 @@ export class StorageHealthSummary extends LitElement {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeStates === 'in_states' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('states', 'in_states')}
                 @click=${() => this.handleFilterClick('states', 'in_states')}
               >In states</button>
               <button
                 class="filter-btn ${this.activeStates === 'not_in_states' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('states', 'not_in_states')}
                 @click=${() => this.handleFilterClick('states', 'not_in_states')}
               >Not in states</button>
             </div>
@@ -632,10 +726,12 @@ export class StorageHealthSummary extends LitElement {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeStatistics === 'in_statistics' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('statistics', 'in_statistics')}
                 @click=${() => this.handleFilterClick('statistics', 'in_statistics')}
               >In statistics</button>
               <button
                 class="filter-btn ${this.activeStatistics === 'not_in_statistics' ? 'active' : ''}"
+                ?disabled=${this.isFilterDisabled('statistics', 'not_in_statistics')}
                 @click=${() => this.handleFilterClick('statistics', 'not_in_statistics')}
               >Not in statistics</button>
             </div>

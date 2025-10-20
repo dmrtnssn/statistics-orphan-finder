@@ -1,5 +1,5 @@
 import { i, n, r, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-CAOYB_f6.js";
+import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-FGIpGagr.js";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -217,4 +217,4 @@ DeleteSqlModal = __decorateClass([
 export {
   DeleteSqlModal
 };
-//# sourceMappingURL=delete-sql-modal-CrjhlokO.js.map
+//# sourceMappingURL=delete-sql-modal-C5m4Schq.js.map

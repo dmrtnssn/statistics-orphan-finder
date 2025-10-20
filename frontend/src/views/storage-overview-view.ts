@@ -775,7 +775,7 @@ export class StorageOverviewView extends LitElement {
 
       <storage-health-summary
         .summary=${this.summary}
-        .entities=${this.entities}
+        .entities=${this.filteredEntities}
         .databaseSize=${this.databaseSize}
         .activeFilter=${this.getActiveFilterType()}
         .activeRegistry=${this.registryFilter}

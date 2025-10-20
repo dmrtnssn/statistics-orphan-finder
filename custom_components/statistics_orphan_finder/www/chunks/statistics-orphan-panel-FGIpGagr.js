@@ -605,6 +605,71 @@ let StorageHealthSummary = class extends i$1 {
     }
     return this.estimateStorageMB(entityCount);
   }
+  getFilterCount(group, value) {
+    if (!this.entities || this.entities.length === 0) {
+      return 0;
+    }
+    switch (group) {
+      case "registry":
+        switch (value) {
+          case "Enabled":
+            return this.entities.filter((e2) => e2.registry_status === "Enabled").length;
+          case "Disabled":
+            return this.entities.filter((e2) => e2.registry_status === "Disabled").length;
+          case "Not in Registry":
+            return this.entities.filter((e2) => e2.registry_status === "Not in Registry").length;
+        }
+        break;
+      case "state":
+        switch (value) {
+          case "Available":
+            return this.entities.filter((e2) => e2.state_status === "Available").length;
+          case "Unavailable":
+            return this.entities.filter((e2) => e2.state_status === "Unavailable").length;
+          case "Not Present":
+            return this.entities.filter((e2) => e2.state_status === "Not Present").length;
+        }
+        break;
+      case "states":
+        switch (value) {
+          case "in_states":
+            return this.entities.filter((e2) => e2.in_states).length;
+          case "not_in_states":
+            return this.entities.filter((e2) => !e2.in_states).length;
+        }
+        break;
+      case "statistics":
+        switch (value) {
+          case "in_statistics":
+            return this.entities.filter((e2) => e2.in_statistics_meta).length;
+          case "not_in_statistics":
+            return this.entities.filter((e2) => !e2.in_statistics_meta).length;
+        }
+        break;
+    }
+    return 0;
+  }
+  isFilterDisabled(group, value) {
+    let isActive = false;
+    switch (group) {
+      case "registry":
+        isActive = this.activeRegistry === value;
+        break;
+      case "state":
+        isActive = this.activeState === value;
+        break;
+      case "states":
+        isActive = this.activeStates === value;
+        break;
+      case "statistics":
+        isActive = this.activeStatistics === value;
+        break;
+    }
+    if (isActive) {
+      return false;
+    }
+    return this.getFilterCount(group, value) === 0;
+  }
   handleAction(action) {
     this.dispatchEvent(new CustomEvent("action-clicked", {
       detail: { action },
@@ -847,14 +912,17 @@ let StorageHealthSummary = class extends i$1 {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeRegistry === "Enabled" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("registry", "Enabled")}
                 @click=${() => this.handleFilterClick("registry", "Enabled")}
               >Enabled</button>
               <button
                 class="filter-btn ${this.activeRegistry === "Disabled" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("registry", "Disabled")}
                 @click=${() => this.handleFilterClick("registry", "Disabled")}
               >Disabled</button>
               <button
                 class="filter-btn ${this.activeRegistry === "Not in Registry" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("registry", "Not in Registry")}
                 @click=${() => this.handleFilterClick("registry", "Not in Registry")}
               >Not present</button>
             </div>
@@ -865,14 +933,17 @@ let StorageHealthSummary = class extends i$1 {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeState === "Available" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("state", "Available")}
                 @click=${() => this.handleFilterClick("state", "Available")}
               >Available</button>
               <button
                 class="filter-btn ${this.activeState === "Unavailable" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("state", "Unavailable")}
                 @click=${() => this.handleFilterClick("state", "Unavailable")}
               >Unavailable</button>
               <button
                 class="filter-btn ${this.activeState === "Not Present" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("state", "Not Present")}
                 @click=${() => this.handleFilterClick("state", "Not Present")}
               >Not present</button>
             </div>
@@ -883,10 +954,12 @@ let StorageHealthSummary = class extends i$1 {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeStates === "in_states" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("states", "in_states")}
                 @click=${() => this.handleFilterClick("states", "in_states")}
               >In states</button>
               <button
                 class="filter-btn ${this.activeStates === "not_in_states" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("states", "not_in_states")}
                 @click=${() => this.handleFilterClick("states", "not_in_states")}
               >Not in states</button>
             </div>
@@ -897,10 +970,12 @@ let StorageHealthSummary = class extends i$1 {
             <div class="filter-buttons">
               <button
                 class="filter-btn ${this.activeStatistics === "in_statistics" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("statistics", "in_statistics")}
                 @click=${() => this.handleFilterClick("statistics", "in_statistics")}
               >In statistics</button>
               <button
                 class="filter-btn ${this.activeStatistics === "not_in_statistics" ? "active" : ""}"
+                ?disabled=${this.isFilterDisabled("statistics", "not_in_statistics")}
                 @click=${() => this.handleFilterClick("statistics", "not_in_statistics")}
               >Not in statistics</button>
             </div>
@@ -926,7 +1001,7 @@ StorageHealthSummary.styles = [
 
       .summary-container {
         display: grid;
-        grid-template-columns: 520px 1fr 300px;
+        grid-template-columns: 520px 1fr 325px;
         gap: 20px;
         margin-bottom: 24px;
       }
@@ -1153,6 +1228,15 @@ StorageHealthSummary.styles = [
       .filter-btn.active {
         background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.3));
         border-color: rgba(255, 193, 7, 0.8);
+      }
+
+      .filter-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .filter-btn:disabled:hover {
+        background: var(--secondary-background-color);
       }
 
       @media (max-width: 1200px) {
@@ -1875,7 +1959,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BcDfJGAE.js");
+      await import("./entity-details-modal-CdXirOGA.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1884,7 +1968,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CrjhlokO.js");
+      await import("./delete-sql-modal-C5m4Schq.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2455,7 +2539,7 @@ ${e2.sql}`;
 
       <storage-health-summary
         .summary=${this.summary}
-        .entities=${this.entities}
+        .entities=${this.filteredEntities}
         .databaseSize=${this.databaseSize}
         .activeFilter=${this.getActiveFilterType()}
         .activeRegistry=${this.registryFilter}
@@ -2908,4 +2992,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-CAOYB_f6.js.map
+//# sourceMappingURL=statistics-orphan-panel-FGIpGagr.js.map
