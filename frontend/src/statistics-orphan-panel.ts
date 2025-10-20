@@ -22,7 +22,6 @@ export class StatisticsOrphanPanel extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
 
   @state() private loading = false;
-  @state() private loadingMessage = '';
   @state() private loadingSteps: Array<{label: string, status: 'pending' | 'active' | 'complete'}> = [];
   @state() private currentStepIndex = 0;
   @state() private error: string | null = null;
@@ -75,59 +74,31 @@ export class StatisticsOrphanPanel extends LitElement {
       }
 
       .loading-title {
-        font-size: 18px;
+        font-size: 20px;
         font-weight: 600;
-        margin-bottom: 24px;
+        margin-bottom: 32px;
         text-align: center;
         color: var(--primary-text-color);
       }
 
-      .loading-steps {
-        margin-bottom: 20px;
+      .loading-spinner {
+        display: block;
+        margin: 0 auto 24px;
       }
 
-      .loading-step {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 0;
+      .loading-step-counter {
+        text-align: center;
         font-size: 14px;
-      }
-
-      .step-indicator {
-        width: 20px;
-        height: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        font-size: 16px;
-      }
-
-      .step-label {
-        color: var(--primary-text-color);
-      }
-
-      .loading-step.pending .step-label {
-        color: var(--secondary-text-color);
-        opacity: 0.6;
-      }
-
-      .loading-step.active .step-label {
         font-weight: 500;
-        color: var(--primary-color);
-      }
-
-      .loading-step.complete .step-label {
-        color: var(--primary-text-color);
-      }
-
-      .loading-progress {
-        text-align: center;
-        font-size: 13px;
         color: var(--secondary-text-color);
-        padding-top: 16px;
-        border-top: 1px solid var(--divider-color);
+        margin-bottom: 12px;
+      }
+
+      .loading-step-description {
+        text-align: center;
+        font-size: 15px;
+        color: var(--primary-text-color);
+        min-height: 20px;
       }
 
       .error-message {
@@ -210,8 +181,6 @@ export class StatisticsOrphanPanel extends LitElement {
         throw new Error('Home Assistant connection not available. Please reload the page.');
       }
 
-      this.loadingMessage = 'Building storage overview...';
-
       // Execute steps 0-8 sequentially
       for (let step = 0; step <= 8; step++) {
         const result = await this.apiService.fetchEntityStorageOverviewStep(step);
@@ -222,13 +191,13 @@ export class StatisticsOrphanPanel extends LitElement {
           this.storageSummary = result.summary;
         }
 
-        this.completeCurrentStep();
+        // Don't increment on the last step to avoid showing "Step 10 of 9"
+        if (step < 8) {
+          this.completeCurrentStep();
+        }
       }
 
-      this.loadingMessage = 'Fetching database statistics...';
       this.databaseSize = await this.apiService.fetchDatabaseSize();
-
-      this.loadingMessage = 'Complete!';
 
       // Clear any previous errors on successful load
       this.error = null;
@@ -255,7 +224,6 @@ export class StatisticsOrphanPanel extends LitElement {
     const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e.detail;
 
     this.loading = true;
-    this.loadingMessage = 'Generating SQL...';
 
     try {
       // Validate hass before starting
@@ -328,32 +296,19 @@ export class StatisticsOrphanPanel extends LitElement {
       ${this.loading ? html`
         <div class="loading-overlay">
           <div class="loading-content">
-            <div class="loading-title">${this.loadingMessage}</div>
+            <div class="loading-title">Refreshing data</div>
+
+            <div class="loading-spinner"></div>
 
             ${this.loadingSteps.length > 0 ? html`
-              <div class="loading-steps">
-                ${this.loadingSteps.map((step, index) => {
-                  let indicator = '○';
-                  if (step.status === 'complete') indicator = '●';
-                  else if (step.status === 'active') indicator = '⧗';
-
-                  return html`
-                    <div class="loading-step ${step.status}">
-                      <span class="step-indicator">${indicator}</span>
-                      <span class="step-label">${step.label}</span>
-                    </div>
-                  `;
-                })}
-              </div>
-
-              <div class="loading-progress">
+              <div class="loading-step-counter">
                 Step ${this.currentStepIndex + 1} of ${this.loadingSteps.length}
               </div>
-            ` : html`
-              <div style="text-align: center;">
-                <div class="loading-spinner"></div>
+
+              <div class="loading-step-description">
+                ${this.loadingSteps[this.currentStepIndex]?.label || ''}
               </div>
-            `}
+            ` : ''}
           </div>
         </div>
       ` : ''}
