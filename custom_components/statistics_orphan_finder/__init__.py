@@ -76,6 +76,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.async_add_executor_job(copy_frontend_file)
 
+    # Get timestamp of JS file for cache busting
+    js_file = Path(__file__).parent / "www" / "statistics-orphan-panel.js"
+    cache_bust = f"?t={int(js_file.stat().st_mtime)}" if js_file.exists() else ""
+
     # Register frontend panel
     frontend.async_register_built_in_panel(
         hass,
@@ -86,7 +90,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         config={
             "_panel_custom": {
                 "name": "statistics-orphan-panel",
-                "module_url": "/local/community/statistics_orphan_finder/statistics-orphan-panel.js",
+                "module_url": f"/local/community/statistics_orphan_finder/statistics-orphan-panel.js{cache_bust}",
             }
         },
         require_admin=True,

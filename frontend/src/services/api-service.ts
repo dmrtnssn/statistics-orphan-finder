@@ -17,17 +17,39 @@ export class ApiService {
   constructor(private hass: HomeAssistant) {}
 
   /**
+   * Validate that hass connection is available
+   */
+  private validateConnection(): void {
+    if (!this.hass) {
+      throw new Error('Home Assistant connection not available. Please reload the page.');
+    }
+    if (!this.hass.callApi) {
+      throw new Error('Home Assistant API not available. Connection may have been lost.');
+    }
+  }
+
+  /**
    * Fetch database size information
    */
   async fetchDatabaseSize(): Promise<DatabaseSize> {
-    return this.hass.callApi<DatabaseSize>('GET', `${API_BASE}?action=database_size`);
+    this.validateConnection();
+    try {
+      return await this.hass.callApi<DatabaseSize>('GET', `${API_BASE}?action=database_size`);
+    } catch (err) {
+      throw new Error(`Failed to fetch database size: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   }
 
   /**
    * Fetch entity storage overview
    */
   async fetchEntityStorageOverview(): Promise<EntityStorageOverviewResponse> {
-    return this.hass.callApi<EntityStorageOverviewResponse>('GET', `${API_BASE}?action=entity_storage_overview`);
+    this.validateConnection();
+    try {
+      return await this.hass.callApi<EntityStorageOverviewResponse>('GET', `${API_BASE}?action=entity_storage_overview`);
+    } catch (err) {
+      throw new Error(`Failed to fetch entity storage overview: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -39,13 +61,18 @@ export class ApiService {
     inStatesMeta: boolean,
     inStatisticsMeta: boolean
   ): Promise<GenerateSqlResponse> {
-    const url = `${API_BASE}?action=generate_delete_sql` +
-      `&entity_id=${encodeURIComponent(entityId)}` +
-      `&in_states_meta=${inStatesMeta ? 'true' : 'false'}` +
-      `&in_statistics_meta=${inStatisticsMeta ? 'true' : 'false'}` +
-      `&origin=${encodeURIComponent(origin)}`;
+    this.validateConnection();
+    try {
+      const url = `${API_BASE}?action=generate_delete_sql` +
+        `&entity_id=${encodeURIComponent(entityId)}` +
+        `&in_states_meta=${inStatesMeta ? 'true' : 'false'}` +
+        `&in_statistics_meta=${inStatisticsMeta ? 'true' : 'false'}` +
+        `&origin=${encodeURIComponent(origin)}`;
 
-    return this.hass.callApi<GenerateSqlResponse>('GET', url);
+      return await this.hass.callApi<GenerateSqlResponse>('GET', url);
+    } catch (err) {
+      throw new Error(`Failed to generate delete SQL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   }
 
   /**

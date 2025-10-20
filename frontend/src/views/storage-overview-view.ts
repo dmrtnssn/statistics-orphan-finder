@@ -75,6 +75,11 @@ export class StorageOverviewView extends LitElement {
       this._lastFilterKey = '';
       this._cachedFilteredEntities = [];
     }
+
+    // Validate hass connection
+    if (changedProperties.has('hass') && !this.hass) {
+      console.warn('StorageOverviewView: hass connection became unavailable');
+    }
   }
 
   static styles = [
@@ -412,8 +417,13 @@ export class StorageOverviewView extends LitElement {
   }
 
   private async handleEntityClick(entity: StorageEntity) {
-    await this._loadEntityDetailsModal();
-    this.selectedEntity = entity;
+    try {
+      await this._loadEntityDetailsModal();
+      this.selectedEntity = entity;
+    } catch (err) {
+      console.error('Error loading entity details modal:', err);
+      // Fail gracefully - don't crash the component
+    }
   }
 
   private handleCloseModal() {
@@ -421,73 +431,98 @@ export class StorageOverviewView extends LitElement {
   }
 
   private handleOpenMoreInfo(e: CustomEvent) {
-    const event = new Event('hass-more-info', { bubbles: true, composed: true });
-    (event as any).detail = { entityId: e.detail.entityId };
-    this.dispatchEvent(event);
+    try {
+      if (!this.hass) {
+        console.warn('Cannot open more info: Home Assistant connection not available');
+        return;
+      }
+      const event = new Event('hass-more-info', { bubbles: true, composed: true });
+      (event as any).detail = { entityId: e.detail.entityId };
+      this.dispatchEvent(event);
+    } catch (err) {
+      console.error('Error opening more info dialog:', err);
+      // Fail gracefully
+    }
   }
 
   private handleGenerateSql(entity: StorageEntity) {
-    // Determine origin based on which tables the entity is in
-    let origin: string;
-    let count: number;
-
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-
-    if (inStates && inStatistics) {
-      // In both states and statistics
-      origin = 'States+Statistics';
-      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-    } else if (inStates) {
-      // Only in states
-      origin = 'States';
-      count = entity.states_count;
-    } else if (inStatistics) {
-      // Only in statistics - use existing logic
-      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-        origin = 'Both';
-      } else if (entity.in_statistics_long_term) {
-        origin = 'Long-term';
-      } else {
-        origin = 'Short-term';
+    try {
+      // Validate hass connection
+      if (!this.hass) {
+        console.warn('Cannot generate SQL: Home Assistant connection not available');
+        return;
       }
-      count = entity.stats_short_count + entity.stats_long_count;
-    } else {
-      // Not in any table - shouldn't happen
-      return;
+
+      // Determine origin based on which tables the entity is in
+      let origin: string;
+      let count: number;
+
+      const inStates = entity.in_states_meta;
+      const inStatistics = entity.in_statistics_meta;
+
+      if (inStates && inStatistics) {
+        // In both states and statistics
+        origin = 'States+Statistics';
+        count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+      } else if (inStates) {
+        // Only in states
+        origin = 'States';
+        count = entity.states_count;
+      } else if (inStatistics) {
+        // Only in statistics - use existing logic
+        if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+          origin = 'Both';
+        } else if (entity.in_statistics_long_term) {
+          origin = 'Long-term';
+        } else {
+          origin = 'Short-term';
+        }
+        count = entity.stats_short_count + entity.stats_long_count;
+      } else {
+        // Not in any table - shouldn't happen
+        return;
+      }
+
+      // Convert StorageEntity to DeleteModalData format
+      const modalData: DeleteModalData = {
+        entityId: entity.entity_id,
+        metadataId: entity.metadata_id || 0, // Will be looked up by backend for states_meta
+        origin: origin as any,
+        status: 'deleted',
+        count: count
+      };
+
+      // Dispatch event to parent to fetch SQL
+      // Pass flags so backend knows which tables to query
+      this.dispatchEvent(new CustomEvent('generate-sql', {
+        detail: {
+          entity_id: entity.entity_id,
+          in_states_meta: inStates,
+          in_statistics_meta: inStatistics,
+          metadata_id: entity.metadata_id,
+          origin: origin,
+          entity: modalData
+        },
+        bubbles: true,
+        composed: true
+      }));
+    } catch (err) {
+      console.error('Error generating SQL:', err);
+      // Fail gracefully
     }
-
-    // Convert StorageEntity to DeleteModalData format
-    const modalData: DeleteModalData = {
-      entityId: entity.entity_id,
-      metadataId: entity.metadata_id || 0, // Will be looked up by backend for states_meta
-      origin: origin as any,
-      status: 'deleted',
-      count: count
-    };
-
-    // Dispatch event to parent to fetch SQL
-    // Pass flags so backend knows which tables to query
-    this.dispatchEvent(new CustomEvent('generate-sql', {
-      detail: {
-        entity_id: entity.entity_id,
-        in_states_meta: inStates,
-        in_statistics_meta: inStatistics,
-        metadata_id: entity.metadata_id,
-        origin: origin,
-        entity: modalData
-      },
-      bubbles: true,
-      composed: true
-    }));
   }
 
   // Called by parent when SQL is ready
   async showDeleteModal(data: DeleteModalData, sql: string, storageSaved: number) {
-    await this._loadDeleteSqlModal();
-    this.deleteModalData = data;
-    this.deleteSql = sql;
-    this.deleteStorageSaved = storageSaved;
+    try {
+      await this._loadDeleteSqlModal();
+      this.deleteModalData = data;
+      this.deleteSql = sql;
+      this.deleteStorageSaved = storageSaved;
+    } catch (err) {
+      console.error('Error loading delete SQL modal:', err);
+      // Fail gracefully - don't crash the component
+    }
   }
 
   private handleCloseDeleteModal() {

@@ -428,23 +428,49 @@ class ApiService {
     this.hass = hass;
   }
   /**
+   * Validate that hass connection is available
+   */
+  validateConnection() {
+    if (!this.hass) {
+      throw new Error("Home Assistant connection not available. Please reload the page.");
+    }
+    if (!this.hass.callApi) {
+      throw new Error("Home Assistant API not available. Connection may have been lost.");
+    }
+  }
+  /**
    * Fetch database size information
    */
   async fetchDatabaseSize() {
-    return this.hass.callApi("GET", `${API_BASE}?action=database_size`);
+    this.validateConnection();
+    try {
+      return await this.hass.callApi("GET", `${API_BASE}?action=database_size`);
+    } catch (err) {
+      throw new Error(`Failed to fetch database size: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   }
   /**
    * Fetch entity storage overview
    */
   async fetchEntityStorageOverview() {
-    return this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview`);
+    this.validateConnection();
+    try {
+      return await this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview`);
+    } catch (err) {
+      throw new Error(`Failed to fetch entity storage overview: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   }
   /**
    * Generate delete SQL for an entity
    */
   async generateDeleteSql(entityId, origin, inStatesMeta, inStatisticsMeta) {
-    const url = `${API_BASE}?action=generate_delete_sql&entity_id=${encodeURIComponent(entityId)}&in_states_meta=${inStatesMeta ? "true" : "false"}&in_statistics_meta=${inStatisticsMeta ? "true" : "false"}&origin=${encodeURIComponent(origin)}`;
-    return this.hass.callApi("GET", url);
+    this.validateConnection();
+    try {
+      const url = `${API_BASE}?action=generate_delete_sql&entity_id=${encodeURIComponent(entityId)}&in_states_meta=${inStatesMeta ? "true" : "false"}&in_statistics_meta=${inStatisticsMeta ? "true" : "false"}&origin=${encodeURIComponent(origin)}`;
+      return await this.hass.callApi("GET", url);
+    } catch (err) {
+      throw new Error(`Failed to generate delete SQL: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   }
   /**
    * Show Home Assistant's more-info dialog for an entity
@@ -1370,7 +1396,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-Dxvgz76D.js");
+      await import("./entity-details-modal-DC0RXsNR.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1379,7 +1405,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BZgYM-zX.js");
+      await import("./delete-sql-modal-CpgkAEmQ.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -1388,6 +1414,9 @@ let StorageOverviewView = class extends i$1 {
     if (changedProperties.has("entities")) {
       this._lastFilterKey = "";
       this._cachedFilteredEntities = [];
+    }
+    if (changedProperties.has("hass") && !this.hass) {
+      console.warn("StorageOverviewView: hass connection became unavailable");
     }
   }
   get filteredEntities() {
@@ -1671,67 +1700,91 @@ let StorageOverviewView = class extends i$1 {
     this.sortStack = [{ column: "entity_id", direction: "asc" }];
   }
   async handleEntityClick(entity) {
-    await this._loadEntityDetailsModal();
-    this.selectedEntity = entity;
+    try {
+      await this._loadEntityDetailsModal();
+      this.selectedEntity = entity;
+    } catch (err) {
+      console.error("Error loading entity details modal:", err);
+    }
   }
   handleCloseModal() {
     this.selectedEntity = null;
   }
   handleOpenMoreInfo(e2) {
-    const event = new Event("hass-more-info", { bubbles: true, composed: true });
-    event.detail = { entityId: e2.detail.entityId };
-    this.dispatchEvent(event);
+    try {
+      if (!this.hass) {
+        console.warn("Cannot open more info: Home Assistant connection not available");
+        return;
+      }
+      const event = new Event("hass-more-info", { bubbles: true, composed: true });
+      event.detail = { entityId: e2.detail.entityId };
+      this.dispatchEvent(event);
+    } catch (err) {
+      console.error("Error opening more info dialog:", err);
+    }
   }
   handleGenerateSql(entity) {
-    let origin;
-    let count;
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-    if (inStates && inStatistics) {
-      origin = "States+Statistics";
-      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-    } else if (inStates) {
-      origin = "States";
-      count = entity.states_count;
-    } else if (inStatistics) {
-      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-        origin = "Both";
-      } else if (entity.in_statistics_long_term) {
-        origin = "Long-term";
-      } else {
-        origin = "Short-term";
+    try {
+      if (!this.hass) {
+        console.warn("Cannot generate SQL: Home Assistant connection not available");
+        return;
       }
-      count = entity.stats_short_count + entity.stats_long_count;
-    } else {
-      return;
-    }
-    const modalData = {
-      entityId: entity.entity_id,
-      metadataId: entity.metadata_id || 0,
-      // Will be looked up by backend for states_meta
-      origin,
-      status: "deleted",
-      count
-    };
-    this.dispatchEvent(new CustomEvent("generate-sql", {
-      detail: {
-        entity_id: entity.entity_id,
-        in_states_meta: inStates,
-        in_statistics_meta: inStatistics,
-        metadata_id: entity.metadata_id,
+      let origin;
+      let count;
+      const inStates = entity.in_states_meta;
+      const inStatistics = entity.in_statistics_meta;
+      if (inStates && inStatistics) {
+        origin = "States+Statistics";
+        count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+      } else if (inStates) {
+        origin = "States";
+        count = entity.states_count;
+      } else if (inStatistics) {
+        if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+          origin = "Both";
+        } else if (entity.in_statistics_long_term) {
+          origin = "Long-term";
+        } else {
+          origin = "Short-term";
+        }
+        count = entity.stats_short_count + entity.stats_long_count;
+      } else {
+        return;
+      }
+      const modalData = {
+        entityId: entity.entity_id,
+        metadataId: entity.metadata_id || 0,
+        // Will be looked up by backend for states_meta
         origin,
-        entity: modalData
-      },
-      bubbles: true,
-      composed: true
-    }));
+        status: "deleted",
+        count
+      };
+      this.dispatchEvent(new CustomEvent("generate-sql", {
+        detail: {
+          entity_id: entity.entity_id,
+          in_states_meta: inStates,
+          in_statistics_meta: inStatistics,
+          metadata_id: entity.metadata_id,
+          origin,
+          entity: modalData
+        },
+        bubbles: true,
+        composed: true
+      }));
+    } catch (err) {
+      console.error("Error generating SQL:", err);
+    }
   }
   // Called by parent when SQL is ready
   async showDeleteModal(data, sql, storageSaved) {
-    await this._loadDeleteSqlModal();
-    this.deleteModalData = data;
-    this.deleteSql = sql;
-    this.deleteStorageSaved = storageSaved;
+    try {
+      await this._loadDeleteSqlModal();
+      this.deleteModalData = data;
+      this.deleteSql = sql;
+      this.deleteStorageSaved = storageSaved;
+    } catch (err) {
+      console.error("Error loading delete SQL modal:", err);
+    }
   }
   handleCloseDeleteModal() {
     this.deleteModalData = null;
@@ -1884,7 +1937,18 @@ let StatisticsOrphanPanel = class extends i$1 {
   }
   connectedCallback() {
     super.connectedCallback();
-    this.apiService = new ApiService(this.hass);
+    if (this.hass) {
+      this.apiService = new ApiService(this.hass);
+    }
+  }
+  willUpdate(changedProperties) {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has("hass") && this.hass) {
+      this.apiService = new ApiService(this.hass);
+      if (this.error?.includes("connection") || this.error?.includes("Connection")) {
+        this.error = null;
+      }
+    }
   }
   initLoadingSteps(steps) {
     this.loadingSteps = steps.map((label, index) => ({
@@ -1917,6 +1981,9 @@ let StatisticsOrphanPanel = class extends i$1 {
       "Fetching database statistics"
     ]);
     try {
+      if (!this.hass) {
+        throw new Error("Home Assistant connection not available. Please reload the page.");
+      }
       this.loadingMessage = "Building storage overview...";
       await new Promise((resolve) => setTimeout(resolve, 100));
       this.completeCurrentStep();
@@ -1937,6 +2004,7 @@ let StatisticsOrphanPanel = class extends i$1 {
       this.databaseSize = await this.apiService.fetchDatabaseSize();
       this.completeCurrentStep();
       this.loadingMessage = "Complete!";
+      this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : "Unknown error occurred";
       console.error("Error loading storage overview data:", err);
@@ -1948,11 +2016,18 @@ let StatisticsOrphanPanel = class extends i$1 {
   handleRefresh() {
     this.loadStorageOverviewData();
   }
+  handleRetry() {
+    this.error = null;
+    this.loadStorageOverviewData();
+  }
   async handleGenerateSql(e2) {
     const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e2.detail;
     this.loading = true;
     this.loadingMessage = "Generating SQL...";
     try {
+      if (!this.hass) {
+        throw new Error("Home Assistant connection not available. Please reload the page.");
+      }
       const result = await this.apiService.generateDeleteSql(
         entity_id,
         origin,
@@ -1969,6 +2044,7 @@ let StatisticsOrphanPanel = class extends i$1 {
       if (this.storageView) {
         await this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
+      this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : "Failed to generate SQL";
       console.error("Error generating SQL:", err);
@@ -1987,7 +2063,16 @@ let StatisticsOrphanPanel = class extends i$1 {
 
       ${this.error ? x`
         <div class="error-message">
-          <strong>Error:</strong> ${this.error}
+          <div>
+            <strong>Error:</strong> ${this.error}
+          </div>
+          <button
+            class="secondary-button"
+            @click=${this.handleRetry}
+            style="margin-top: 12px;"
+          >
+            Retry
+          </button>
         </div>
       ` : ""}
 
@@ -2182,4 +2267,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-ckjaNJ1Y.js.map
+//# sourceMappingURL=statistics-orphan-panel-CnKtSza7.js.map

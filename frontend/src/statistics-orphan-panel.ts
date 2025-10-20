@@ -147,8 +147,23 @@ export class StatisticsOrphanPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.apiService = new ApiService(this.hass);
+    if (this.hass) {
+      this.apiService = new ApiService(this.hass);
+    }
     // Don't auto-load data - user must click Refresh button
+  }
+
+  protected willUpdate(changedProperties: Map<string, any>) {
+    super.willUpdate(changedProperties);
+
+    // Reinitialize API service when hass connection changes
+    if (changedProperties.has('hass') && this.hass) {
+      this.apiService = new ApiService(this.hass);
+      // Clear any previous connection errors
+      if (this.error?.includes('connection') || this.error?.includes('Connection')) {
+        this.error = null;
+      }
+    }
   }
 
   private initLoadingSteps(steps: string[]) {
@@ -189,6 +204,11 @@ export class StatisticsOrphanPanel extends LitElement {
     ]);
 
     try {
+      // Validate hass before starting
+      if (!this.hass) {
+        throw new Error('Home Assistant connection not available. Please reload the page.');
+      }
+
       this.loadingMessage = 'Building storage overview...';
       // Simulate backend steps (in reality, backend does all at once)
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -213,6 +233,9 @@ export class StatisticsOrphanPanel extends LitElement {
       this.completeCurrentStep(); // database stats
 
       this.loadingMessage = 'Complete!';
+
+      // Clear any previous errors on successful load
+      this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Error loading storage overview data:', err);
@@ -226,6 +249,12 @@ export class StatisticsOrphanPanel extends LitElement {
     this.loadStorageOverviewData();
   }
 
+  private handleRetry() {
+    // Clear error and retry the last operation
+    this.error = null;
+    this.loadStorageOverviewData();
+  }
+
   private async handleGenerateSql(e: CustomEvent) {
     const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e.detail;
 
@@ -233,6 +262,11 @@ export class StatisticsOrphanPanel extends LitElement {
     this.loadingMessage = 'Generating SQL...';
 
     try {
+      // Validate hass before starting
+      if (!this.hass) {
+        throw new Error('Home Assistant connection not available. Please reload the page.');
+      }
+
       const result = await this.apiService.generateDeleteSql(
         entity_id,
         origin,
@@ -252,6 +286,9 @@ export class StatisticsOrphanPanel extends LitElement {
       if (this.storageView) {
         await this.storageView.showDeleteModal(modalData, result.sql, result.storage_saved);
       }
+
+      // Clear any previous errors on success
+      this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Failed to generate SQL';
       console.error('Error generating SQL:', err);
@@ -271,7 +308,16 @@ export class StatisticsOrphanPanel extends LitElement {
 
       ${this.error ? html`
         <div class="error-message">
-          <strong>Error:</strong> ${this.error}
+          <div>
+            <strong>Error:</strong> ${this.error}
+          </div>
+          <button
+            class="secondary-button"
+            @click=${this.handleRetry}
+            style="margin-top: 12px;"
+          >
+            Retry
+          </button>
         </div>
       ` : ''}
 
