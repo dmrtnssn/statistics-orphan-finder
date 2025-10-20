@@ -128,6 +128,20 @@ class StatisticsOrphanView(HomeAssistantView):
         elif action == "entity_storage_overview":
             overview = await self.coordinator.async_get_entity_storage_overview()
             return web.json_response(overview)
+        elif action == "entity_storage_overview_step":
+            # New action for step-by-step fetching
+            step_param = request.query.get("step")
+            if not step_param:
+                return web.json_response({"error": "Missing step parameter"}, status=400)
+
+            try:
+                step = int(step_param)
+                result = await self.coordinator.async_execute_overview_step(step)
+                return web.json_response(result)
+            except ValueError as err:
+                return web.json_response({"error": f"Invalid step: {err}"}, status=400)
+            except Exception as err:
+                return web.json_response({"error": f"Error executing step: {err}"}, status=500)
         elif action == "generate_delete_sql":
             origin = request.query.get("origin")
             entity_id = request.query.get("entity_id")

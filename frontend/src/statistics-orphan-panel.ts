@@ -193,14 +193,15 @@ export class StatisticsOrphanPanel extends LitElement {
     this.error = null;
 
     this.initLoadingSteps([
-      'Reading entity registry',
-      'Reading state machine',
+      'Initializing',
       'Scanning states_meta table',
       'Scanning states table',
       'Scanning statistics_meta table',
-      'Scanning statistics tables',
-      'Calculating entity summaries',
-      'Fetching database statistics'
+      'Scanning statistics_short_term table',
+      'Scanning statistics (long-term) table',
+      'Reading entity registry and state machine',
+      'Calculating storage for deleted entities',
+      'Finalizing and generating summary'
     ]);
 
     try {
@@ -210,27 +211,22 @@ export class StatisticsOrphanPanel extends LitElement {
       }
 
       this.loadingMessage = 'Building storage overview...';
-      // Simulate backend steps (in reality, backend does all at once)
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // entity registry
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // state machine
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // states_meta
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // states table
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.completeCurrentStep(); // statistics_meta
 
-      const overview = await this.apiService.fetchEntityStorageOverview();
-      this.storageEntities = overview.entities;
-      this.storageSummary = overview.summary;
-      this.completeCurrentStep(); // statistics tables
-      this.completeCurrentStep(); // calculating summaries
+      // Execute steps 0-8 sequentially
+      for (let step = 0; step <= 8; step++) {
+        const result = await this.apiService.fetchEntityStorageOverviewStep(step);
+
+        if (step === 8) {
+          // Final step returns the complete overview
+          this.storageEntities = result.entities;
+          this.storageSummary = result.summary;
+        }
+
+        this.completeCurrentStep();
+      }
 
       this.loadingMessage = 'Fetching database statistics...';
       this.databaseSize = await this.apiService.fetchDatabaseSize();
-      this.completeCurrentStep(); // database stats
 
       this.loadingMessage = 'Complete!';
 

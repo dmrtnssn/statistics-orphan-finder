@@ -461,6 +461,17 @@ class ApiService {
     }
   }
   /**
+   * Fetch entity storage overview step by step
+   */
+  async fetchEntityStorageOverviewStep(step) {
+    this.validateConnection();
+    try {
+      return await this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview_step&step=${step}`);
+    } catch (err) {
+      throw new Error(`Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+  /**
    * Generate delete SQL for an entity
    */
   async generateDeleteSql(entityId, origin, inStatesMeta, inStatisticsMeta) {
@@ -1725,7 +1736,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-D5r9r9ii.js");
+      await import("./entity-details-modal-BfJPcVKW.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1734,7 +1745,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BXDy_Xdz.js");
+      await import("./delete-sql-modal-VFzkYhCZ.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2475,38 +2486,31 @@ let StatisticsOrphanPanel = class extends i$1 {
     this.loading = true;
     this.error = null;
     this.initLoadingSteps([
-      "Reading entity registry",
-      "Reading state machine",
+      "Initializing",
       "Scanning states_meta table",
       "Scanning states table",
       "Scanning statistics_meta table",
-      "Scanning statistics tables",
-      "Calculating entity summaries",
-      "Fetching database statistics"
+      "Scanning statistics_short_term table",
+      "Scanning statistics (long-term) table",
+      "Reading entity registry and state machine",
+      "Calculating storage for deleted entities",
+      "Finalizing and generating summary"
     ]);
     try {
       if (!this.hass) {
         throw new Error("Home Assistant connection not available. Please reload the page.");
       }
       this.loadingMessage = "Building storage overview...";
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      this.completeCurrentStep();
-      const overview = await this.apiService.fetchEntityStorageOverview();
-      this.storageEntities = overview.entities;
-      this.storageSummary = overview.summary;
-      this.completeCurrentStep();
-      this.completeCurrentStep();
+      for (let step = 0; step <= 8; step++) {
+        const result = await this.apiService.fetchEntityStorageOverviewStep(step);
+        if (step === 8) {
+          this.storageEntities = result.entities;
+          this.storageSummary = result.summary;
+        }
+        this.completeCurrentStep();
+      }
       this.loadingMessage = "Fetching database statistics...";
       this.databaseSize = await this.apiService.fetchDatabaseSize();
-      this.completeCurrentStep();
       this.loadingMessage = "Complete!";
       this.error = null;
     } catch (err) {
@@ -2771,4 +2775,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-Dta5DDhQ.js.map
+//# sourceMappingURL=statistics-orphan-panel-C4pcJc2p.js.map

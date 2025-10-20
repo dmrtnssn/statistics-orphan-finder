@@ -53,6 +53,18 @@ export class ApiService {
   }
 
   /**
+   * Fetch entity storage overview step by step
+   */
+  async fetchEntityStorageOverviewStep(step: number): Promise<any> {
+    this.validateConnection();
+    try {
+      return await this.hass.callApi<any>('GET', `${API_BASE}?action=entity_storage_overview_step&step=${step}`);
+    } catch (err) {
+      throw new Error(`Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Generate delete SQL for an entity
    */
   async generateDeleteSql(
