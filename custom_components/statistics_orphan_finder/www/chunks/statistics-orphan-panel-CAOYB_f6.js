@@ -575,6 +575,10 @@ let StorageHealthSummary = class extends i$1 {
     this.entities = [];
     this.databaseSize = null;
     this.activeFilter = null;
+    this.activeRegistry = null;
+    this.activeState = null;
+    this.activeStates = null;
+    this.activeStatistics = null;
   }
   getUnavailableLongTerm() {
     const sevenDaysInSeconds = 7 * 24 * 3600;
@@ -604,6 +608,13 @@ let StorageHealthSummary = class extends i$1 {
   handleAction(action) {
     this.dispatchEvent(new CustomEvent("action-clicked", {
       detail: { action },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleFilterClick(group, value) {
+    this.dispatchEvent(new CustomEvent("filter-changed", {
+      detail: { group, value },
       bubbles: true,
       composed: true
     }));
@@ -827,9 +838,73 @@ let StorageHealthSummary = class extends i$1 {
           ${this.renderActionSummary()}
         </div>
 
-        <!-- Column 3: Placeholder -->
-        <div class="column placeholder-column">
-          Reserved for<br>future features
+        <!-- Column 3: Filter Panel -->
+        <div class="column filter-panel-column">
+          <div class="filter-panel-title">Filters</div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">Registry:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeRegistry === "Enabled" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("registry", "Enabled")}
+              >Enabled</button>
+              <button
+                class="filter-btn ${this.activeRegistry === "Disabled" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("registry", "Disabled")}
+              >Disabled</button>
+              <button
+                class="filter-btn ${this.activeRegistry === "Not in Registry" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("registry", "Not in Registry")}
+              >Not present</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">State machine:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeState === "Available" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("state", "Available")}
+              >Available</button>
+              <button
+                class="filter-btn ${this.activeState === "Unavailable" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("state", "Unavailable")}
+              >Unavailable</button>
+              <button
+                class="filter-btn ${this.activeState === "Not Present" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("state", "Not Present")}
+              >Not present</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">States:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeStates === "in_states" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("states", "in_states")}
+              >In states</button>
+              <button
+                class="filter-btn ${this.activeStates === "not_in_states" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("states", "not_in_states")}
+              >Not in states</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">Statistics:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeStatistics === "in_statistics" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("statistics", "in_statistics")}
+              >In statistics</button>
+              <button
+                class="filter-btn ${this.activeStatistics === "not_in_statistics" ? "active" : ""}"
+                @click=${() => this.handleFilterClick("statistics", "not_in_statistics")}
+              >Not in statistics</button>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -851,7 +926,7 @@ StorageHealthSummary.styles = [
 
       .summary-container {
         display: grid;
-        grid-template-columns: 520px 1fr 200px;
+        grid-template-columns: 520px 1fr 300px;
         gap: 20px;
         margin-bottom: 24px;
       }
@@ -1025,20 +1100,63 @@ StorageHealthSummary.styles = [
         font-size: 14px;
       }
 
-      /* Column 3: Placeholder */
-      .placeholder-column {
+      /* Column 3: Filter Panel */
+      .filter-panel-column {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--secondary-text-color);
-        font-style: italic;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .filter-panel-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--primary-text-color);
+      }
+
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .filter-group-label {
         font-size: 13px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+
+      .filter-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: nowrap;
+      }
+
+      .filter-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: var(--primary-text-color);
+        min-width: 50px;
         text-align: center;
-        min-height: 200px;
+        line-height: 1.3;
+      }
+
+      .filter-btn:hover {
+        background: var(--divider-color);
+      }
+
+      .filter-btn.active {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.3));
+        border-color: rgba(255, 193, 7, 0.8);
       }
 
       @media (max-width: 1200px) {
-        .placeholder-column {
+        .filter-panel-column {
           display: none;
         }
       }
@@ -1056,6 +1174,18 @@ __decorateClass$5([
 __decorateClass$5([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeFilter", 2);
+__decorateClass$5([
+  n({ type: String })
+], StorageHealthSummary.prototype, "activeRegistry", 2);
+__decorateClass$5([
+  n({ type: String })
+], StorageHealthSummary.prototype, "activeState", 2);
+__decorateClass$5([
+  n({ type: String })
+], StorageHealthSummary.prototype, "activeStates", 2);
+__decorateClass$5([
+  n({ type: String })
+], StorageHealthSummary.prototype, "activeStatistics", 2);
 StorageHealthSummary = __decorateClass$5([
   t("storage-health-summary")
 ], StorageHealthSummary);
@@ -1724,6 +1854,8 @@ let StorageOverviewView = class extends i$1 {
     this.registryFilter = null;
     this.stateFilter = null;
     this.advancedFilter = null;
+    this.statesFilter = null;
+    this.statisticsFilter = null;
     this.sortStack = [{ column: "entity_id", direction: "asc" }];
     this.selectedEntity = null;
     this.deleteModalData = null;
@@ -1743,7 +1875,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-B4RtqQs1.js");
+      await import("./entity-details-modal-BcDfJGAE.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1752,7 +1884,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-rgy-9LmF.js");
+      await import("./delete-sql-modal-CrjhlokO.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -1781,7 +1913,7 @@ let StorageOverviewView = class extends i$1 {
     return new Set(this.selectableEntities.map((e2) => e2.entity_id));
   }
   get filteredEntities() {
-    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
+    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.statesFilter}|${this.statisticsFilter}|${this.sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
     if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
       return this._cachedFilteredEntities;
     }
@@ -1807,6 +1939,16 @@ let StorageOverviewView = class extends i$1 {
       filtered = filtered.filter((e2) => e2.in_states && !e2.in_statistics_meta);
     } else if (this.advancedFilter === "only_stats") {
       filtered = filtered.filter((e2) => e2.in_statistics_meta && !e2.in_states);
+    }
+    if (this.statesFilter === "in_states") {
+      filtered = filtered.filter((e2) => e2.in_states);
+    } else if (this.statesFilter === "not_in_states") {
+      filtered = filtered.filter((e2) => !e2.in_states);
+    }
+    if (this.statisticsFilter === "in_statistics") {
+      filtered = filtered.filter((e2) => e2.in_statistics_meta);
+    } else if (this.statisticsFilter === "not_in_statistics") {
+      filtered = filtered.filter((e2) => !e2.in_statistics_meta);
     }
     this._lastFilterKey = filterKey;
     this._cachedFilteredEntities = this.sortEntities(filtered);
@@ -2053,6 +2195,25 @@ let StorageOverviewView = class extends i$1 {
     this.registryFilter = null;
     this.stateFilter = null;
     this.advancedFilter = null;
+    this.statesFilter = null;
+    this.statisticsFilter = null;
+  }
+  handleFilterPanelChange(e2) {
+    const { group, value } = e2.detail;
+    switch (group) {
+      case "registry":
+        this.registryFilter = this.registryFilter === value ? null : value;
+        break;
+      case "state":
+        this.stateFilter = this.stateFilter === value ? null : value;
+        break;
+      case "states":
+        this.statesFilter = this.statesFilter === value ? null : value;
+        break;
+      case "statistics":
+        this.statisticsFilter = this.statisticsFilter === value ? null : value;
+        break;
+    }
   }
   handleSortChanged(e2) {
     this.sortStack = e2.detail.sortStack;
@@ -2297,7 +2458,12 @@ ${e2.sql}`;
         .entities=${this.entities}
         .databaseSize=${this.databaseSize}
         .activeFilter=${this.getActiveFilterType()}
+        .activeRegistry=${this.registryFilter}
+        .activeState=${this.stateFilter}
+        .activeStates=${this.statesFilter}
+        .activeStatistics=${this.statisticsFilter}
         @action-clicked=${this.handleHealthAction}
+        @filter-changed=${this.handleFilterPanelChange}
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
@@ -2405,6 +2571,12 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "advancedFilter", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "statesFilter", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "statisticsFilter", 2);
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "sortStack", 2);
@@ -2736,4 +2908,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BNF4VbFA.js.map
+//# sourceMappingURL=statistics-orphan-panel-CAOYB_f6.js.map

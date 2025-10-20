@@ -15,6 +15,10 @@ export class StorageHealthSummary extends LitElement {
   @property({ type: Array }) entities: StorageEntity[] = [];
   @property({ type: Object }) databaseSize: DatabaseSize | null = null;
   @property({ type: String }) activeFilter: string | null = null;
+  @property({ type: String }) activeRegistry: string | null = null;
+  @property({ type: String }) activeState: string | null = null;
+  @property({ type: String }) activeStates: string | null = null;
+  @property({ type: String }) activeStatistics: string | null = null;
 
   static styles = [
     sharedStyles,
@@ -26,7 +30,7 @@ export class StorageHealthSummary extends LitElement {
 
       .summary-container {
         display: grid;
-        grid-template-columns: 520px 1fr 200px;
+        grid-template-columns: 520px 1fr 300px;
         gap: 20px;
         margin-bottom: 24px;
       }
@@ -200,20 +204,63 @@ export class StorageHealthSummary extends LitElement {
         font-size: 14px;
       }
 
-      /* Column 3: Placeholder */
-      .placeholder-column {
+      /* Column 3: Filter Panel */
+      .filter-panel-column {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--secondary-text-color);
-        font-style: italic;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .filter-panel-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--primary-text-color);
+      }
+
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .filter-group-label {
         font-size: 13px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+
+      .filter-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: nowrap;
+      }
+
+      .filter-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: var(--primary-text-color);
+        min-width: 50px;
         text-align: center;
-        min-height: 200px;
+        line-height: 1.3;
+      }
+
+      .filter-btn:hover {
+        background: var(--divider-color);
+      }
+
+      .filter-btn.active {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.3));
+        border-color: rgba(255, 193, 7, 0.8);
       }
 
       @media (max-width: 1200px) {
-        .placeholder-column {
+        .filter-panel-column {
           display: none;
         }
       }
@@ -256,6 +303,14 @@ export class StorageHealthSummary extends LitElement {
   private handleAction(action: string) {
     this.dispatchEvent(new CustomEvent('action-clicked', {
       detail: { action },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  private handleFilterClick(group: string, value: string) {
+    this.dispatchEvent(new CustomEvent('filter-changed', {
+      detail: { group, value },
       bubbles: true,
       composed: true
     }));
@@ -518,9 +573,73 @@ export class StorageHealthSummary extends LitElement {
           ${this.renderActionSummary()}
         </div>
 
-        <!-- Column 3: Placeholder -->
-        <div class="column placeholder-column">
-          Reserved for<br>future features
+        <!-- Column 3: Filter Panel -->
+        <div class="column filter-panel-column">
+          <div class="filter-panel-title">Filters</div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">Registry:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeRegistry === 'Enabled' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('registry', 'Enabled')}
+              >Enabled</button>
+              <button
+                class="filter-btn ${this.activeRegistry === 'Disabled' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('registry', 'Disabled')}
+              >Disabled</button>
+              <button
+                class="filter-btn ${this.activeRegistry === 'Not in Registry' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('registry', 'Not in Registry')}
+              >Not present</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">State machine:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeState === 'Available' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('state', 'Available')}
+              >Available</button>
+              <button
+                class="filter-btn ${this.activeState === 'Unavailable' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('state', 'Unavailable')}
+              >Unavailable</button>
+              <button
+                class="filter-btn ${this.activeState === 'Not Present' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('state', 'Not Present')}
+              >Not present</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">States:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeStates === 'in_states' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('states', 'in_states')}
+              >In states</button>
+              <button
+                class="filter-btn ${this.activeStates === 'not_in_states' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('states', 'not_in_states')}
+              >Not in states</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-group-label">Statistics:</div>
+            <div class="filter-buttons">
+              <button
+                class="filter-btn ${this.activeStatistics === 'in_statistics' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('statistics', 'in_statistics')}
+              >In statistics</button>
+              <button
+                class="filter-btn ${this.activeStatistics === 'not_in_statistics' ? 'active' : ''}"
+                @click=${() => this.handleFilterClick('statistics', 'not_in_statistics')}
+              >Not in statistics</button>
+            </div>
+          </div>
         </div>
       </div>
     `;

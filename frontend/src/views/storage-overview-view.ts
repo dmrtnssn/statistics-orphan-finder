@@ -36,6 +36,8 @@ export class StorageOverviewView extends LitElement {
   @state() private registryFilter: string | null = null;
   @state() private stateFilter: string | null = null;
   @state() private advancedFilter: string | null = null;
+  @state() private statesFilter: string | null = null;
+  @state() private statisticsFilter: string | null = null;
   @state() private sortStack: SortState[] = [{ column: 'entity_id', direction: 'asc' }];
   @state() private selectedEntity: StorageEntity | null = null;
   @state() private deleteModalData: DeleteModalData | null = null;
@@ -130,7 +132,7 @@ export class StorageOverviewView extends LitElement {
 
   private get filteredEntities(): StorageEntity[] {
     // Create a cache key from all filter parameters
-    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.sortStack.map(s => `${s.column}:${s.direction}`).join(',')}`;
+    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.statesFilter}|${this.statisticsFilter}|${this.sortStack.map(s => `${s.column}:${s.direction}`).join(',')}`;
 
     // Return cached result if filters haven't changed
     if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
@@ -170,6 +172,20 @@ export class StorageOverviewView extends LitElement {
       filtered = filtered.filter(e => e.in_states && !e.in_statistics_meta);
     } else if (this.advancedFilter === 'only_stats') {
       filtered = filtered.filter(e => e.in_statistics_meta && !e.in_states);
+    }
+
+    // States filter
+    if (this.statesFilter === 'in_states') {
+      filtered = filtered.filter(e => e.in_states);
+    } else if (this.statesFilter === 'not_in_states') {
+      filtered = filtered.filter(e => !e.in_states);
+    }
+
+    // Statistics filter
+    if (this.statisticsFilter === 'in_statistics') {
+      filtered = filtered.filter(e => e.in_statistics_meta);
+    } else if (this.statisticsFilter === 'not_in_statistics') {
+      filtered = filtered.filter(e => !e.in_statistics_meta);
     }
 
     // Cache the result
@@ -433,6 +449,28 @@ export class StorageOverviewView extends LitElement {
     this.registryFilter = null;
     this.stateFilter = null;
     this.advancedFilter = null;
+    this.statesFilter = null;
+    this.statisticsFilter = null;
+  }
+
+  private handleFilterPanelChange(e: CustomEvent) {
+    const { group, value } = e.detail;
+
+    // Toggle filter: if already active, clear it; otherwise set it
+    switch (group) {
+      case 'registry':
+        this.registryFilter = this.registryFilter === value ? null : value;
+        break;
+      case 'state':
+        this.stateFilter = this.stateFilter === value ? null : value;
+        break;
+      case 'states':
+        this.statesFilter = this.statesFilter === value ? null : value;
+        break;
+      case 'statistics':
+        this.statisticsFilter = this.statisticsFilter === value ? null : value;
+        break;
+    }
   }
 
   private handleSortChanged(e: CustomEvent) {
@@ -740,7 +778,12 @@ export class StorageOverviewView extends LitElement {
         .entities=${this.entities}
         .databaseSize=${this.databaseSize}
         .activeFilter=${this.getActiveFilterType()}
+        .activeRegistry=${this.registryFilter}
+        .activeState=${this.stateFilter}
+        .activeStates=${this.statesFilter}
+        .activeStatistics=${this.statisticsFilter}
         @action-clicked=${this.handleHealthAction}
+        @filter-changed=${this.handleFilterPanelChange}
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
