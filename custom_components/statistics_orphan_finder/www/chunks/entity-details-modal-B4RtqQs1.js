@@ -1,5 +1,5 @@
 import { i, n, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-Fl1SkBRg.js";
+import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-BNF4VbFA.js";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -295,4 +295,4 @@ EntityDetailsModal = __decorateClass([
 export {
   EntityDetailsModal
 };
-//# sourceMappingURL=entity-details-modal-P9GLtvZm.js.map
+//# sourceMappingURL=entity-details-modal-B4RtqQs1.js.map

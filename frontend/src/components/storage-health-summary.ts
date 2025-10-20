@@ -26,7 +26,7 @@ export class StorageHealthSummary extends LitElement {
 
       .summary-container {
         display: grid;
-        grid-template-columns: 300px 1fr 200px;
+        grid-template-columns: 520px 1fr 200px;
         gap: 20px;
         margin-bottom: 24px;
       }
@@ -48,8 +48,6 @@ export class StorageHealthSummary extends LitElement {
       .chart-column {
         display: flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
         /* Debug: Uncomment to verify container size */
         /* background: rgba(255, 255, 0, 0.1); */
       }
@@ -61,15 +59,22 @@ export class StorageHealthSummary extends LitElement {
         color: var(--primary-text-color);
       }
 
+      .chart-wrapper {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+      }
+
       #pie-chart {
         width: 220px;
         height: 220px;
         display: block;
+        flex-shrink: 0;
       }
 
       .chart-legend {
-        margin-top: 16px;
-        width: 100%;
+        flex: 1;
+        min-width: 200px;
       }
 
       .legend-item {
@@ -375,23 +380,25 @@ export class StorageHealthSummary extends LitElement {
 
     return html`
       <div class="chart-title">Database Storage</div>
-      <canvas id="pie-chart" width="220" height="220"></canvas>
-      <div class="chart-legend">
-        ${segments.map(segment => {
-          const recordCount = getRecordCount(segment.label);
-          return html`
-            <div class="legend-item">
-              <div class="legend-color" style="background: ${segment.color}"></div>
-              <div class="legend-content">
-                <div class="legend-main">
-                  <span class="legend-label">${segment.label}</span>
-                  <span class="legend-value">${formatBytes(segment.size)}</span>
+      <div class="chart-wrapper">
+        <canvas id="pie-chart" width="220" height="220"></canvas>
+        <div class="chart-legend">
+          ${segments.map(segment => {
+            const recordCount = getRecordCount(segment.label);
+            return html`
+              <div class="legend-item">
+                <div class="legend-color" style="background: ${segment.color}"></div>
+                <div class="legend-content">
+                  <div class="legend-main">
+                    <span class="legend-label">${segment.label}</span>
+                    <span class="legend-value">${formatBytes(segment.size)}</span>
+                  </div>
+                  <div class="legend-count">${formatNumber(recordCount)} records</div>
                 </div>
-                <div class="legend-count">${formatNumber(recordCount)} records</div>
               </div>
-            </div>
-          `;
-        })}
+            `;
+          })}
+        </div>
       </div>
     `;
   }
