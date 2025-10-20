@@ -58,6 +58,20 @@ export interface GenerateSqlResponse {
   storage_saved: number;
 }
 
+export interface BulkSqlGenerationResult {
+  entities: Array<{
+    entity_id: string;
+    sql: string;
+    storage_saved: number;
+    count: number;
+    error?: string;
+  }>;
+  total_storage_saved: number;
+  total_count: number;
+  success_count: number;
+  error_count: number;
+}
+
 // ============================================================================
 // Storage Overview Types
 // ============================================================================
@@ -190,6 +204,13 @@ export interface EntityClickedEvent extends CustomEvent {
 export interface EntityDetailsEvent extends CustomEvent {
   detail: {
     entity: StorageEntity;
+  };
+}
+
+export interface SelectionChangedEvent extends CustomEvent {
+  detail: {
+    entityId: string;
+    selected: boolean;
   };
 }
 

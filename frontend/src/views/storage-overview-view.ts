@@ -14,11 +14,14 @@ import type {
   ColumnConfig,
   SortState,
   DeleteModalData,
-  HomeAssistant
+  HomeAssistant,
+  BulkSqlGenerationResult
 } from '../types';
+import { ApiService } from '../services/api-service';
 import '../components/storage-health-summary';
 import '../components/filter-bar';
 import '../components/entity-table';
+import '../components/selection-panel';
 // Modals are lazy-loaded to reduce initial bundle size
 
 @customElement('storage-overview-view')
@@ -38,6 +41,12 @@ export class StorageOverviewView extends LitElement {
   @state() private deleteModalData: DeleteModalData | null = null;
   @state() private deleteSql = '';
   @state() private deleteStorageSaved = 0;
+
+  // Selection state for bulk operations
+  @state() private selectedEntityIds: Set<string> = new Set();
+  @state() private isGeneratingBulkSql = false;
+  @state() private bulkSqlProgress = 0;
+  @state() private bulkSqlTotal = 0;
 
   // Memoization for filtered entities
   private _cachedFilteredEntities: StorageEntity[] = [];
@@ -100,6 +109,24 @@ export class StorageOverviewView extends LitElement {
       }
     `
   ];
+
+  /**
+   * Get entities that are eligible for deletion (deleted entities only)
+   */
+  private get selectableEntities(): StorageEntity[] {
+    return this.filteredEntities.filter(entity =>
+      !entity.in_entity_registry &&
+      !entity.in_state_machine &&
+      (entity.in_states_meta || entity.in_statistics_meta)
+    );
+  }
+
+  /**
+   * Get Set of selectable entity IDs for efficient lookups
+   */
+  private get selectableEntityIds(): Set<string> {
+    return new Set(this.selectableEntities.map(e => e.entity_id));
+  }
 
   private get filteredEntities(): StorageEntity[] {
     // Create a cache key from all filter parameters
@@ -531,6 +558,169 @@ export class StorageOverviewView extends LitElement {
     this.deleteStorageSaved = 0;
   }
 
+  /**
+   * Handle selection change from table checkbox
+   */
+  private handleSelectionChanged(e: CustomEvent) {
+    const { entityId, selected } = e.detail;
+
+    if (selected) {
+      this.selectedEntityIds.add(entityId);
+    } else {
+      this.selectedEntityIds.delete(entityId);
+    }
+
+    // Trigger re-render by creating new Set
+    this.selectedEntityIds = new Set(this.selectedEntityIds);
+  }
+
+  /**
+   * Handle select all filtered deleted entities
+   */
+  private handleSelectAll() {
+    this.selectedEntityIds = new Set(
+      this.selectableEntities.map(e => e.entity_id)
+    );
+  }
+
+  /**
+   * Handle deselect all
+   */
+  private handleDeselectAll() {
+    this.selectedEntityIds = new Set();
+  }
+
+  /**
+   * Handle bulk SQL generation for selected entities
+   */
+  private async handleGenerateBulkSql() {
+    if (this.selectedEntityIds.size === 0) return;
+
+    try {
+      // Validate hass connection
+      if (!this.hass) {
+        console.error('Cannot generate SQL: Home Assistant connection not available');
+        return;
+      }
+
+      this.isGeneratingBulkSql = true;
+      this.bulkSqlTotal = this.selectedEntityIds.size;
+      this.bulkSqlProgress = 0;
+
+      const apiService = new ApiService(this.hass);
+      const results: BulkSqlGenerationResult = {
+        entities: [],
+        total_storage_saved: 0,
+        total_count: 0,
+        success_count: 0,
+        error_count: 0
+      };
+
+      // Get selected entities with full data
+      const selectedEntities = this.entities.filter(e =>
+        this.selectedEntityIds.has(e.entity_id)
+      );
+
+      // Generate SQL for each entity sequentially
+      for (const entity of selectedEntities) {
+        this.bulkSqlProgress++;
+
+        try {
+          // Determine parameters for SQL generation
+          const inStates = entity.in_states_meta;
+          const inStatistics = entity.in_statistics_meta;
+
+          let origin: string;
+          let count: number;
+
+          if (inStates && inStatistics) {
+            origin = 'States+Statistics';
+            count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+          } else if (inStates) {
+            origin = 'States';
+            count = entity.states_count;
+          } else if (inStatistics) {
+            if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+              origin = 'Both';
+            } else if (entity.in_statistics_long_term) {
+              origin = 'Long-term';
+            } else {
+              origin = 'Short-term';
+            }
+            count = entity.stats_short_count + entity.stats_long_count;
+          } else {
+            // Skip entities not in any table
+            continue;
+          }
+
+          // Call API to generate SQL
+          const response = await apiService.generateDeleteSql(
+            entity.entity_id,
+            origin as any,
+            inStates,
+            inStatistics
+          );
+
+          results.entities.push({
+            entity_id: entity.entity_id,
+            sql: response.sql,
+            storage_saved: response.storage_saved,
+            count: count
+          });
+
+          results.total_storage_saved += response.storage_saved;
+          results.total_count += count;
+          results.success_count++;
+        } catch (err) {
+          console.error(`Error generating SQL for ${entity.entity_id}:`, err);
+          results.entities.push({
+            entity_id: entity.entity_id,
+            sql: '',
+            storage_saved: 0,
+            count: 0,
+            error: err instanceof Error ? err.message : 'Unknown error'
+          });
+          results.error_count++;
+        }
+      }
+
+      // Format combined SQL
+      const combinedSql = results.entities
+        .map(e => {
+          if (e.error) {
+            return `-- Entity: ${e.entity_id}\n-- ERROR: ${e.error}\n`;
+          }
+          const storageMB = (e.storage_saved / (1024 * 1024)).toFixed(2);
+          return `-- Entity: ${e.entity_id} (${e.count.toLocaleString()} records, ${storageMB} MB saved)\n${e.sql}`;
+        })
+        .join('\n\n');
+
+      // Show modal with bulk results
+      const modalData: DeleteModalData = {
+        entityId: `${results.success_count} entities`,
+        metadataId: 0,
+        origin: 'Both' as any,
+        status: 'deleted',
+        count: results.total_count
+      };
+
+      await this._loadDeleteSqlModal();
+      this.deleteModalData = modalData;
+      this.deleteSql = combinedSql;
+      this.deleteStorageSaved = results.total_storage_saved;
+
+      // Clear selection after successful generation
+      this.selectedEntityIds = new Set();
+    } catch (err) {
+      console.error('Error in bulk SQL generation:', err);
+      // Keep selection so user can retry
+    } finally {
+      this.isGeneratingBulkSql = false;
+      this.bulkSqlProgress = 0;
+      this.bulkSqlTotal = 0;
+    }
+  }
+
   render() {
     const hasActiveFilters =
       this.searchQuery ||
@@ -574,7 +764,11 @@ export class StorageOverviewView extends LitElement {
         .sortStack=${this.sortStack}
         .stickyFirstColumn=${true}
         .emptyMessage=${'No entities found'}
+        .showCheckboxes=${true}
+        .selectedIds=${this.selectedEntityIds}
+        .selectableEntityIds=${this.selectableEntityIds}
         @sort-changed=${this.handleSortChanged}
+        @selection-changed=${this.handleSelectionChanged}
       ></entity-table>
 
       ${this.selectedEntity ? html`
@@ -592,6 +786,19 @@ export class StorageOverviewView extends LitElement {
           .storageSaved=${this.deleteStorageSaved}
           @close-modal=${this.handleCloseDeleteModal}
         ></delete-sql-modal>
+      ` : ''}
+
+      ${this.selectedEntityIds.size > 0 ? html`
+        <selection-panel
+          .selectedCount=${this.selectedEntityIds.size}
+          .selectableCount=${this.selectableEntities.length}
+          .isGenerating=${this.isGeneratingBulkSql}
+          .generatingProgress=${this.bulkSqlProgress}
+          .generatingTotal=${this.bulkSqlTotal}
+          @select-all=${this.handleSelectAll}
+          @deselect-all=${this.handleDeselectAll}
+          @generate-bulk-sql=${this.handleGenerateBulkSql}
+        ></selection-panel>
       ` : ''}
     `;
   }

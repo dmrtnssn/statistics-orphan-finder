@@ -547,14 +547,14 @@ function debounce(func, wait) {
     }, wait);
   };
 }
-var __defProp$4 = Object.defineProperty;
-var __getOwnPropDesc$4 = Object.getOwnPropertyDescriptor;
-var __decorateClass$4 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$4(target, key) : target;
+var __defProp$5 = Object.defineProperty;
+var __getOwnPropDesc$5 = Object.getOwnPropertyDescriptor;
+var __decorateClass$5 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$5(target, key) : target;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$4(target, key, result);
+  if (kind && result) __defProp$5(target, key, result);
   return result;
 };
 let StorageHealthSummary = class extends i$1 {
@@ -1026,29 +1026,29 @@ StorageHealthSummary.styles = [
       }
     `
 ];
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Object })
 ], StorageHealthSummary.prototype, "summary", 2);
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Array })
 ], StorageHealthSummary.prototype, "entities", 2);
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Object })
 ], StorageHealthSummary.prototype, "databaseSize", 2);
-__decorateClass$4([
+__decorateClass$5([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeFilter", 2);
-StorageHealthSummary = __decorateClass$4([
+StorageHealthSummary = __decorateClass$5([
   t("storage-health-summary")
 ], StorageHealthSummary);
-var __defProp$3 = Object.defineProperty;
-var __getOwnPropDesc$3 = Object.getOwnPropertyDescriptor;
-var __decorateClass$3 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$3(target, key) : target;
+var __defProp$4 = Object.defineProperty;
+var __getOwnPropDesc$4 = Object.getOwnPropertyDescriptor;
+var __decorateClass$4 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$4(target, key) : target;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$3(target, key, result);
+  if (kind && result) __defProp$4(target, key, result);
   return result;
 };
 let FilterBar = class extends i$1 {
@@ -1140,32 +1140,32 @@ FilterBar.styles = [
       }
     `
 ];
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Array })
 ], FilterBar.prototype, "filters", 2);
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Boolean })
 ], FilterBar.prototype, "showSearch", 2);
-__decorateClass$3([
+__decorateClass$4([
   n({ type: String })
 ], FilterBar.prototype, "searchPlaceholder", 2);
-__decorateClass$3([
+__decorateClass$4([
   n({ type: String })
 ], FilterBar.prototype, "searchValue", 2);
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Boolean })
 ], FilterBar.prototype, "showClearButton", 2);
-FilterBar = __decorateClass$3([
+FilterBar = __decorateClass$4([
   t("filter-bar")
 ], FilterBar);
-var __defProp$2 = Object.defineProperty;
-var __getOwnPropDesc$2 = Object.getOwnPropertyDescriptor;
-var __decorateClass$2 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$2(target, key) : target;
+var __defProp$3 = Object.defineProperty;
+var __getOwnPropDesc$3 = Object.getOwnPropertyDescriptor;
+var __decorateClass$3 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$3(target, key) : target;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$2(target, key, result);
+  if (kind && result) __defProp$3(target, key, result);
   return result;
 };
 let EntityTable = class extends i$1 {
@@ -1177,6 +1177,9 @@ let EntityTable = class extends i$1 {
     this.stickyFirstColumn = false;
     this.sortStack = [{ column: "", direction: "asc" }];
     this.emptyMessage = "No data available";
+    this.showCheckboxes = false;
+    this.selectedIds = /* @__PURE__ */ new Set();
+    this.selectableEntityIds = /* @__PURE__ */ new Set();
   }
   handleSort(columnId) {
     if (!this.sortable) return;
@@ -1218,6 +1221,18 @@ let EntityTable = class extends i$1 {
       composed: true
     }));
   }
+  handleCheckboxChange(entity, event) {
+    const checkbox = event.target;
+    const entityId = entity.entity_id;
+    this.dispatchEvent(new CustomEvent("selection-changed", {
+      detail: {
+        entityId,
+        selected: checkbox.checked
+      },
+      bubbles: true,
+      composed: true
+    }));
+  }
   renderCell(entity, column) {
     if (column.render) {
       const content = column.render(entity);
@@ -1246,6 +1261,9 @@ let EntityTable = class extends i$1 {
           <table>
             <thead>
               <tr>
+                ${this.showCheckboxes ? x`
+                  <th class="checkbox-column sticky-column"></th>
+                ` : ""}
                 ${this.columns.map((column, index) => {
       const isSticky = this.stickyFirstColumn && index === 0;
       const isSortable = column.sortable !== false && this.sortable;
@@ -1269,23 +1287,41 @@ let EntityTable = class extends i$1 {
               </tr>
             </thead>
             <tbody>
-              ${this.entities.map((entity) => x`
-                <tr>
-                  ${this.columns.map((column, index) => {
-      const isSticky = this.stickyFirstColumn && index === 0;
-      const classes = [
-        isSticky ? "sticky-column" : "",
-        column.className || "",
-        column.align ? `align-${column.align}` : ""
-      ].filter(Boolean).join(" ");
+              ${this.entities.map((entity) => {
+      const entityId = entity.entity_id;
+      const isSelectable = this.selectableEntityIds.has(entityId);
+      const isSelected = this.selectedIds.has(entityId);
       return x`
-                      <td class=${classes}>
-                        ${this.renderCell(entity, column)}
+                  <tr>
+                    ${this.showCheckboxes ? x`
+                      <td class="checkbox-column sticky-column">
+                        <div class="checkbox-cell">
+                          <input
+                            type="checkbox"
+                            .checked=${isSelected}
+                            ?disabled=${!isSelectable}
+                            @change=${(e2) => this.handleCheckboxChange(entity, e2)}
+                            title=${isSelectable ? "Select this entity" : "This entity cannot be deleted"}
+                          />
+                        </div>
                       </td>
-                    `;
+                    ` : ""}
+                    ${this.columns.map((column, index) => {
+        const isSticky = this.stickyFirstColumn && index === 0;
+        const classes = [
+          isSticky ? "sticky-column" : "",
+          column.className || "",
+          column.align ? `align-${column.align}` : ""
+        ].filter(Boolean).join(" ");
+        return x`
+                        <td class=${classes}>
+                          ${this.renderCell(entity, column)}
+                        </td>
+                      `;
+      })}
+                  </tr>
+                `;
     })}
-                </tr>
-              `)}
             </tbody>
           </table>
         </div>
@@ -1337,29 +1373,318 @@ EntityTable.styles = [
       .align-center {
         text-align: center;
       }
+
+      .checkbox-column {
+        width: 50px;
+        text-align: center;
+        padding: 8px;
+      }
+
+      .checkbox-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--primary-color);
+      }
+
+      input[type="checkbox"]:disabled {
+        cursor: not-allowed;
+        opacity: 0.3;
+      }
+    `
+];
+__decorateClass$3([
+  n({ type: Array })
+], EntityTable.prototype, "entities", 2);
+__decorateClass$3([
+  n({ type: Array })
+], EntityTable.prototype, "columns", 2);
+__decorateClass$3([
+  n({ type: Boolean })
+], EntityTable.prototype, "sortable", 2);
+__decorateClass$3([
+  n({ type: Boolean })
+], EntityTable.prototype, "stickyFirstColumn", 2);
+__decorateClass$3([
+  n({ type: Array })
+], EntityTable.prototype, "sortStack", 2);
+__decorateClass$3([
+  n({ type: String })
+], EntityTable.prototype, "emptyMessage", 2);
+__decorateClass$3([
+  n({ type: Boolean })
+], EntityTable.prototype, "showCheckboxes", 2);
+__decorateClass$3([
+  n({ type: Object })
+], EntityTable.prototype, "selectedIds", 2);
+__decorateClass$3([
+  n({ type: Object })
+], EntityTable.prototype, "selectableEntityIds", 2);
+EntityTable = __decorateClass$3([
+  t("entity-table")
+], EntityTable);
+var __defProp$2 = Object.defineProperty;
+var __getOwnPropDesc$2 = Object.getOwnPropertyDescriptor;
+var __decorateClass$2 = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$2(target, key) : target;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp$2(target, key, result);
+  return result;
+};
+let SelectionPanel = class extends i$1 {
+  constructor() {
+    super(...arguments);
+    this.selectedCount = 0;
+    this.selectableCount = 0;
+    this.isGenerating = false;
+    this.generatingProgress = 0;
+    this.generatingTotal = 0;
+  }
+  handleSelectAll() {
+    this.dispatchEvent(new CustomEvent("select-all", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleDeselectAll() {
+    this.dispatchEvent(new CustomEvent("deselect-all", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleGenerateSql() {
+    this.dispatchEvent(new CustomEvent("generate-bulk-sql", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  render() {
+    const allSelected = this.selectedCount === this.selectableCount && this.selectableCount > 0;
+    return x`
+      <div class="selection-panel">
+        <div class="left-section">
+          <div class="count">
+            ${this.selectedCount} ${this.selectedCount === 1 ? "entity" : "entities"} selected
+          </div>
+          ${this.isGenerating ? x`
+            <div class="progress-text">
+              Generating SQL for ${this.generatingProgress} of ${this.generatingTotal}...
+            </div>
+          ` : ""}
+        </div>
+
+        <div class="actions">
+          <button
+            class="select-all-btn"
+            @click=${this.handleSelectAll}
+            ?disabled=${allSelected || this.isGenerating}
+            title=${allSelected ? "All entities selected" : "Select all filtered deleted entities"}
+          >
+            Select All${this.selectableCount > 0 ? ` (${this.selectableCount})` : ""}
+          </button>
+
+          <button
+            class="deselect-btn"
+            @click=${this.handleDeselectAll}
+            ?disabled=${this.selectedCount === 0 || this.isGenerating}
+          >
+            Deselect All
+          </button>
+
+          <button
+            class="generate-btn"
+            @click=${this.handleGenerateSql}
+            ?disabled=${this.selectedCount === 0 || this.isGenerating}
+          >
+            ${this.isGenerating ? x`
+              <span class="loading-spinner"></span>
+              Generating...
+            ` : x`
+              Generate Delete SQL
+            `}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+};
+SelectionPanel.styles = [
+  sharedStyles,
+  i`
+      :host {
+        display: block;
+      }
+
+      .selection-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--card-background-color);
+        border-top: 2px solid var(--primary-color);
+        padding: 16px 24px;
+        z-index: 100;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+        animation: slideUp 0.3s ease-out;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .left-section {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .count {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+      }
+
+      .progress-text {
+        font-size: 14px;
+        color: var(--secondary-text-color);
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .select-all-btn {
+        padding: 8px 16px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        color: var(--primary-text-color);
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+
+      .select-all-btn:hover:not(:disabled) {
+        background: var(--divider-color);
+      }
+
+      .deselect-btn {
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+      }
+
+      .deselect-btn:hover:not(:disabled) {
+        border-color: var(--primary-text-color);
+        color: var(--primary-text-color);
+      }
+
+      .generate-btn {
+        padding: 10px 24px;
+        background: var(--primary-color);
+        border: none;
+        border-radius: 4px;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.2s;
+        white-space: nowrap;
+      }
+
+      .generate-btn:hover:not(:disabled) {
+        background: var(--primary-color);
+        opacity: 0.9;
+      }
+
+      .generate-btn:disabled,
+      .select-all-btn:disabled,
+      .deselect-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .selection-panel {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+        }
+
+        .left-section {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+        }
+
+        .actions {
+          flex-wrap: wrap;
+        }
+      }
     `
 ];
 __decorateClass$2([
-  n({ type: Array })
-], EntityTable.prototype, "entities", 2);
+  n({ type: Number })
+], SelectionPanel.prototype, "selectedCount", 2);
 __decorateClass$2([
-  n({ type: Array })
-], EntityTable.prototype, "columns", 2);
-__decorateClass$2([
-  n({ type: Boolean })
-], EntityTable.prototype, "sortable", 2);
+  n({ type: Number })
+], SelectionPanel.prototype, "selectableCount", 2);
 __decorateClass$2([
   n({ type: Boolean })
-], EntityTable.prototype, "stickyFirstColumn", 2);
+], SelectionPanel.prototype, "isGenerating", 2);
 __decorateClass$2([
-  n({ type: Array })
-], EntityTable.prototype, "sortStack", 2);
+  n({ type: Number })
+], SelectionPanel.prototype, "generatingProgress", 2);
 __decorateClass$2([
-  n({ type: String })
-], EntityTable.prototype, "emptyMessage", 2);
-EntityTable = __decorateClass$2([
-  t("entity-table")
-], EntityTable);
+  n({ type: Number })
+], SelectionPanel.prototype, "generatingTotal", 2);
+SelectionPanel = __decorateClass$2([
+  t("selection-panel")
+], SelectionPanel);
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -1386,6 +1711,10 @@ let StorageOverviewView = class extends i$1 {
     this.deleteModalData = null;
     this.deleteSql = "";
     this.deleteStorageSaved = 0;
+    this.selectedEntityIds = /* @__PURE__ */ new Set();
+    this.isGeneratingBulkSql = false;
+    this.bulkSqlProgress = 0;
+    this.bulkSqlTotal = 0;
     this._cachedFilteredEntities = [];
     this._lastFilterKey = "";
     this._entityDetailsModalLoaded = false;
@@ -1396,7 +1725,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DC0RXsNR.js");
+      await import("./entity-details-modal-D5r9r9ii.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1405,7 +1734,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CpgkAEmQ.js");
+      await import("./delete-sql-modal-BXDy_Xdz.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -1418,6 +1747,20 @@ let StorageOverviewView = class extends i$1 {
     if (changedProperties.has("hass") && !this.hass) {
       console.warn("StorageOverviewView: hass connection became unavailable");
     }
+  }
+  /**
+   * Get entities that are eligible for deletion (deleted entities only)
+   */
+  get selectableEntities() {
+    return this.filteredEntities.filter(
+      (entity) => !entity.in_entity_registry && !entity.in_state_machine && (entity.in_states_meta || entity.in_statistics_meta)
+    );
+  }
+  /**
+   * Get Set of selectable entity IDs for efficient lookups
+   */
+  get selectableEntityIds() {
+    return new Set(this.selectableEntities.map((e2) => e2.entity_id));
   }
   get filteredEntities() {
     const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
@@ -1791,6 +2134,138 @@ let StorageOverviewView = class extends i$1 {
     this.deleteSql = "";
     this.deleteStorageSaved = 0;
   }
+  /**
+   * Handle selection change from table checkbox
+   */
+  handleSelectionChanged(e2) {
+    const { entityId, selected } = e2.detail;
+    if (selected) {
+      this.selectedEntityIds.add(entityId);
+    } else {
+      this.selectedEntityIds.delete(entityId);
+    }
+    this.selectedEntityIds = new Set(this.selectedEntityIds);
+  }
+  /**
+   * Handle select all filtered deleted entities
+   */
+  handleSelectAll() {
+    this.selectedEntityIds = new Set(
+      this.selectableEntities.map((e2) => e2.entity_id)
+    );
+  }
+  /**
+   * Handle deselect all
+   */
+  handleDeselectAll() {
+    this.selectedEntityIds = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Handle bulk SQL generation for selected entities
+   */
+  async handleGenerateBulkSql() {
+    if (this.selectedEntityIds.size === 0) return;
+    try {
+      if (!this.hass) {
+        console.error("Cannot generate SQL: Home Assistant connection not available");
+        return;
+      }
+      this.isGeneratingBulkSql = true;
+      this.bulkSqlTotal = this.selectedEntityIds.size;
+      this.bulkSqlProgress = 0;
+      const apiService = new ApiService(this.hass);
+      const results = {
+        entities: [],
+        total_storage_saved: 0,
+        total_count: 0,
+        success_count: 0,
+        error_count: 0
+      };
+      const selectedEntities = this.entities.filter(
+        (e2) => this.selectedEntityIds.has(e2.entity_id)
+      );
+      for (const entity of selectedEntities) {
+        this.bulkSqlProgress++;
+        try {
+          const inStates = entity.in_states_meta;
+          const inStatistics = entity.in_statistics_meta;
+          let origin;
+          let count;
+          if (inStates && inStatistics) {
+            origin = "States+Statistics";
+            count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+          } else if (inStates) {
+            origin = "States";
+            count = entity.states_count;
+          } else if (inStatistics) {
+            if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+              origin = "Both";
+            } else if (entity.in_statistics_long_term) {
+              origin = "Long-term";
+            } else {
+              origin = "Short-term";
+            }
+            count = entity.stats_short_count + entity.stats_long_count;
+          } else {
+            continue;
+          }
+          const response = await apiService.generateDeleteSql(
+            entity.entity_id,
+            origin,
+            inStates,
+            inStatistics
+          );
+          results.entities.push({
+            entity_id: entity.entity_id,
+            sql: response.sql,
+            storage_saved: response.storage_saved,
+            count
+          });
+          results.total_storage_saved += response.storage_saved;
+          results.total_count += count;
+          results.success_count++;
+        } catch (err) {
+          console.error(`Error generating SQL for ${entity.entity_id}:`, err);
+          results.entities.push({
+            entity_id: entity.entity_id,
+            sql: "",
+            storage_saved: 0,
+            count: 0,
+            error: err instanceof Error ? err.message : "Unknown error"
+          });
+          results.error_count++;
+        }
+      }
+      const combinedSql = results.entities.map((e2) => {
+        if (e2.error) {
+          return `-- Entity: ${e2.entity_id}
+-- ERROR: ${e2.error}
+`;
+        }
+        const storageMB = (e2.storage_saved / (1024 * 1024)).toFixed(2);
+        return `-- Entity: ${e2.entity_id} (${e2.count.toLocaleString()} records, ${storageMB} MB saved)
+${e2.sql}`;
+      }).join("\n\n");
+      const modalData = {
+        entityId: `${results.success_count} entities`,
+        metadataId: 0,
+        origin: "Both",
+        status: "deleted",
+        count: results.total_count
+      };
+      await this._loadDeleteSqlModal();
+      this.deleteModalData = modalData;
+      this.deleteSql = combinedSql;
+      this.deleteStorageSaved = results.total_storage_saved;
+      this.selectedEntityIds = /* @__PURE__ */ new Set();
+    } catch (err) {
+      console.error("Error in bulk SQL generation:", err);
+    } finally {
+      this.isGeneratingBulkSql = false;
+      this.bulkSqlProgress = 0;
+      this.bulkSqlTotal = 0;
+    }
+  }
   render() {
     const hasActiveFilters = this.searchQuery || this.basicFilter || this.registryFilter || this.stateFilter || this.advancedFilter;
     return x`
@@ -1828,7 +2303,11 @@ let StorageOverviewView = class extends i$1 {
         .sortStack=${this.sortStack}
         .stickyFirstColumn=${true}
         .emptyMessage=${"No entities found"}
+        .showCheckboxes=${true}
+        .selectedIds=${this.selectedEntityIds}
+        .selectableEntityIds=${this.selectableEntityIds}
         @sort-changed=${this.handleSortChanged}
+        @selection-changed=${this.handleSelectionChanged}
       ></entity-table>
 
       ${this.selectedEntity ? x`
@@ -1846,6 +2325,19 @@ let StorageOverviewView = class extends i$1 {
           .storageSaved=${this.deleteStorageSaved}
           @close-modal=${this.handleCloseDeleteModal}
         ></delete-sql-modal>
+      ` : ""}
+
+      ${this.selectedEntityIds.size > 0 ? x`
+        <selection-panel
+          .selectedCount=${this.selectedEntityIds.size}
+          .selectableCount=${this.selectableEntities.length}
+          .isGenerating=${this.isGeneratingBulkSql}
+          .generatingProgress=${this.bulkSqlProgress}
+          .generatingTotal=${this.bulkSqlTotal}
+          @select-all=${this.handleSelectAll}
+          @deselect-all=${this.handleDeselectAll}
+          @generate-bulk-sql=${this.handleGenerateBulkSql}
+        ></selection-panel>
       ` : ""}
     `;
   }
@@ -1910,6 +2402,18 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "deleteStorageSaved", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "selectedEntityIds", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "isGeneratingBulkSql", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "bulkSqlProgress", 2);
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "bulkSqlTotal", 2);
 StorageOverviewView = __decorateClass$1([
   t("storage-overview-view")
 ], StorageOverviewView);
@@ -2267,4 +2771,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-CnKtSza7.js.map
+//# sourceMappingURL=statistics-orphan-panel-Dta5DDhQ.js.map

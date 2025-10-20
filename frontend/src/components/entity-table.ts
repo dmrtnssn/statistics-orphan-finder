@@ -16,6 +16,9 @@ export class EntityTable extends LitElement {
   @property({ type: Boolean }) stickyFirstColumn = false;
   @property({ type: Array }) sortStack: SortState[] = [{ column: '', direction: 'asc' }];
   @property({ type: String }) emptyMessage = 'No data available';
+  @property({ type: Boolean }) showCheckboxes = false;
+  @property({ type: Object }) selectedIds: Set<string> = new Set();
+  @property({ type: Object }) selectableEntityIds: Set<string> = new Set();
 
   static styles = [
     sharedStyles,
@@ -60,6 +63,30 @@ export class EntityTable extends LitElement {
 
       .align-center {
         text-align: center;
+      }
+
+      .checkbox-column {
+        width: 50px;
+        text-align: center;
+        padding: 8px;
+      }
+
+      .checkbox-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--primary-color);
+      }
+
+      input[type="checkbox"]:disabled {
+        cursor: not-allowed;
+        opacity: 0.3;
       }
     `
   ];
@@ -115,6 +142,20 @@ export class EntityTable extends LitElement {
     }));
   }
 
+  private handleCheckboxChange(entity: any, event: Event) {
+    const checkbox = event.target as HTMLInputElement;
+    const entityId = entity.entity_id;
+
+    this.dispatchEvent(new CustomEvent('selection-changed', {
+      detail: {
+        entityId,
+        selected: checkbox.checked
+      },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
   private renderCell(entity: any, column: ColumnConfig) {
     if (column.render) {
       const content = column.render(entity);
@@ -146,6 +187,9 @@ export class EntityTable extends LitElement {
           <table>
             <thead>
               <tr>
+                ${this.showCheckboxes ? html`
+                  <th class="checkbox-column sticky-column"></th>
+                ` : ''}
                 ${this.columns.map((column, index) => {
                   const isSticky = this.stickyFirstColumn && index === 0;
                   const isSortable = column.sortable !== false && this.sortable;
@@ -170,24 +214,43 @@ export class EntityTable extends LitElement {
               </tr>
             </thead>
             <tbody>
-              ${this.entities.map(entity => html`
-                <tr>
-                  ${this.columns.map((column, index) => {
-                    const isSticky = this.stickyFirstColumn && index === 0;
-                    const classes = [
-                      isSticky ? 'sticky-column' : '',
-                      column.className || '',
-                      column.align ? `align-${column.align}` : ''
-                    ].filter(Boolean).join(' ');
+              ${this.entities.map(entity => {
+                const entityId = entity.entity_id;
+                const isSelectable = this.selectableEntityIds.has(entityId);
+                const isSelected = this.selectedIds.has(entityId);
 
-                    return html`
-                      <td class=${classes}>
-                        ${this.renderCell(entity, column)}
+                return html`
+                  <tr>
+                    ${this.showCheckboxes ? html`
+                      <td class="checkbox-column sticky-column">
+                        <div class="checkbox-cell">
+                          <input
+                            type="checkbox"
+                            .checked=${isSelected}
+                            ?disabled=${!isSelectable}
+                            @change=${(e: Event) => this.handleCheckboxChange(entity, e)}
+                            title=${isSelectable ? 'Select this entity' : 'This entity cannot be deleted'}
+                          />
+                        </div>
                       </td>
-                    `;
-                  })}
-                </tr>
-              `)}
+                    ` : ''}
+                    ${this.columns.map((column, index) => {
+                      const isSticky = this.stickyFirstColumn && index === 0;
+                      const classes = [
+                        isSticky ? 'sticky-column' : '',
+                        column.className || '',
+                        column.align ? `align-${column.align}` : ''
+                      ].filter(Boolean).join(' ');
+
+                      return html`
+                        <td class=${classes}>
+                          ${this.renderCell(entity, column)}
+                        </td>
+                      `;
+                    })}
+                  </tr>
+                `;
+              })}
             </tbody>
           </table>
         </div>
