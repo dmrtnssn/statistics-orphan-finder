@@ -100,7 +100,14 @@ class SqlGenerator:
 
             if row:
                 states_metadata_id = row[0]
-                # Delete from states table first (child records)
+                # First, clear any old_state_id references to states we're about to delete
+                # This prevents foreign key constraint violations
+                # Using nested subquery for MySQL compatibility
+                statements.append(
+                    f"UPDATE states SET old_state_id = NULL WHERE old_state_id IN "
+                    f"(SELECT state_id FROM (SELECT state_id FROM states WHERE metadata_id = {states_metadata_id}) AS temp);"
+                )
+                # Delete from states table (child records)
                 statements.append(f"DELETE FROM states WHERE metadata_id = {states_metadata_id};")
                 # Then delete from states_meta (parent record)
                 statements.append(f"DELETE FROM states_meta WHERE metadata_id = {states_metadata_id};")
