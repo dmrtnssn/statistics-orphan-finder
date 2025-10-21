@@ -8,42 +8,59 @@ A Home Assistant custom component that helps you identify and manage orphaned st
 
 ## Features
 
-### Orphan Finder
-- **Automatic Detection**: Scans your Home Assistant database to find statistics for entities that no longer exist
-- **Status Classification**: Distinguishes between truly deleted entities and temporarily unavailable ones
-- **Storage Analysis**: Calculates how much database space is being used by orphaned statistics
-- **SQL Generation**: Generates safe SQL statements to remove orphaned data
+### Comprehensive Entity Analysis
+- **Complete Database Scan**: Analyzes all entities across states and statistics tables in your Home Assistant database
+- **Storage Footprint Tracking**: See exactly how much database space each entity uses
+- **Precise Update Tracking**: Accurate 24-hour update counts and message intervals for all entities (no longer limited to 50 samples)
+- **Smart Filtering & Search**: Filter by registry status, state machine presence, statistics tracking, and more
+- **Visual Filter Panel**: Interactive summary cards with clickable filters for quick analysis
 
-### Storage Overview
-- **Comprehensive Entity Analysis**: View all entities with their storage footprint across states and statistics tables
-- **Smart Filtering**: Filter entities by registry status, state machine presence, statistics tracking, and more
-- **Update Frequency Tracking**: See message intervals and update frequency for each entity
-- **Entity Details Modal**: Click any entity ID to view detailed diagnostics including availability status, device info, and statistics eligibility
-- **Visual Filter Indicators**: Active filters are highlighted for easy identification
-- **Database Overview**: Real-time insights into your database size across different tables
+### Orphan Detection & Cleanup
+- **Automatic Orphan Detection**: Identifies deleted entities still consuming database space
+- **Bulk Selection**: Select multiple deleted entities with checkboxes
+- **Bulk SQL Generation**: Generate combined deletion statements for multiple entities at once
+- **Storage Impact Analysis**: See exactly how much space will be freed before deletion
+- **Safe SQL Generation**: Creates safe, reviewable SQL statements for data removal
 
-### General Features
-- **User-Friendly Interface**: Beautiful web-based panel with two tabs integrated into Home Assistant's sidebar
-- **Multi-Database Support**: Works with SQLite, MySQL/MariaDB, and PostgreSQL databases
-- **Clickable Entity IDs**: Direct access to Home Assistant's more-info dialog for any entity
+### Enhanced Entity Diagnostics
+Click any entity ID to view detailed diagnostics with intelligent analysis:
+- **Context-Aware Availability**: Smart explanations for entity status (no more "Unknown reason")
+- **Domain-Aware Statistics Eligibility**: Identifies incompatible entity types (binary_sensor, switch, light, etc.)
+- **Logical Validation Order**: Checks numeric state before suggesting configuration changes
+- **Device & Integration Info**: Platform details, device associations, and integration status
+- **Complete Storage Breakdown**: Records across all database tables (states_meta, states, statistics_meta, etc.)
+
+### User Experience
+- **Beautiful Interface**: Clean, responsive web panel integrated into Home Assistant's sidebar
+- **Multi-Database Support**: Works with SQLite, MySQL/MariaDB, and PostgreSQL
+- **Direct Entity Access**: Click entity IDs to open Home Assistant's more-info dialog
+- **Real-Time Filtering**: Active filters highlighted for easy identification
 
 ## Screenshots
 
-The integration adds a new panel to your Home Assistant sidebar with two main tabs:
+The integration adds a new "Statistics Orphans" panel to your Home Assistant sidebar (with a database-search icon).
 
-### Orphan Finder Tab
-- View all orphaned statistics entities
-- See when each entity was last updated
-- Check whether data is in short-term, long-term, or both statistics tables
-- Calculate storage space saved by deletion
-- Generate and copy SQL deletion statements
+### Main Interface
+- **Storage Health Summary**: Visual breakdown cards showing total entities, deleted entities, storage usage, etc.
+  - Click any card to instantly filter the table below
+  - Filter panel with registry status, state status, states table, and statistics table filters
+- **Comprehensive Entity Table**: Complete list of all entities with detailed columns:
+  - Entity ID (clickable for detailed diagnostics)
+  - Entity Registry status (Enabled/Disabled/Not in Registry)
+  - State Machine status (Available/Unavailable/Not Present)
+  - States table presence and record counts
+  - Statistics table presence and record counts
+  - Update frequency and 24-hour update counts
+  - Actions: View details and generate delete SQL for orphaned entities
+- **Search & Sort**: Real-time search and multi-column sorting
+- **Bulk Operations**: Select multiple deleted entities with checkboxes and generate combined SQL
 
-### Storage Overview Tab
-- Analyze all entities and their database storage footprint
-- Filter by registry status, state machine presence, and statistics tracking
-- View update frequencies and message intervals
-- Click entity IDs to see detailed diagnostics and availability information
-- Identify which entities are eligible for statistics tracking and why
+### Entity Details Modal
+- Comprehensive diagnostics for any entity
+- Smart availability analysis with actionable explanations
+- Statistics eligibility checker with domain awareness
+- Device, platform, and integration information
+- Complete storage breakdown across all database tables
 
 ## Installation
 
@@ -103,60 +120,65 @@ postgresql://homeassistant:password@localhost/homeassistant
 
 ### Accessing the Panel
 
-After installation, you'll find a new "Statistics Orphans" entry in your Home Assistant sidebar (with a database-search icon). The panel has two tabs:
+After installation, you'll find a new "Statistics Orphans" entry in your Home Assistant sidebar (with a database-search icon). Click the "Refresh" button to scan your database.
 
 ### Understanding the Interface
 
-#### Orphan Finder Tab
+#### Storage Health Summary
 
-This tab helps you identify and remove orphaned statistics:
+The top section provides an at-a-glance overview with interactive filter cards:
+- **Total entities** in the registry
+- **Entities in state machine**
+- **Entities in statistics** database
+- **Entities only in states** (not in statistics)
+- **Entities only in statistics** (not in states)
+- **Deleted entities** (orphaned data)
+- **Database size** breakdown
 
-1. **Database Overview**: Total records and storage space across different database tables
-2. **Orphaned Entities List**:
-   - **Entity ID**: The identifier of the orphaned entity (clickable to open details)
-   - **Status**:
-     - `deleted`: Entity no longer exists in Home Assistant
-     - `unavailable`: Entity exists but is currently unavailable
-   - **Last Update**: When the last statistic was recorded
-   - **Origin**: Where the statistics are stored (Long-term, Short-term, or Both)
-   - **Record Count**: Number of statistic entries
-   - **Storage**: Estimated database space used
+Click any card to instantly filter the entity table below. Additional filter buttons allow you to refine by:
+- Registry status (Enabled/Disabled/Not in Registry)
+- State status (Available/Unavailable/Not Present)
+- States table presence (In states/Not in states)
+- Statistics table presence (In statistics/Not in statistics)
 
-#### Storage Overview Tab
+#### Entity Table
 
-This tab provides comprehensive entity storage analysis:
+A comprehensive 15-column table showing all entities:
+- **Entity ID**: Clickable to open detailed diagnostics modal
+- **Entity Registry**: ✓ Enabled / ⊘ Disabled / ✕ Not in Registry
+- **State Machine**: ✓ Available / ⚠ Unavailable / ○ Not Present
+- **States Meta, States, States #**: States table tracking
+- **Message Interval**: How often the entity updates
+- **Last State Update**: Most recent state change timestamp
+- **Stats Meta, Short, Long**: Statistics table tracking
+- **Short #, Long #**: Record counts in statistics tables
+- **Last Stats Update**: Most recent statistics timestamp
+- **Actions**: View details button and delete SQL button (for orphaned entities)
 
-1. **Database Overview Cards**: Visual breakdown of storage by category
-   - Total entities in registry
-   - Entities in state machine
-   - Entities in statistics database
-   - Entities only in states (not statistics)
-   - Entities only in statistics (not states)
-   - Deleted entities
-   - Click any card to filter the table below
+Features:
+- **Search**: Real-time entity ID search
+- **Sort**: Click column headers to sort (shift-click for multi-column)
+- **Horizontal scroll**: Table scrolls horizontally with sticky first column
+- **Bulk selection**: Checkboxes appear for deleted entities
 
-2. **Entity Table**: Detailed list of all entities with:
-   - **Entity ID**: Clickable to open detailed diagnostics modal
-   - **Name**: Friendly name of the entity
-   - **Registry**: Whether entity is registered in Home Assistant
-   - **State**: Whether entity has state machine records
-   - **Statistics**: Whether entity has statistics records
-   - **Records**: Total number of state records
-   - **Storage**: Estimated database space used
-   - **Interval**: Message interval (how often entity updates)
-   - Search and sort functionality
+#### Entity Details Modal
 
-3. **Entity Details Modal**: Click any entity ID to see:
-   - Current availability status (available/unavailable/unknown)
-   - Device information and platform
-   - Configuration entry details
-   - Update frequency and message interval
-   - Statistics eligibility explanation
-   - Reasons why entity may not be tracked in statistics
+Click any entity ID to view comprehensive diagnostics:
+- **Entity Information**: Platform, device, and integration details
+- **Current Status**: Availability with intelligent explanations
+- **States Table**: Presence, record count, and last update
+- **Update Frequency**: Message interval and precise 24-hour update count
+- **Statistics Table**: Short-term and long-term tracking status
+- **Statistics Eligibility**: Smart analysis explaining why entities can or cannot have statistics:
+  - Detects incompatible entity types (binary_sensor, switch, light, automation, etc.)
+  - Validates numeric state before suggesting configuration changes
+  - Provides actionable, context-aware explanations
 
 ### Deleting Orphaned Statistics
 
 **IMPORTANT**: Always backup your database before performing deletions!
+
+#### Single Entity Deletion
 
 1. Click on an orphaned entity to view its details
 2. Review the information carefully:
@@ -168,6 +190,15 @@ This tab provides comprehensive entity storage analysis:
    - **SQLite**: Use DB Browser for SQLite or the command line
    - **MySQL/MariaDB**: Use phpMyAdmin, MySQL Workbench, or command line
    - **PostgreSQL**: Use pgAdmin or command line
+
+#### Bulk Deletion
+
+1. Filter the entity table to show only deleted entities
+2. Use checkboxes to select multiple entities for deletion
+3. Click "Select All" to select all filtered deleted entities at once
+4. Click "Generate Bulk SQL" to create combined deletion statements
+5. Review the summary showing total entities, records, and storage to be freed
+6. Copy and execute the combined SQL statements on your database
 
 ### Safety Recommendations
 
