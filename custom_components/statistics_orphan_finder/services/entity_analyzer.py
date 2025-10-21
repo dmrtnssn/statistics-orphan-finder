@@ -19,7 +19,7 @@ class EntityAnalyzer:
         registry_entry,
         state,
         device_registry
-    ) -> str:
+    ) -> str | None:
         """Determine why an entity is unavailable with user-friendly hint.
 
         Args:
@@ -30,7 +30,7 @@ class EntityAnalyzer:
             device_registry: Device registry instance
 
         Returns:
-            Human-readable reason for unavailability
+            Human-readable reason for unavailability, or None if entity is available
         """
         # Entity is administratively disabled
         if registry_entry and registry_entry.disabled:
@@ -84,7 +84,8 @@ class EntityAnalyzer:
             else:
                 return "Entity has been deleted - no longer exists in Home Assistant"
 
-        return "Unknown reason"
+        # Entity is available and working normally - no reason to display
+        return None
 
     @staticmethod
     def determine_statistics_eligibility(entity_id: str, registry_entry, state) -> str:
@@ -114,6 +115,31 @@ class EntityAnalyzer:
         if state.state in ["unavailable", "unknown"]:
             return "Entity is currently unavailable - statistics require valid state values"
 
+        # Check if domain is incompatible with statistics
+        domain = entity_id.split('.')[0]
+        incompatible_domains = {
+            'binary_sensor': "Binary sensors cannot have statistics - they represent on/off states, not numeric measurements",
+            'switch': "Switches cannot have statistics - they are control devices, not sensors",
+            'light': "Lights cannot have statistics - they are control devices, not sensors",
+            'input_boolean': "Input booleans cannot have statistics - they represent on/off states, not numeric measurements",
+            'button': "Buttons cannot have statistics - they are trigger-only entities",
+            'scene': "Scenes cannot have statistics - they are trigger-only entities",
+            'script': "Scripts cannot have statistics - they are automation entities, not sensors",
+            'automation': "Automations cannot have statistics - they are automation entities, not sensors",
+            'person': "Person entities cannot have statistics - they track location/presence, not numeric values",
+            'device_tracker': "Device trackers cannot have statistics - they track location/presence, not numeric values",
+            'zone': "Zones cannot have statistics - they are location entities, not sensors",
+        }
+
+        if domain in incompatible_domains:
+            return incompatible_domains[domain]
+
+        # Check if state value is numeric (before checking for state_class/unit)
+        try:
+            float(state.state)
+        except (ValueError, TypeError):
+            return f"State value '{state.state}' is not numeric - statistics only work with numeric values"
+
         # Get state attributes
         attributes = state.attributes or {}
 
@@ -126,12 +152,6 @@ class EntityAnalyzer:
         unit = attributes.get("unit_of_measurement")
         if not unit:
             return "Missing 'unit_of_measurement' attribute - statistics require a unit of measurement"
-
-        # Check if state value is numeric
-        try:
-            float(state.state)
-        except (ValueError, TypeError):
-            return f"State value '{state.state}' is not numeric - statistics only work with numeric values"
 
         # If all checks pass, entity should be eligible
         return "Entity appears eligible for statistics - it may take time to appear, or check recorder configuration"
@@ -148,7 +168,7 @@ class EntityAnalyzer:
             Dictionary with interval_seconds, update_count_24h, and interval_text, or None if insufficient data
         """
         with engine.connect() as conn:
-            # Get last 50 state updates
+            # Get last 50 state updates for interval calculation
             query = text("""
                 SELECT last_updated_ts
                 FROM states s
@@ -163,6 +183,18 @@ class EntityAnalyzer:
             if len(timestamps) < 2:
                 return None
 
+            # Get precise count of updates in last 24 hours
+            cutoff_ts = datetime.now(timezone.utc).timestamp() - 86400
+            count_query = text("""
+                SELECT COUNT(*)
+                FROM states s
+                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
+                WHERE sm.entity_id = :entity_id
+                AND s.last_updated_ts >= :cutoff
+            """)
+            count_result = conn.execute(count_query, {"entity_id": entity_id, "cutoff": cutoff_ts})
+            count_24h = count_result.scalar()
+
             # Calculate intervals between consecutive updates
             intervals = []
             for i in range(len(timestamps) - 1):
@@ -173,10 +205,6 @@ class EntityAnalyzer:
                 return None
 
             avg_interval = sum(intervals) / len(intervals)
-
-            # Count updates in last 24 hours
-            cutoff = datetime.now(timezone.utc).timestamp() - 86400
-            count_24h = sum(1 for ts in timestamps if ts >= cutoff)
 
             interval_seconds = int(avg_interval)
             return {

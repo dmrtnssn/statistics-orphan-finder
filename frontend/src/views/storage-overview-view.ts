@@ -105,9 +105,15 @@ export class StorageOverviewView extends LitElement {
         color: var(--secondary-text-color);
       }
 
-      .clear-sort-container {
+      .search-and-sort-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
         margin-bottom: 8px;
-        text-align: right;
+      }
+
+      .search-and-sort-row filter-bar {
+        flex: 1;
       }
     `
   ];
@@ -787,17 +793,16 @@ export class StorageOverviewView extends LitElement {
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
-      <filter-bar
-        .filters=${[]}
-        .showSearch=${true}
-        .searchPlaceholder=${'Search entity ID...'}
-        .searchValue=${this.searchQuery}
-        .showClearButton=${hasActiveFilters}
-        @search-changed=${this.handleSearchChanged}
-        @clear-filters=${this.handleClearFilters}
-      ></filter-bar>
-
-      <div class="clear-sort-container">
+      <div class="search-and-sort-row">
+        <filter-bar
+          .filters=${[]}
+          .showSearch=${true}
+          .searchPlaceholder=${'Search entity ID...'}
+          .searchValue=${this.searchQuery}
+          .showClearButton=${hasActiveFilters}
+          @search-changed=${this.handleSearchChanged}
+          @clear-filters=${this.handleClearFilters}
+        ></filter-bar>
         <button class="secondary-button" @click=${this.handleClearSort}>Clear Sort</button>
       </div>
 

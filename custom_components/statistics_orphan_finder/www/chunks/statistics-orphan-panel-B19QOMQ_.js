@@ -1959,7 +1959,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-CdXirOGA.js");
+      await import("./entity-details-modal-DU-iRCtu.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1968,7 +1968,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-C5m4Schq.js");
+      await import("./delete-sql-modal-DL1H5vlu.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2551,17 +2551,16 @@ ${e2.sql}`;
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
-      <filter-bar
-        .filters=${[]}
-        .showSearch=${true}
-        .searchPlaceholder=${"Search entity ID..."}
-        .searchValue=${this.searchQuery}
-        .showClearButton=${hasActiveFilters}
-        @search-changed=${this.handleSearchChanged}
-        @clear-filters=${this.handleClearFilters}
-      ></filter-bar>
-
-      <div class="clear-sort-container">
+      <div class="search-and-sort-row">
+        <filter-bar
+          .filters=${[]}
+          .showSearch=${true}
+          .searchPlaceholder=${"Search entity ID..."}
+          .searchValue=${this.searchQuery}
+          .showClearButton=${hasActiveFilters}
+          @search-changed=${this.handleSearchChanged}
+          @clear-filters=${this.handleClearFilters}
+        ></filter-bar>
         <button class="secondary-button" @click=${this.handleClearSort}>Clear Sort</button>
       </div>
 
@@ -2622,9 +2621,15 @@ StorageOverviewView.styles = [
         color: var(--secondary-text-color);
       }
 
-      .clear-sort-container {
+      .search-and-sort-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
         margin-bottom: 8px;
-        text-align: right;
+      }
+
+      .search-and-sort-row filter-bar {
+        flex: 1;
       }
     `
 ];
@@ -2992,4 +2997,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-FGIpGagr.js.map
+//# sourceMappingURL=statistics-orphan-panel-B19QOMQ_.js.map
