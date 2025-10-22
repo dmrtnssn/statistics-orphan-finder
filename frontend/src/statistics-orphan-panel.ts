@@ -230,24 +230,25 @@ export class StatisticsOrphanPanel extends LitElement {
     if (changedProperties.has('hass')) {
       const oldHass = changedProperties.get('hass');
 
-      if (this.hass) {
-        this.apiService = new ApiService(this.hass);
-        console.debug('[Panel] Home Assistant connection available');
-
-        // Clear any previous connection errors
-        if (this.error?.includes('connection') || this.error?.includes('Connection')) {
-          this.error = null;
-        }
-
-        // If hass was null/undefined before and now exists, connection was restored
-        if (!oldHass && this.hass) {
-          console.log('[Panel] Home Assistant connection restored');
-        }
-      } else {
+      // Only log when connection state actually changes (not on every state update)
+      if (this.hass && !oldHass) {
+        // Connection established
+        console.log('[Panel] Home Assistant connection established');
+      } else if (!this.hass && oldHass) {
         // Connection lost
         console.warn('[Panel] Home Assistant connection lost');
         if (!this.error) {
           this.error = 'Connection to Home Assistant lost. Waiting for reconnection...';
+        }
+      }
+
+      // Reinitialize API service whenever hass is available (even on updates)
+      if (this.hass) {
+        this.apiService = new ApiService(this.hass);
+
+        // Clear any previous connection errors
+        if (this.error?.includes('connection') || this.error?.includes('Connection')) {
+          this.error = null;
         }
       }
     }
