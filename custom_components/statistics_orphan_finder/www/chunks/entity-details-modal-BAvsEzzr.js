@@ -1,16 +1,15 @@
-import { i, n, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-B19QOMQ_.js";
+import { a as i, i as i$1, x, n } from "./lit-core-Bxp6o0XG.js";
+import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-DnUliVsH.js";
 var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp(target, key, result);
   return result;
 };
-let EntityDetailsModal = class extends i$1 {
+const _EntityDetailsModal = class _EntityDetailsModal extends i {
   constructor() {
     super(...arguments);
     this.entity = null;
@@ -192,9 +191,9 @@ let EntityDetailsModal = class extends i$1 {
     `;
   }
 };
-EntityDetailsModal.styles = [
+_EntityDetailsModal.styles = [
   sharedStyles,
-  i`
+  i$1`
       .details-section {
         margin-bottom: 24px;
       }
@@ -286,13 +285,14 @@ EntityDetailsModal.styles = [
       }
     `
 ];
+let EntityDetailsModal = _EntityDetailsModal;
 __decorateClass([
   n({ type: Object })
-], EntityDetailsModal.prototype, "entity", 2);
-EntityDetailsModal = __decorateClass([
-  t("entity-details-modal")
-], EntityDetailsModal);
+], EntityDetailsModal.prototype, "entity");
+if (!customElements.get("entity-details-modal")) {
+  customElements.define("entity-details-modal", EntityDetailsModal);
+}
 export {
   EntityDetailsModal
 };
-//# sourceMappingURL=entity-details-modal-DU-iRCtu.js.map
+//# sourceMappingURL=entity-details-modal-BAvsEzzr.js.map

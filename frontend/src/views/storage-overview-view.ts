@@ -4,7 +4,7 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { formatNumber } from '../services/formatters';
 import type {
@@ -24,7 +24,6 @@ import '../components/entity-table';
 import '../components/selection-panel';
 // Modals are lazy-loaded to reduce initial bundle size
 
-@customElement('storage-overview-view')
 export class StorageOverviewView extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
   @property({ type: Array }) entities: StorageEntity[] = [];
@@ -850,4 +849,9 @@ export class StorageOverviewView extends LitElement {
       ` : ''}
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('storage-overview-view')) {
+  customElements.define('storage-overview-view', StorageOverviewView);
 }

@@ -3,7 +3,7 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const t$2 = globalThis, e$4 = t$2.ShadowRoot && (void 0 === t$2.ShadyCSS || t$2.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, s$2 = Symbol(), o$4 = /* @__PURE__ */ new WeakMap();
+const t$1 = globalThis, e$4 = t$1.ShadowRoot && (void 0 === t$1.ShadyCSS || t$1.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, s$2 = Symbol(), o$4 = /* @__PURE__ */ new WeakMap();
 let n$3 = class n {
   constructor(t2, e2, o2) {
     if (this._$cssResult$ = true, o2 !== s$2) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -32,7 +32,7 @@ const r$4 = (t2) => new n$3("string" == typeof t2 ? t2 : t2 + "", void 0, s$2), 
 }, S$1 = (s2, o2) => {
   if (e$4) s2.adoptedStyleSheets = o2.map((t2) => t2 instanceof CSSStyleSheet ? t2 : t2.styleSheet);
   else for (const e2 of o2) {
-    const o3 = document.createElement("style"), n3 = t$2.litNonce;
+    const o3 = document.createElement("style"), n3 = t$1.litNonce;
     void 0 !== n3 && o3.setAttribute("nonce", n3), o3.textContent = e2.cssText, s2.appendChild(o3);
   }
 }, c$2 = e$4 ? (t2) => t2 : (t2) => t2 instanceof CSSStyleSheet ? ((t3) => {
@@ -262,7 +262,7 @@ y$1.elementStyles = [], y$1.shadowRootOptions = { mode: "open" }, y$1[d$1("eleme
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const t$1 = globalThis, i$1 = t$1.trustedTypes, s$1 = i$1 ? i$1.createPolicy("lit-html", { createHTML: (t2) => t2 }) : void 0, e$2 = "$lit$", h = `lit$${Math.random().toFixed(9).slice(2)}$`, o$2 = "?" + h, n$1 = `<${o$2}>`, r$2 = document, l = () => r$2.createComment(""), c = (t2) => null === t2 || "object" != typeof t2 && "function" != typeof t2, a = Array.isArray, u = (t2) => a(t2) || "function" == typeof t2?.[Symbol.iterator], d = "[ 	\n\f\r]", f = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, v = /-->/g, _ = />/g, m = RegExp(`>|${d}(?:([^\\s"'>=/]+)(${d}*=${d}*(?:[^ 	
+const t = globalThis, i$1 = t.trustedTypes, s$1 = i$1 ? i$1.createPolicy("lit-html", { createHTML: (t2) => t2 }) : void 0, e$2 = "$lit$", h = `lit$${Math.random().toFixed(9).slice(2)}$`, o$2 = "?" + h, n$1 = `<${o$2}>`, r$2 = document, l = () => r$2.createComment(""), c = (t2) => null === t2 || "object" != typeof t2 && "function" != typeof t2, a = Array.isArray, u = (t2) => a(t2) || "function" == typeof t2?.[Symbol.iterator], d = "[ 	\n\f\r]", f = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, v = /-->/g, _ = />/g, m = RegExp(`>|${d}(?:([^\\s"'>=/]+)(${d}*=${d}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), p = /'/g, g = /"/g, $ = /^(?:script|style|textarea|title)$/i, y2 = (t2) => (i2, ...s2) => ({ _$litType$: t2, strings: i2, values: s2 }), x = y2(1), T = Symbol.for("lit-noChange"), E = Symbol.for("lit-nothing"), A = /* @__PURE__ */ new WeakMap(), C = r$2.createTreeWalker(r$2, 129);
 function P(t2, i2) {
   if (!a(t2) || !t2.hasOwnProperty("raw")) throw Error("invalid template strings array");
@@ -475,8 +475,8 @@ class z {
     S(this, t2);
   }
 }
-const j = t$1.litHtmlPolyfillSupport;
-j?.(N, R), (t$1.litHtmlVersions ?? (t$1.litHtmlVersions = [])).push("3.3.1");
+const j = t.litHtmlPolyfillSupport;
+j?.(N, R), (t.litHtmlVersions ?? (t.litHtmlVersions = [])).push("3.3.1");
 const B = (t2, i2, s2) => {
   const e2 = s2?.renderBefore ?? i2;
   let h2 = e2._$litPart$;
@@ -519,16 +519,6 @@ i._$litElement$ = true, i["finalized"] = true, s.litElementHydrateSupport?.({ Li
 const o$1 = s.litElementPolyfillSupport;
 o$1?.({ LitElement: i });
 (s.litElementVersions ?? (s.litElementVersions = [])).push("4.2.1");
-/**
- * @license
- * Copyright 2017 Google LLC
- * SPDX-License-Identifier: BSD-3-Clause
- */
-const t = (t2) => (e2, o2) => {
-  void 0 !== o2 ? o2.addInitializer(() => {
-    customElements.define(t2, e2);
-  }) : customElements.define(t2, e2);
-};
 /**
  * @license
  * Copyright 2017 Google LLC
@@ -594,7 +584,6 @@ export {
   i$3 as i,
   n2 as n,
   r,
-  t,
   x
 };
-//# sourceMappingURL=lit-core-C_-GaGI3.js.map
+//# sourceMappingURL=lit-core-Bxp6o0XG.js.map

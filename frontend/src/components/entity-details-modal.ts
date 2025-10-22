@@ -4,12 +4,11 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { formatNumber, formatDuration } from '../services/formatters';
 import type { StorageEntity } from '../types';
 
-@customElement('entity-details-modal')
 export class EntityDetailsModal extends LitElement {
   @property({ type: Object }) entity: StorageEntity | null = null;
 
@@ -294,4 +293,9 @@ export class EntityDetailsModal extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('entity-details-modal')) {
+  customElements.define('entity-details-modal', EntityDetailsModal);
 }

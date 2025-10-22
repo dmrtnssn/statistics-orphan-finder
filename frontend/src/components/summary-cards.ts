@@ -4,7 +4,7 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 
 export interface SummaryCard {
@@ -23,7 +23,6 @@ export interface SummaryCard {
   }[];
 }
 
-@customElement('summary-cards')
 export class SummaryCards extends LitElement {
   @property({ type: Array }) cards: SummaryCard[] = [];
   @property({ type: Number }) columns = 4;
@@ -137,4 +136,9 @@ export class SummaryCards extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('summary-cards')) {
+  customElements.define('summary-cards', SummaryCards);
 }

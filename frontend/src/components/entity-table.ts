@@ -4,11 +4,10 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import type { ColumnConfig, SortState } from '../types';
 import { sharedStyles } from '../styles/shared-styles';
 
-@customElement('entity-table')
 export class EntityTable extends LitElement {
   @property({ type: Array }) entities: any[] = [];
   @property({ type: Array }) columns: ColumnConfig[] = [];
@@ -257,4 +256,9 @@ export class EntityTable extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('entity-table')) {
+  customElements.define('entity-table', EntityTable);
 }

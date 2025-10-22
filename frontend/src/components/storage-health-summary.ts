@@ -4,12 +4,11 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { formatNumber, formatBytes } from '../services/formatters';
 import type { StorageSummary, StorageEntity, DatabaseSize } from '../types';
 
-@customElement('storage-health-summary')
 export class StorageHealthSummary extends LitElement {
   @property({ type: Object }) summary: StorageSummary | null = null;
   @property({ type: Array }) entities: StorageEntity[] = [];
@@ -750,4 +749,9 @@ export class StorageHealthSummary extends LitElement {
       requestAnimationFrame(() => this.drawChart());
     }
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('storage-health-summary')) {
+  customElements.define('storage-health-summary', StorageHealthSummary);
 }

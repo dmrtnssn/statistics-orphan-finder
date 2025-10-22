@@ -5,10 +5,9 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 
-@customElement('selection-panel')
 export class SelectionPanel extends LitElement {
   @property({ type: Number }) selectedCount = 0;
   @property({ type: Number }) selectableCount = 0;
@@ -239,6 +238,11 @@ export class SelectionPanel extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('selection-panel')) {
+  customElements.define('selection-panel', SelectionPanel);
 }
 
 declare global {

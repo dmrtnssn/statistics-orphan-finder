@@ -4,12 +4,11 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { formatBytes, copyToClipboard } from '../services/formatters';
 import type { DeleteModalData } from '../types';
 
-@customElement('delete-sql-modal')
 export class DeleteSqlModal extends LitElement {
   @property({ type: Object }) data: DeleteModalData | null = null;
   @property({ type: String }) sql = '';
@@ -202,4 +201,9 @@ export class DeleteSqlModal extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('delete-sql-modal')) {
+  customElements.define('delete-sql-modal', DeleteSqlModal);
 }

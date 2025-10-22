@@ -1,4 +1,4 @@
-import { i, n, a as i$1, x, t, r, e } from "./lit-core-C_-GaGI3.js";
+import { i, a as i$1, x, n, r, e } from "./lit-core-Bxp6o0XG.js";
 const sharedStyles = i`
   /* Base styles */
   :host {
@@ -495,6 +495,153 @@ class ApiService {
     document.querySelector("home-assistant")?.dispatchEvent(event);
   }
 }
+const CACHE_KEY = "statistics_orphan_finder_cache";
+const CACHE_VERSION = 1;
+class CacheService {
+  /**
+   * Save data to localStorage cache
+   */
+  static saveCache(databaseSize, storageEntities, storageSummary) {
+    try {
+      const cacheData = {
+        version: CACHE_VERSION,
+        timestamp: Date.now(),
+        data: {
+          databaseSize,
+          storageEntities,
+          storageSummary
+        }
+      };
+      const serialized = JSON.stringify(cacheData);
+      localStorage.setItem(CACHE_KEY, serialized);
+      console.debug("[CacheService] Data cached successfully", {
+        timestamp: new Date(cacheData.timestamp).toISOString(),
+        entities: storageEntities.length
+      });
+      return true;
+    } catch (error) {
+      console.debug("[CacheService] Failed to save cache:", error);
+      return false;
+    }
+  }
+  /**
+   * Load data from localStorage cache
+   * Returns null if cache doesn't exist, is invalid, or version mismatch
+   */
+  static loadCache() {
+    try {
+      const serialized = localStorage.getItem(CACHE_KEY);
+      if (!serialized) {
+        console.debug("[CacheService] No cache found");
+        return null;
+      }
+      const parsed = JSON.parse(serialized);
+      if (!parsed || typeof parsed.version !== "number" || typeof parsed.timestamp !== "number" || !parsed.data) {
+        console.debug("[CacheService] Invalid cache structure, clearing");
+        this.clearCache();
+        return null;
+      }
+      if (parsed.version !== CACHE_VERSION) {
+        console.debug(
+          `[CacheService] Cache version mismatch (${parsed.version} !== ${CACHE_VERSION}), clearing`
+        );
+        this.clearCache();
+        return null;
+      }
+      if (!Array.isArray(parsed.data.storageEntities) || parsed.data.databaseSize !== null && typeof parsed.data.databaseSize !== "object" || parsed.data.storageSummary !== null && typeof parsed.data.storageSummary !== "object") {
+        console.debug("[CacheService] Invalid data structure in cache, clearing");
+        this.clearCache();
+        return null;
+      }
+      console.debug("[CacheService] Cache loaded successfully", {
+        timestamp: new Date(parsed.timestamp).toISOString(),
+        age: this.formatAge(this.getCacheAge(parsed)),
+        entities: parsed.data.storageEntities.length
+      });
+      return parsed;
+    } catch (error) {
+      console.debug("[CacheService] Failed to load cache:", error);
+      this.clearCache();
+      return null;
+    }
+  }
+  /**
+   * Clear the cache
+   */
+  static clearCache() {
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      console.debug("[CacheService] Cache cleared");
+    } catch (error) {
+      console.debug("[CacheService] Failed to clear cache:", error);
+    }
+  }
+  /**
+   * Get cache age in milliseconds
+   * Returns null if no cache exists
+   */
+  static getCacheAge(cache = null) {
+    try {
+      const cachedData = cache || this.loadCache();
+      if (!cachedData) {
+        return null;
+      }
+      return Date.now() - cachedData.timestamp;
+    } catch {
+      return null;
+    }
+  }
+  /**
+   * Check if cache is stale (older than maxAge milliseconds)
+   */
+  static isCacheStale(maxAgeMs, cache = null) {
+    const age = this.getCacheAge(cache);
+    if (age === null) {
+      return true;
+    }
+    return age > maxAgeMs;
+  }
+  /**
+   * Format cache age as human-readable string
+   */
+  static formatAge(ageMs) {
+    if (ageMs === null) {
+      return "unknown";
+    }
+    const seconds = Math.floor(ageMs / 1e3);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) {
+      return `${days} day${days === 1 ? "" : "s"} ago`;
+    } else if (hours > 0) {
+      return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    } else if (minutes > 0) {
+      return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+    } else {
+      return `${seconds} second${seconds === 1 ? "" : "s"} ago`;
+    }
+  }
+  /**
+   * Get cache metadata (without full data)
+   */
+  static getCacheMetadata() {
+    try {
+      const cache = this.loadCache();
+      if (!cache) {
+        return null;
+      }
+      const age = this.getCacheAge(cache);
+      return {
+        timestamp: cache.timestamp,
+        age: age || 0,
+        ageFormatted: this.formatAge(age)
+      };
+    } catch {
+      return null;
+    }
+  }
+}
 function formatBytes(bytes) {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -559,16 +706,15 @@ function debounce(func, wait) {
   };
 }
 var __defProp$5 = Object.defineProperty;
-var __getOwnPropDesc$5 = Object.getOwnPropertyDescriptor;
 var __decorateClass$5 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$5(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$5(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$5(target, key, result);
   return result;
 };
-let StorageHealthSummary = class extends i$1 {
+const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
   constructor() {
     super(...arguments);
     this.summary = null;
@@ -991,7 +1137,7 @@ let StorageHealthSummary = class extends i$1 {
     }
   }
 };
-StorageHealthSummary.styles = [
+_StorageHealthSummary.styles = [
   sharedStyles,
   i`
       :host {
@@ -1246,44 +1392,44 @@ StorageHealthSummary.styles = [
       }
     `
 ];
+let StorageHealthSummary = _StorageHealthSummary;
 __decorateClass$5([
   n({ type: Object })
-], StorageHealthSummary.prototype, "summary", 2);
+], StorageHealthSummary.prototype, "summary");
 __decorateClass$5([
   n({ type: Array })
-], StorageHealthSummary.prototype, "entities", 2);
+], StorageHealthSummary.prototype, "entities");
 __decorateClass$5([
   n({ type: Object })
-], StorageHealthSummary.prototype, "databaseSize", 2);
+], StorageHealthSummary.prototype, "databaseSize");
 __decorateClass$5([
   n({ type: String })
-], StorageHealthSummary.prototype, "activeFilter", 2);
+], StorageHealthSummary.prototype, "activeFilter");
 __decorateClass$5([
   n({ type: String })
-], StorageHealthSummary.prototype, "activeRegistry", 2);
+], StorageHealthSummary.prototype, "activeRegistry");
 __decorateClass$5([
   n({ type: String })
-], StorageHealthSummary.prototype, "activeState", 2);
+], StorageHealthSummary.prototype, "activeState");
 __decorateClass$5([
   n({ type: String })
-], StorageHealthSummary.prototype, "activeStates", 2);
+], StorageHealthSummary.prototype, "activeStates");
 __decorateClass$5([
   n({ type: String })
-], StorageHealthSummary.prototype, "activeStatistics", 2);
-StorageHealthSummary = __decorateClass$5([
-  t("storage-health-summary")
-], StorageHealthSummary);
+], StorageHealthSummary.prototype, "activeStatistics");
+if (!customElements.get("storage-health-summary")) {
+  customElements.define("storage-health-summary", StorageHealthSummary);
+}
 var __defProp$4 = Object.defineProperty;
-var __getOwnPropDesc$4 = Object.getOwnPropertyDescriptor;
 var __decorateClass$4 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$4(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$4(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$4(target, key, result);
   return result;
 };
-let FilterBar = class extends i$1 {
+const _FilterBar = class _FilterBar extends i$1 {
   constructor() {
     super(...arguments);
     this.filters = [];
@@ -1353,7 +1499,7 @@ let FilterBar = class extends i$1 {
     `;
   }
 };
-FilterBar.styles = [
+_FilterBar.styles = [
   sharedStyles,
   i`
       :host {
@@ -1372,35 +1518,35 @@ FilterBar.styles = [
       }
     `
 ];
+let FilterBar = _FilterBar;
 __decorateClass$4([
   n({ type: Array })
-], FilterBar.prototype, "filters", 2);
+], FilterBar.prototype, "filters");
 __decorateClass$4([
   n({ type: Boolean })
-], FilterBar.prototype, "showSearch", 2);
+], FilterBar.prototype, "showSearch");
 __decorateClass$4([
   n({ type: String })
-], FilterBar.prototype, "searchPlaceholder", 2);
+], FilterBar.prototype, "searchPlaceholder");
 __decorateClass$4([
   n({ type: String })
-], FilterBar.prototype, "searchValue", 2);
+], FilterBar.prototype, "searchValue");
 __decorateClass$4([
   n({ type: Boolean })
-], FilterBar.prototype, "showClearButton", 2);
-FilterBar = __decorateClass$4([
-  t("filter-bar")
-], FilterBar);
+], FilterBar.prototype, "showClearButton");
+if (!customElements.get("filter-bar")) {
+  customElements.define("filter-bar", FilterBar);
+}
 var __defProp$3 = Object.defineProperty;
-var __getOwnPropDesc$3 = Object.getOwnPropertyDescriptor;
 var __decorateClass$3 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$3(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$3(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$3(target, key, result);
   return result;
 };
-let EntityTable = class extends i$1 {
+const _EntityTable = class _EntityTable extends i$1 {
   constructor() {
     super(...arguments);
     this.entities = [];
@@ -1561,7 +1707,7 @@ let EntityTable = class extends i$1 {
     `;
   }
 };
-EntityTable.styles = [
+_EntityTable.styles = [
   sharedStyles,
   i`
       :host {
@@ -1631,47 +1777,47 @@ EntityTable.styles = [
       }
     `
 ];
+let EntityTable = _EntityTable;
 __decorateClass$3([
   n({ type: Array })
-], EntityTable.prototype, "entities", 2);
+], EntityTable.prototype, "entities");
 __decorateClass$3([
   n({ type: Array })
-], EntityTable.prototype, "columns", 2);
+], EntityTable.prototype, "columns");
 __decorateClass$3([
   n({ type: Boolean })
-], EntityTable.prototype, "sortable", 2);
+], EntityTable.prototype, "sortable");
 __decorateClass$3([
   n({ type: Boolean })
-], EntityTable.prototype, "stickyFirstColumn", 2);
+], EntityTable.prototype, "stickyFirstColumn");
 __decorateClass$3([
   n({ type: Array })
-], EntityTable.prototype, "sortStack", 2);
+], EntityTable.prototype, "sortStack");
 __decorateClass$3([
   n({ type: String })
-], EntityTable.prototype, "emptyMessage", 2);
+], EntityTable.prototype, "emptyMessage");
 __decorateClass$3([
   n({ type: Boolean })
-], EntityTable.prototype, "showCheckboxes", 2);
+], EntityTable.prototype, "showCheckboxes");
 __decorateClass$3([
   n({ type: Object })
-], EntityTable.prototype, "selectedIds", 2);
+], EntityTable.prototype, "selectedIds");
 __decorateClass$3([
   n({ type: Object })
-], EntityTable.prototype, "selectableEntityIds", 2);
-EntityTable = __decorateClass$3([
-  t("entity-table")
-], EntityTable);
+], EntityTable.prototype, "selectableEntityIds");
+if (!customElements.get("entity-table")) {
+  customElements.define("entity-table", EntityTable);
+}
 var __defProp$2 = Object.defineProperty;
-var __getOwnPropDesc$2 = Object.getOwnPropertyDescriptor;
 var __decorateClass$2 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$2(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$2(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$2(target, key, result);
   return result;
 };
-let SelectionPanel = class extends i$1 {
+const _SelectionPanel = class _SelectionPanel extends i$1 {
   constructor() {
     super(...arguments);
     this.selectedCount = 0;
@@ -1748,7 +1894,7 @@ let SelectionPanel = class extends i$1 {
     `;
   }
 };
-SelectionPanel.styles = [
+_SelectionPanel.styles = [
   sharedStyles,
   i`
       :host {
@@ -1899,35 +2045,35 @@ SelectionPanel.styles = [
       }
     `
 ];
+let SelectionPanel = _SelectionPanel;
 __decorateClass$2([
   n({ type: Number })
-], SelectionPanel.prototype, "selectedCount", 2);
+], SelectionPanel.prototype, "selectedCount");
 __decorateClass$2([
   n({ type: Number })
-], SelectionPanel.prototype, "selectableCount", 2);
+], SelectionPanel.prototype, "selectableCount");
 __decorateClass$2([
   n({ type: Boolean })
-], SelectionPanel.prototype, "isGenerating", 2);
+], SelectionPanel.prototype, "isGenerating");
 __decorateClass$2([
   n({ type: Number })
-], SelectionPanel.prototype, "generatingProgress", 2);
+], SelectionPanel.prototype, "generatingProgress");
 __decorateClass$2([
   n({ type: Number })
-], SelectionPanel.prototype, "generatingTotal", 2);
-SelectionPanel = __decorateClass$2([
-  t("selection-panel")
-], SelectionPanel);
+], SelectionPanel.prototype, "generatingTotal");
+if (!customElements.get("selection-panel")) {
+  customElements.define("selection-panel", SelectionPanel);
+}
 var __defProp$1 = Object.defineProperty;
-var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc$1(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp$1(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$1(target, key, result);
   return result;
 };
-let StorageOverviewView = class extends i$1 {
+const _StorageOverviewView = class _StorageOverviewView extends i$1 {
   constructor() {
     super(...arguments);
     this.entities = [];
@@ -1959,7 +2105,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DU-iRCtu.js");
+      await import("./entity-details-modal-BAvsEzzr.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -1968,7 +2114,7 @@ let StorageOverviewView = class extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-DL1H5vlu.js");
+      await import("./delete-sql-modal-DxDAvZRD.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2609,7 +2755,7 @@ ${e2.sql}`;
     `;
   }
 };
-StorageOverviewView.styles = [
+_StorageOverviewView.styles = [
   sharedStyles,
   i`
       :host {
@@ -2633,80 +2779,80 @@ StorageOverviewView.styles = [
       }
     `
 ];
+let StorageOverviewView = _StorageOverviewView;
 __decorateClass$1([
   n({ type: Object })
-], StorageOverviewView.prototype, "hass", 2);
+], StorageOverviewView.prototype, "hass");
 __decorateClass$1([
   n({ type: Array })
-], StorageOverviewView.prototype, "entities", 2);
+], StorageOverviewView.prototype, "entities");
 __decorateClass$1([
   n({ type: Object })
-], StorageOverviewView.prototype, "summary", 2);
+], StorageOverviewView.prototype, "summary");
 __decorateClass$1([
   n({ type: Object })
-], StorageOverviewView.prototype, "databaseSize", 2);
+], StorageOverviewView.prototype, "databaseSize");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "searchQuery", 2);
+], StorageOverviewView.prototype, "searchQuery");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "basicFilter", 2);
+], StorageOverviewView.prototype, "basicFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "registryFilter", 2);
+], StorageOverviewView.prototype, "registryFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "stateFilter", 2);
+], StorageOverviewView.prototype, "stateFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "advancedFilter", 2);
+], StorageOverviewView.prototype, "advancedFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "statesFilter", 2);
+], StorageOverviewView.prototype, "statesFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "statisticsFilter", 2);
+], StorageOverviewView.prototype, "statisticsFilter");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "sortStack", 2);
+], StorageOverviewView.prototype, "sortStack");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "selectedEntity", 2);
+], StorageOverviewView.prototype, "selectedEntity");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "deleteModalData", 2);
+], StorageOverviewView.prototype, "deleteModalData");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "deleteSql", 2);
+], StorageOverviewView.prototype, "deleteSql");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "deleteStorageSaved", 2);
+], StorageOverviewView.prototype, "deleteStorageSaved");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "selectedEntityIds", 2);
+], StorageOverviewView.prototype, "selectedEntityIds");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "isGeneratingBulkSql", 2);
+], StorageOverviewView.prototype, "isGeneratingBulkSql");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "bulkSqlProgress", 2);
+], StorageOverviewView.prototype, "bulkSqlProgress");
 __decorateClass$1([
   r()
-], StorageOverviewView.prototype, "bulkSqlTotal", 2);
-StorageOverviewView = __decorateClass$1([
-  t("storage-overview-view")
-], StorageOverviewView);
+], StorageOverviewView.prototype, "bulkSqlTotal");
+if (!customElements.get("storage-overview-view")) {
+  customElements.define("storage-overview-view", StorageOverviewView);
+}
 var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp(target, key, result);
   return result;
 };
-let StatisticsOrphanPanel = class extends i$1 {
+const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
   constructor() {
     super(...arguments);
     this.loading = false;
@@ -2716,19 +2862,65 @@ let StatisticsOrphanPanel = class extends i$1 {
     this.databaseSize = null;
     this.storageEntities = [];
     this.storageSummary = null;
+    this.cacheTimestamp = null;
+    this.showStaleBanner = false;
+    this.dataSource = null;
   }
   connectedCallback() {
     super.connectedCallback();
+    console.debug("[Panel] Component connected to DOM");
     if (this.hass) {
       this.apiService = new ApiService(this.hass);
+    }
+    const cacheLoaded = this.loadFromCache();
+    console.debug("[Panel] Cache load attempt:", cacheLoaded ? "success" : "no cache found");
+    this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
+    document.addEventListener("visibilitychange", this.boundVisibilityHandler);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    console.debug("[Panel] Component disconnected from DOM");
+    if (this.boundVisibilityHandler) {
+      document.removeEventListener("visibilitychange", this.boundVisibilityHandler);
+    }
+  }
+  /**
+   * Handle page visibility changes
+   * Provides recovery mechanism if panel data is lost
+   */
+  handleVisibilityChange() {
+    if (!document.hidden) {
+      console.debug("[Panel] Tab became visible, checking panel health");
+      if (!this.storageEntities.length && !this.loading && !this.storageSummary) {
+        console.warn("[Panel] Panel data lost, attempting recovery from cache");
+        const recovered = this.loadFromCache();
+        if (!recovered) {
+          console.error("[Panel] No cache available for recovery");
+          this.error = "Panel data was lost. Please click Refresh to reload.";
+        } else {
+          console.log("[Panel] Successfully recovered data from cache");
+        }
+      }
     }
   }
   willUpdate(changedProperties) {
     super.willUpdate(changedProperties);
-    if (changedProperties.has("hass") && this.hass) {
-      this.apiService = new ApiService(this.hass);
-      if (this.error?.includes("connection") || this.error?.includes("Connection")) {
-        this.error = null;
+    if (changedProperties.has("hass")) {
+      const oldHass = changedProperties.get("hass");
+      if (this.hass) {
+        this.apiService = new ApiService(this.hass);
+        console.debug("[Panel] Home Assistant connection available");
+        if (this.error?.includes("connection") || this.error?.includes("Connection")) {
+          this.error = null;
+        }
+        if (!oldHass && this.hass) {
+          console.log("[Panel] Home Assistant connection restored");
+        }
+      } else {
+        console.warn("[Panel] Home Assistant connection lost");
+        if (!this.error) {
+          this.error = "Connection to Home Assistant lost. Waiting for reconnection...";
+        }
       }
     }
   }
@@ -2750,6 +2942,7 @@ let StatisticsOrphanPanel = class extends i$1 {
     }
   }
   async loadStorageOverviewData() {
+    console.log("[Panel] Starting data load (9-step process)");
     this.loading = true;
     this.error = null;
     this.initLoadingSteps([
@@ -2768,10 +2961,12 @@ let StatisticsOrphanPanel = class extends i$1 {
         throw new Error("Home Assistant connection not available. Please reload the page.");
       }
       for (let step = 0; step <= 8; step++) {
+        console.debug(`[Panel] Executing step ${step + 1}/9`);
         const result = await this.apiService.fetchEntityStorageOverviewStep(step);
         if (step === 8) {
           this.storageEntities = result.entities;
           this.storageSummary = result.summary;
+          console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
         }
         if (step < 8) {
           this.completeCurrentStep();
@@ -2779,9 +2974,11 @@ let StatisticsOrphanPanel = class extends i$1 {
       }
       this.databaseSize = await this.apiService.fetchDatabaseSize();
       this.error = null;
+      this.saveToCache();
+      console.log("[Panel] Data load complete and cached");
     } catch (err) {
       this.error = err instanceof Error ? err.message : "Unknown error occurred";
-      console.error("Error loading storage overview data:", err);
+      console.error("[Panel] Error loading storage overview data:", err);
     } finally {
       this.loading = false;
       this.loadingSteps = [];
@@ -2793,6 +2990,75 @@ let StatisticsOrphanPanel = class extends i$1 {
   handleRetry() {
     this.error = null;
     this.loadStorageOverviewData();
+  }
+  /**
+   * Load data from cache if available
+   */
+  loadFromCache() {
+    try {
+      const cache = CacheService.loadCache();
+      if (!cache) {
+        console.debug("[Panel] No cache available");
+        return false;
+      }
+      this.databaseSize = cache.data.databaseSize;
+      this.storageEntities = cache.data.storageEntities;
+      this.storageSummary = cache.data.storageSummary;
+      this.cacheTimestamp = cache.timestamp;
+      this.dataSource = "cache";
+      const TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
+      this.showStaleBanner = CacheService.isCacheStale(TWELVE_HOURS_MS, cache);
+      console.log("[Panel] Data restored from cache", {
+        age: CacheService.formatAge(CacheService.getCacheAge(cache)),
+        entities: this.storageEntities.length,
+        isStale: this.showStaleBanner
+      });
+      return true;
+    } catch (error) {
+      console.debug("[Panel] Failed to load from cache:", error);
+      return false;
+    }
+  }
+  /**
+   * Save current data to cache
+   */
+  saveToCache() {
+    try {
+      const success = CacheService.saveCache(
+        this.databaseSize,
+        this.storageEntities,
+        this.storageSummary
+      );
+      if (success) {
+        this.cacheTimestamp = Date.now();
+        this.dataSource = "live";
+        this.showStaleBanner = false;
+        console.log("[Panel] Data saved to cache");
+      }
+    } catch (error) {
+      console.debug("[Panel] Failed to save to cache:", error);
+    }
+  }
+  /**
+   * Get formatted cache age string
+   */
+  getCacheAgeString() {
+    if (!this.cacheTimestamp) {
+      return "unknown";
+    }
+    const age = Date.now() - this.cacheTimestamp;
+    const ageStr = CacheService.formatAge(age);
+    const seconds = Math.floor(age / 1e3);
+    if (seconds < 10) {
+      return "just now";
+    }
+    return ageStr;
+  }
+  /**
+   * Dismiss the stale data banner
+   */
+  dismissStaleBanner() {
+    this.showStaleBanner = false;
   }
   async handleGenerateSql(e2) {
     const { entity_id, in_states_meta, in_statistics_meta, origin, entity } = e2.detail;
@@ -2829,10 +3095,37 @@ let StatisticsOrphanPanel = class extends i$1 {
     return x`
       <div class="header">
         <h1>Statistics Orphan Finder</h1>
-        <button class="refresh-button" @click=${this.handleRefresh}>
-          ↻ Refresh
-        </button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          ${this.cacheTimestamp ? x`
+            <span class="cache-indicator">
+              Refreshed ${this.getCacheAgeString()}
+            </span>
+          ` : ""}
+          <button class="refresh-button" @click=${this.handleRefresh}>
+            ↻ Refresh
+          </button>
+        </div>
       </div>
+
+      ${this.showStaleBanner ? x`
+        <div class="stale-cache-banner">
+          <div class="stale-cache-icon">⚠️</div>
+          <div class="stale-cache-content">
+            <div class="stale-cache-title">Showing cached data</div>
+            <div class="stale-cache-message">
+              Data is from cache (${this.getCacheAgeString()}). Click Refresh to update with latest information.
+            </div>
+          </div>
+          <div class="stale-cache-actions">
+            <button @click=${this.handleRefresh}>
+              Refresh Now
+            </button>
+            <button class="secondary-button" @click=${this.dismissStaleBanner}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ` : ""}
 
       ${this.error ? x`
         <div class="error-message">
@@ -2879,7 +3172,7 @@ let StatisticsOrphanPanel = class extends i$1 {
     `;
   }
 };
-StatisticsOrphanPanel.styles = [
+_StatisticsOrphanPanel.styles = [
   sharedStyles,
   i`
       :host {
@@ -2954,41 +3247,106 @@ StatisticsOrphanPanel.styles = [
         color: var(--error-color, #F44336);
       }
 
+      .stale-cache-banner {
+        background: rgba(255, 193, 7, 0.1);
+        border-left: 4px solid #FFC107;
+        padding: 16px;
+        margin-bottom: 16px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .stale-cache-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+      }
+
+      .stale-cache-content {
+        flex: 1;
+      }
+
+      .stale-cache-title {
+        font-weight: 600;
+        color: var(--primary-text-color);
+        margin-bottom: 4px;
+      }
+
+      .stale-cache-message {
+        font-size: 14px;
+        color: var(--secondary-text-color);
+      }
+
+      .stale-cache-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .cache-indicator {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.05);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
       .refresh-button {
         margin-left: 16px;
       }
     `
 ];
+let StatisticsOrphanPanel = _StatisticsOrphanPanel;
 __decorateClass([
   n({ type: Object })
-], StatisticsOrphanPanel.prototype, "hass", 2);
+], StatisticsOrphanPanel.prototype, "hass");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "loading", 2);
+], StatisticsOrphanPanel.prototype, "loading");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "loadingSteps", 2);
+], StatisticsOrphanPanel.prototype, "loadingSteps");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "currentStepIndex", 2);
+], StatisticsOrphanPanel.prototype, "currentStepIndex");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "error", 2);
+], StatisticsOrphanPanel.prototype, "error");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "databaseSize", 2);
+], StatisticsOrphanPanel.prototype, "databaseSize");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "storageEntities", 2);
+], StatisticsOrphanPanel.prototype, "storageEntities");
 __decorateClass([
   r()
-], StatisticsOrphanPanel.prototype, "storageSummary", 2);
+], StatisticsOrphanPanel.prototype, "storageSummary");
+__decorateClass([
+  r()
+], StatisticsOrphanPanel.prototype, "cacheTimestamp");
+__decorateClass([
+  r()
+], StatisticsOrphanPanel.prototype, "showStaleBanner");
+__decorateClass([
+  r()
+], StatisticsOrphanPanel.prototype, "dataSource");
 __decorateClass([
   e("storage-overview-view")
-], StatisticsOrphanPanel.prototype, "storageView", 2);
-StatisticsOrphanPanel = __decorateClass([
-  t("statistics-orphan-panel")
-], StatisticsOrphanPanel);
+], StatisticsOrphanPanel.prototype, "storageView");
+try {
+  if (!customElements.get("statistics-orphan-panel")) {
+    customElements.define("statistics-orphan-panel", StatisticsOrphanPanel);
+    console.debug("[Panel] Custom element registered successfully");
+  } else {
+    console.debug("[Panel] Custom element already registered");
+  }
+} catch (error) {
+  console.error("[Panel] Failed to register custom element:", error);
+}
 export {
   StatisticsOrphanPanel as S,
   formatDuration as a,
@@ -2997,4 +3355,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-B19QOMQ_.js.map
+//# sourceMappingURL=statistics-orphan-panel-DnUliVsH.js.map

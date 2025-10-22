@@ -1,16 +1,15 @@
-import { i, n, r, a as i$1, x, t } from "./lit-core-C_-GaGI3.js";
-import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-B19QOMQ_.js";
+import { a as i, i as i$1, x, n, r } from "./lit-core-Bxp6o0XG.js";
+import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-DnUliVsH.js";
 var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp(target, key, result);
+      result = decorator(target, key, result) || result;
+  if (result) __defProp(target, key, result);
   return result;
 };
-let DeleteSqlModal = class extends i$1 {
+const _DeleteSqlModal = class _DeleteSqlModal extends i {
   constructor() {
     super(...arguments);
     this.data = null;
@@ -112,9 +111,9 @@ let DeleteSqlModal = class extends i$1 {
     `;
   }
 };
-DeleteSqlModal.styles = [
+_DeleteSqlModal.styles = [
   sharedStyles,
-  i`
+  i$1`
       .sql-container {
         background: var(--secondary-background-color);
         padding: 16px;
@@ -199,22 +198,23 @@ DeleteSqlModal.styles = [
       }
     `
 ];
+let DeleteSqlModal = _DeleteSqlModal;
 __decorateClass([
   n({ type: Object })
-], DeleteSqlModal.prototype, "data", 2);
+], DeleteSqlModal.prototype, "data");
 __decorateClass([
   n({ type: String })
-], DeleteSqlModal.prototype, "sql", 2);
+], DeleteSqlModal.prototype, "sql");
 __decorateClass([
   n({ type: Number })
-], DeleteSqlModal.prototype, "storageSaved", 2);
+], DeleteSqlModal.prototype, "storageSaved");
 __decorateClass([
   r()
-], DeleteSqlModal.prototype, "copyButtonText", 2);
-DeleteSqlModal = __decorateClass([
-  t("delete-sql-modal")
-], DeleteSqlModal);
+], DeleteSqlModal.prototype, "copyButtonText");
+if (!customElements.get("delete-sql-modal")) {
+  customElements.define("delete-sql-modal", DeleteSqlModal);
+}
 export {
   DeleteSqlModal
 };
-//# sourceMappingURL=delete-sql-modal-DL1H5vlu.js.map
+//# sourceMappingURL=delete-sql-modal-DxDAvZRD.js.map

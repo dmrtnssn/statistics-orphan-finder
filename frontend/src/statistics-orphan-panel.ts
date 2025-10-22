@@ -4,9 +4,10 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state, query } from 'lit/decorators.js';
+import { property, state, query } from 'lit/decorators.js';
 import { sharedStyles } from './styles/shared-styles';
 import { ApiService } from './services/api-service';
+import { CacheService } from './services/cache-service';
 import type {
   DatabaseSize,
   StorageEntity,
@@ -17,7 +18,6 @@ import type {
 import './views/storage-overview-view';
 import type { StorageOverviewView } from './views/storage-overview-view';
 
-@customElement('statistics-orphan-panel')
 export class StatisticsOrphanPanel extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
 
@@ -31,9 +31,15 @@ export class StatisticsOrphanPanel extends LitElement {
   @state() private storageEntities: StorageEntity[] = [];
   @state() private storageSummary: StorageSummary | null = null;
 
+  // Cache management
+  @state() private cacheTimestamp: number | null = null;
+  @state() private showStaleBanner: boolean = false;
+  @state() private dataSource: 'live' | 'cache' | null = null;
+
   @query('storage-overview-view') private storageView?: StorageOverviewView;
 
   private apiService!: ApiService;
+  private boundVisibilityHandler!: () => void;
 
   static styles = [
     sharedStyles,
@@ -110,6 +116,54 @@ export class StatisticsOrphanPanel extends LitElement {
         color: var(--error-color, #F44336);
       }
 
+      .stale-cache-banner {
+        background: rgba(255, 193, 7, 0.1);
+        border-left: 4px solid #FFC107;
+        padding: 16px;
+        margin-bottom: 16px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .stale-cache-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+      }
+
+      .stale-cache-content {
+        flex: 1;
+      }
+
+      .stale-cache-title {
+        font-weight: 600;
+        color: var(--primary-text-color);
+        margin-bottom: 4px;
+      }
+
+      .stale-cache-message {
+        font-size: 14px;
+        color: var(--secondary-text-color);
+      }
+
+      .stale-cache-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .cache-indicator {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.05);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
       .refresh-button {
         margin-left: 16px;
       }
@@ -118,21 +172,83 @@ export class StatisticsOrphanPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    console.debug('[Panel] Component connected to DOM');
+
     if (this.hass) {
       this.apiService = new ApiService(this.hass);
     }
-    // Don't auto-load data - user must click Refresh button
+
+    // Try to load data from cache immediately
+    // This ensures the panel has data to render even after being recreated
+    const cacheLoaded = this.loadFromCache();
+    console.debug('[Panel] Cache load attempt:', cacheLoaded ? 'success' : 'no cache found');
+
+    // Add visibility change listener for recovery
+    this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
+    document.addEventListener('visibilitychange', this.boundVisibilityHandler);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    console.debug('[Panel] Component disconnected from DOM');
+
+    // Clean up event listeners
+    if (this.boundVisibilityHandler) {
+      document.removeEventListener('visibilitychange', this.boundVisibilityHandler);
+    }
+  }
+
+  /**
+   * Handle page visibility changes
+   * Provides recovery mechanism if panel data is lost
+   */
+  private handleVisibilityChange(): void {
+    if (!document.hidden) {
+      // User returned to tab/window
+      console.debug('[Panel] Tab became visible, checking panel health');
+
+      // If we have no data and aren't currently loading, try to recover from cache
+      if (!this.storageEntities.length && !this.loading && !this.storageSummary) {
+        console.warn('[Panel] Panel data lost, attempting recovery from cache');
+        const recovered = this.loadFromCache();
+
+        if (!recovered) {
+          console.error('[Panel] No cache available for recovery');
+          // Could show an error message to user here
+          this.error = 'Panel data was lost. Please click Refresh to reload.';
+        } else {
+          console.log('[Panel] Successfully recovered data from cache');
+        }
+      }
+    }
   }
 
   protected willUpdate(changedProperties: Map<string, any>) {
     super.willUpdate(changedProperties);
 
     // Reinitialize API service when hass connection changes
-    if (changedProperties.has('hass') && this.hass) {
-      this.apiService = new ApiService(this.hass);
-      // Clear any previous connection errors
-      if (this.error?.includes('connection') || this.error?.includes('Connection')) {
-        this.error = null;
+    if (changedProperties.has('hass')) {
+      const oldHass = changedProperties.get('hass');
+
+      if (this.hass) {
+        this.apiService = new ApiService(this.hass);
+        console.debug('[Panel] Home Assistant connection available');
+
+        // Clear any previous connection errors
+        if (this.error?.includes('connection') || this.error?.includes('Connection')) {
+          this.error = null;
+        }
+
+        // If hass was null/undefined before and now exists, connection was restored
+        if (!oldHass && this.hass) {
+          console.log('[Panel] Home Assistant connection restored');
+        }
+      } else {
+        // Connection lost
+        console.warn('[Panel] Home Assistant connection lost');
+        if (!this.error) {
+          this.error = 'Connection to Home Assistant lost. Waiting for reconnection...';
+        }
       }
     }
   }
@@ -160,6 +276,7 @@ export class StatisticsOrphanPanel extends LitElement {
   }
 
   private async loadStorageOverviewData() {
+    console.log('[Panel] Starting data load (9-step process)');
     this.loading = true;
     this.error = null;
 
@@ -183,12 +300,14 @@ export class StatisticsOrphanPanel extends LitElement {
 
       // Execute steps 0-8 sequentially
       for (let step = 0; step <= 8; step++) {
+        console.debug(`[Panel] Executing step ${step + 1}/9`);
         const result = await this.apiService.fetchEntityStorageOverviewStep(step);
 
         if (step === 8) {
           // Final step returns the complete overview
           this.storageEntities = result.entities;
           this.storageSummary = result.summary;
+          console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
         }
 
         // Don't increment on the last step to avoid showing "Step 10 of 9"
@@ -201,9 +320,13 @@ export class StatisticsOrphanPanel extends LitElement {
 
       // Clear any previous errors on successful load
       this.error = null;
+
+      // Save to cache after successful load
+      this.saveToCache();
+      console.log('[Panel] Data load complete and cached');
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error loading storage overview data:', err);
+      console.error('[Panel] Error loading storage overview data:', err);
     } finally {
       this.loading = false;
       this.loadingSteps = [];
@@ -218,6 +341,89 @@ export class StatisticsOrphanPanel extends LitElement {
     // Clear error and retry the last operation
     this.error = null;
     this.loadStorageOverviewData();
+  }
+
+  /**
+   * Load data from cache if available
+   */
+  private loadFromCache(): boolean {
+    try {
+      const cache = CacheService.loadCache();
+      if (!cache) {
+        console.debug('[Panel] No cache available');
+        return false;
+      }
+
+      // Restore cached data
+      this.databaseSize = cache.data.databaseSize;
+      this.storageEntities = cache.data.storageEntities;
+      this.storageSummary = cache.data.storageSummary;
+      this.cacheTimestamp = cache.timestamp;
+      this.dataSource = 'cache';
+
+      // Check if cache is stale (>12 hours = 43200000 ms)
+      const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+      this.showStaleBanner = CacheService.isCacheStale(TWELVE_HOURS_MS, cache);
+
+      console.log('[Panel] Data restored from cache', {
+        age: CacheService.formatAge(CacheService.getCacheAge(cache)),
+        entities: this.storageEntities.length,
+        isStale: this.showStaleBanner,
+      });
+
+      return true;
+    } catch (error) {
+      console.debug('[Panel] Failed to load from cache:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Save current data to cache
+   */
+  private saveToCache(): void {
+    try {
+      const success = CacheService.saveCache(
+        this.databaseSize,
+        this.storageEntities,
+        this.storageSummary
+      );
+
+      if (success) {
+        this.cacheTimestamp = Date.now();
+        this.dataSource = 'live';
+        this.showStaleBanner = false;
+        console.log('[Panel] Data saved to cache');
+      }
+    } catch (error) {
+      console.debug('[Panel] Failed to save to cache:', error);
+    }
+  }
+
+  /**
+   * Get formatted cache age string
+   */
+  private getCacheAgeString(): string {
+    if (!this.cacheTimestamp) {
+      return 'unknown';
+    }
+    const age = Date.now() - this.cacheTimestamp;
+    const ageStr = CacheService.formatAge(age);
+
+    // Handle "just now" case for very recent refreshes
+    const seconds = Math.floor(age / 1000);
+    if (seconds < 10) {
+      return 'just now';
+    }
+
+    return ageStr;
+  }
+
+  /**
+   * Dismiss the stale data banner
+   */
+  private dismissStaleBanner(): void {
+    this.showStaleBanner = false;
   }
 
   private async handleGenerateSql(e: CustomEvent) {
@@ -265,10 +471,37 @@ export class StatisticsOrphanPanel extends LitElement {
     return html`
       <div class="header">
         <h1>Statistics Orphan Finder</h1>
-        <button class="refresh-button" @click=${this.handleRefresh}>
-          ↻ Refresh
-        </button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          ${this.cacheTimestamp ? html`
+            <span class="cache-indicator">
+              Refreshed ${this.getCacheAgeString()}
+            </span>
+          ` : ''}
+          <button class="refresh-button" @click=${this.handleRefresh}>
+            ↻ Refresh
+          </button>
+        </div>
       </div>
+
+      ${this.showStaleBanner ? html`
+        <div class="stale-cache-banner">
+          <div class="stale-cache-icon">⚠️</div>
+          <div class="stale-cache-content">
+            <div class="stale-cache-title">Showing cached data</div>
+            <div class="stale-cache-message">
+              Data is from cache (${this.getCacheAgeString()}). Click Refresh to update with latest information.
+            </div>
+          </div>
+          <div class="stale-cache-actions">
+            <button @click=${this.handleRefresh}>
+              Refresh Now
+            </button>
+            <button class="secondary-button" @click=${this.dismissStaleBanner}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ` : ''}
 
       ${this.error ? html`
         <div class="error-message">
@@ -314,6 +547,21 @@ export class StatisticsOrphanPanel extends LitElement {
       ` : ''}
     `;
   }
+}
+
+// Register the custom element only if not already registered
+// Wrap in try-catch to prevent silent failures during module initialization
+try {
+  if (!customElements.get('statistics-orphan-panel')) {
+    customElements.define('statistics-orphan-panel', StatisticsOrphanPanel);
+    console.debug('[Panel] Custom element registered successfully');
+  } else {
+    console.debug('[Panel] Custom element already registered');
+  }
+} catch (error) {
+  console.error('[Panel] Failed to register custom element:', error);
+  // Don't re-throw - let Home Assistant handle the error
+  // This prevents the entire module from failing to load
 }
 
 // Register the custom element

@@ -1,5 +1,5 @@
-import "./chunks/lit-core-C_-GaGI3.js";
-import { S } from "./chunks/statistics-orphan-panel-B19QOMQ_.js";
+import "./chunks/lit-core-Bxp6o0XG.js";
+import { S } from "./chunks/statistics-orphan-panel-DnUliVsH.js";
 export {
   S as StatisticsOrphanPanel
 };

@@ -4,7 +4,7 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { debounce } from '../services/formatters';
 
@@ -14,7 +14,6 @@ interface FilterButton {
   active?: boolean;
 }
 
-@customElement('filter-bar')
 export class FilterBar extends LitElement {
   @property({ type: Array }) filters: FilterButton[] = [];
   @property({ type: Boolean }) showSearch = false;
@@ -106,4 +105,9 @@ export class FilterBar extends LitElement {
       </div>
     `;
   }
+}
+
+// Register the custom element only if not already registered
+if (!customElements.get('filter-bar')) {
+  customElements.define('filter-bar', FilterBar);
 }
