@@ -120,6 +120,16 @@ export class StorageOverviewView extends LitElement {
       .search-and-sort-row filter-bar {
         flex: 1;
       }
+
+      .table-container {
+        /* Add bottom padding when selection panel is visible to prevent last row from being covered */
+        padding-bottom: 0;
+        transition: padding-bottom 0.3s ease-out;
+      }
+
+      .table-container.has-selections {
+        padding-bottom: 100px;
+      }
     `
   ];
 
@@ -1042,19 +1052,21 @@ export class StorageOverviewView extends LitElement {
         <button class="secondary-button" @click=${this.handleClearSort}>Clear Sort</button>
       </div>
 
-      <entity-table
-        .entities=${this.filteredEntities}
-        .columns=${this.tableColumns}
-        .sortStack=${this.sortStack}
-        .stickyFirstColumn=${true}
-        .emptyMessage=${'No entities found'}
-        .showCheckboxes=${true}
-        .selectedIds=${this.selectedEntityIds}
-        .selectableEntityIds=${this.selectableEntityIds}
-        .disabledEntityIds=${this.disabledEntityIds}
-        @sort-changed=${this.handleSortChanged}
-        @selection-changed=${this.handleSelectionChanged}
-      ></entity-table>
+      <div class="table-container ${this.selectedEntityIds.size > 0 ? 'has-selections' : ''}">
+        <entity-table
+          .entities=${this.filteredEntities}
+          .columns=${this.tableColumns}
+          .sortStack=${this.sortStack}
+          .stickyFirstColumn=${true}
+          .emptyMessage=${'No entities found'}
+          .showCheckboxes=${true}
+          .selectedIds=${this.selectedEntityIds}
+          .selectableEntityIds=${this.selectableEntityIds}
+          .disabledEntityIds=${this.disabledEntityIds}
+          @sort-changed=${this.handleSortChanged}
+          @selection-changed=${this.handleSelectionChanged}
+        ></entity-table>
+      </div>
 
       ${this.selectedEntity ? html`
         <entity-details-modal

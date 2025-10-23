@@ -11,6 +11,8 @@ import { sharedStyles } from '../styles/shared-styles';
 export class SelectionPanel extends LitElement {
   @property({ type: Number }) selectedCount = 0;
   @property({ type: Number }) selectableCount = 0;
+  @property({ type: Number }) deletedCount = 0;
+  @property({ type: Number }) disabledCount = 0;
   @property({ type: Boolean }) isGenerating = false;
   @property({ type: Number }) generatingProgress = 0;
   @property({ type: Number }) generatingTotal = 0;
@@ -25,8 +27,9 @@ export class SelectionPanel extends LitElement {
       .selection-panel {
         position: fixed;
         bottom: 0;
-        left: 0;
-        right: 0;
+        /* Account for Home Assistant sidebar (256px) + app padding (16px) */
+        left: max(272px, calc(256px + 16px));
+        right: 16px;
         background: var(--card-background-color);
         border-top: 2px solid var(--primary-color);
         padding: 16px 24px;
@@ -37,6 +40,13 @@ export class SelectionPanel extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+      }
+
+      /* Adjust for narrow sidebar */
+      @media (max-width: 870px) {
+        .selection-panel {
+          left: 80px; /* Narrow sidebar + padding */
+        }
       }
 
       @keyframes slideUp {
@@ -65,6 +75,43 @@ export class SelectionPanel extends LitElement {
       .progress-text {
         font-size: 14px;
         color: var(--secondary-text-color);
+      }
+
+      .breakdown {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--secondary-text-color);
+        margin-top: 4px;
+      }
+
+      .breakdown-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .breakdown-item.deleted {
+        color: var(--primary-color);
+      }
+
+      .breakdown-item.disabled {
+        color: #FF9800;
+      }
+
+      .breakdown-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .breakdown-dot.deleted {
+        background: var(--primary-color);
+      }
+
+      .breakdown-dot.disabled {
+        background: #FF9800;
       }
 
       .actions {
@@ -149,6 +196,7 @@ export class SelectionPanel extends LitElement {
 
       @media (max-width: 768px) {
         .selection-panel {
+          left: 16px; /* Mobile - no sidebar */
           flex-direction: column;
           align-items: stretch;
           gap: 12px;
@@ -190,12 +238,31 @@ export class SelectionPanel extends LitElement {
 
   render() {
     const allSelected = this.selectedCount === this.selectableCount && this.selectableCount > 0;
+    const hasBreakdown = this.disabledCount > 0;
 
     return html`
       <div class="selection-panel">
         <div class="left-section">
-          <div class="count">
-            ${this.selectedCount} ${this.selectedCount === 1 ? 'entity' : 'entities'} selected
+          <div>
+            <div class="count">
+              ${this.selectedCount} ${this.selectedCount === 1 ? 'entity' : 'entities'} selected
+            </div>
+            ${hasBreakdown && !this.isGenerating ? html`
+              <div class="breakdown">
+                ${this.deletedCount > 0 ? html`
+                  <div class="breakdown-item deleted">
+                    <span class="breakdown-dot deleted"></span>
+                    ${this.deletedCount} deleted
+                  </div>
+                ` : ''}
+                ${this.disabledCount > 0 ? html`
+                  <div class="breakdown-item disabled">
+                    <span class="breakdown-dot disabled"></span>
+                    ${this.disabledCount} disabled
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
           </div>
           ${this.isGenerating ? html`
             <div class="progress-text">
