@@ -43,6 +43,12 @@ export class StorageOverviewView extends LitElement {
   @state() private deleteSql = '';
   @state() private deleteStorageSaved = 0;
 
+  // Confirmation mode state for new two-state modal
+  @state() private deleteModalMode: 'confirm' | 'display' = 'display';
+  @state() private deleteModalEntities: StorageEntity[] = [];
+  @state() private deleteModalDeletedCount = 0;
+  @state() private deleteModalDisabledCount = 0;
+
   // Selection state for bulk operations
   @state() private selectedEntityIds: Set<string> = new Set();
   @state() private isGeneratingBulkSql = false;
@@ -118,14 +124,76 @@ export class StorageOverviewView extends LitElement {
   ];
 
   /**
-   * Get entities that are eligible for deletion (deleted entities only)
+   * Check if entity has been disabled with stale statistics (90+ days)
+   *
+   * Note: Home Assistant doesn't track WHEN entities were disabled, only WHO disabled them.
+   * We use last_stats_update as a proxy - if entity is disabled AND statistics haven't
+   * been updated in 90+ days, it's likely been abandoned and safe to delete.
+   */
+  private isDisabledForAtLeast90Days(entity: StorageEntity): boolean {
+    try {
+      // Entity must be disabled
+      if (!entity || entity.registry_status !== 'Disabled') return false;
+
+      // Must have statistics data (otherwise nothing to delete)
+      if (!entity.last_stats_update) return false;
+
+      // Check if statistics are stale (90+ days old)
+      const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000; // 7,776,000,000 milliseconds
+      const lastUpdate = new Date(entity.last_stats_update).getTime();
+
+      // Validate the parsed date
+      if (isNaN(lastUpdate)) {
+        console.warn('[StorageOverviewView] Invalid date for entity:', entity.entity_id, entity.last_stats_update);
+        return false;
+      }
+
+      const age = Date.now() - lastUpdate;
+
+      return age >= NINETY_DAYS_MS;
+    } catch (err) {
+      console.warn('[StorageOverviewView] Error in isDisabledForAtLeast90Days:', entity?.entity_id, err);
+      return false;
+    }
+  }
+
+  /**
+   * Get entity selection type for UI differentiation
+   */
+  private getEntitySelectionType(entity: StorageEntity): 'deleted' | 'disabled' | 'not-selectable' {
+    const hasData = entity.in_states_meta || entity.in_statistics_meta;
+    if (!hasData) return 'not-selectable';
+
+    // Deleted entities (not in registry, not in state machine)
+    if (!entity.in_entity_registry && !entity.in_state_machine) {
+      return 'deleted';
+    }
+
+    // Disabled entities (in registry, disabled for >90 days)
+    if (this.isDisabledForAtLeast90Days(entity)) {
+      return 'disabled';
+    }
+
+    return 'not-selectable';
+  }
+
+  /**
+   * Get entities that are eligible for deletion
+   * Includes both deleted entities and disabled entities (>90 days)
    */
   private get selectableEntities(): StorageEntity[] {
-    return this.filteredEntities.filter(entity =>
-      !entity.in_entity_registry &&
-      !entity.in_state_machine &&
-      (entity.in_states_meta || entity.in_statistics_meta)
-    );
+    return this.filteredEntities.filter(entity => {
+      const hasData = entity.in_states_meta || entity.in_statistics_meta;
+      if (!hasData) return false;
+
+      // Deleted entities (existing behavior)
+      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
+
+      // Disabled entities (NEW - with 90-day check)
+      const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
+
+      return isDeleted || isDisabledLongEnough;
+    });
   }
 
   /**
@@ -133,6 +201,72 @@ export class StorageOverviewView extends LitElement {
    */
   private get selectableEntityIds(): Set<string> {
     return new Set(this.selectableEntities.map(e => e.entity_id));
+  }
+
+  /**
+   * Get set of disabled entity IDs (for visual differentiation)
+   */
+  private get disabledEntityIds(): Set<string> {
+    // Defensive: Return empty set if entities array is not ready
+    if (!this.entities || !Array.isArray(this.entities) || this.entities.length === 0) {
+      return new Set();
+    }
+
+    try {
+      return new Set(
+        this.entities
+          .filter(e => e && this.isDisabledForAtLeast90Days(e))
+          .map(e => e.entity_id)
+      );
+    } catch (err) {
+      console.warn('[StorageOverviewView] Error computing disabledEntityIds:', err);
+      return new Set();
+    }
+  }
+
+  /**
+   * Get breakdown of selected entities by type (deleted vs disabled)
+   */
+  private get selectionBreakdown(): { deleted: StorageEntity[]; disabled: StorageEntity[] } {
+    const deleted: StorageEntity[] = [];
+    const disabled: StorageEntity[] = [];
+
+    this.selectedEntityIds.forEach(entityId => {
+      const entity = this.entities.find(e => e.entity_id === entityId);
+      if (!entity) return;
+
+      const type = this.getEntitySelectionType(entity);
+      if (type === 'deleted') deleted.push(entity);
+      if (type === 'disabled') disabled.push(entity);
+    });
+
+    return { deleted, disabled };
+  }
+
+  /**
+   * Format how long ago statistics were last updated for a disabled entity
+   * This gives users context about data staleness
+   */
+  private formatDisabledDuration(entity: StorageEntity): string {
+    if (!entity.last_stats_update) return 'unknown duration';
+
+    const lastUpdate = new Date(entity.last_stats_update).getTime();
+    const ageMs = Date.now() - lastUpdate;
+    const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+
+    if (days < 1) return 'stats updated today';
+    if (days === 1) return 'stats 1 day old';
+    if (days < 30) return `stats ${days} days old`;
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return months === 1 ? 'stats 1 month old' : `stats ${months} months old`;
+    }
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor((days % 365) / 30);
+    if (remainingMonths === 0) {
+      return years === 1 ? 'stats 1 year old' : `stats ${years} years old`;
+    }
+    return `stats ${years} year${years === 1 ? '' : 's'}, ${remainingMonths} month${remainingMonths === 1 ? '' : 's'} old`;
   }
 
   private get filteredEntities(): StorageEntity[] {
@@ -382,7 +516,8 @@ export class StorageOverviewView extends LitElement {
         width: '80px',
         className: 'group-border-left',
         render: (entity: StorageEntity) => {
-          const isDeleted = !entity.in_entity_registry && !entity.in_state_machine && (entity.in_states_meta || entity.in_statistics_meta);
+          // Show delete button for both deleted entities AND disabled entities with 90+ day old stats
+          const isSelectable = this.selectableEntityIds.has(entity.entity_id);
 
           return html`
             <div style="display: flex; gap: 4px; justify-content: center;">
@@ -398,7 +533,7 @@ export class StorageOverviewView extends LitElement {
                   <circle cx="50.831" cy="19.591" r="6.171" fill="white"/>
                 </svg>
               </button>
-              ${isDeleted ? html`
+              ${isSelectable ? html`
                 <button
                   class="secondary-button"
                   @click=${() => this.handleGenerateSql(entity)}
@@ -515,7 +650,7 @@ export class StorageOverviewView extends LitElement {
     }
   }
 
-  private handleGenerateSql(entity: StorageEntity) {
+  private async handleGenerateSql(entity: StorageEntity) {
     try {
       // Validate hass connection
       if (!this.hass) {
@@ -523,69 +658,39 @@ export class StorageOverviewView extends LitElement {
         return;
       }
 
-      // Determine origin based on which tables the entity is in
-      let origin: string;
-      let count: number;
+      // Load the modal component first
+      await this._loadDeleteSqlModal();
 
-      const inStates = entity.in_states_meta;
-      const inStatistics = entity.in_statistics_meta;
+      // Determine if entity is deleted or disabled
+      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
+      const isDisabled = entity.registry_status === 'Disabled';
 
-      if (inStates && inStatistics) {
-        // In both states and statistics
-        origin = 'States+Statistics';
-        count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-      } else if (inStates) {
-        // Only in states
-        origin = 'States';
-        count = entity.states_count;
-      } else if (inStatistics) {
-        // Only in statistics - use existing logic
-        if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-          origin = 'Both';
-        } else if (entity.in_statistics_long_term) {
-          origin = 'Long-term';
-        } else {
-          origin = 'Short-term';
-        }
-        count = entity.stats_short_count + entity.stats_long_count;
-      } else {
-        // Not in any table - shouldn't happen
-        return;
-      }
+      // Show confirmation modal first
+      this.deleteModalMode = 'confirm';
+      this.deleteModalEntities = [entity];
+      this.deleteModalDeletedCount = isDeleted ? 1 : 0;
+      this.deleteModalDisabledCount = isDisabled ? 1 : 0;
 
-      // Convert StorageEntity to DeleteModalData format
-      const modalData: DeleteModalData = {
+      // Trigger modal to show by setting a placeholder data object
+      this.deleteModalData = {
         entityId: entity.entity_id,
-        metadataId: entity.metadata_id || 0, // Will be looked up by backend for states_meta
-        origin: origin as any,
-        status: 'deleted',
-        count: count
+        metadataId: entity.metadata_id || 0,
+        origin: 'Both' as any, // Will be set properly after confirmation
+        status: 'deleted', // Both deleted and disabled entities get their stats deleted
+        count: 0 // Will be set properly after confirmation
       };
-
-      // Dispatch event to parent to fetch SQL
-      // Pass flags so backend knows which tables to query
-      this.dispatchEvent(new CustomEvent('generate-sql', {
-        detail: {
-          entity_id: entity.entity_id,
-          in_states_meta: inStates,
-          in_statistics_meta: inStatistics,
-          metadata_id: entity.metadata_id,
-          origin: origin,
-          entity: modalData
-        },
-        bubbles: true,
-        composed: true
-      }));
     } catch (err) {
-      console.error('Error generating SQL:', err);
+      console.error('Error showing confirmation modal:', err);
       // Fail gracefully
     }
   }
 
-  // Called by parent when SQL is ready
+  // Called by parent when SQL is ready (for single entity operations)
   async showDeleteModal(data: DeleteModalData, sql: string, storageSaved: number) {
     try {
       await this._loadDeleteSqlModal();
+      // Transition modal to display mode with the SQL
+      this.deleteModalMode = 'display';
       this.deleteModalData = data;
       this.deleteSql = sql;
       this.deleteStorageSaved = storageSaved;
@@ -599,45 +704,105 @@ export class StorageOverviewView extends LitElement {
     this.deleteModalData = null;
     this.deleteSql = '';
     this.deleteStorageSaved = 0;
+    this.deleteModalMode = 'display';
+    this.deleteModalEntities = [];
+    this.deleteModalDeletedCount = 0;
+    this.deleteModalDisabledCount = 0;
   }
 
   /**
-   * Handle selection change from table checkbox
+   * Handle cancel from confirmation modal
    */
-  private handleSelectionChanged(e: CustomEvent) {
-    const { entityId, selected } = e.detail;
+  private handleDeleteModalCancel() {
+    // Just close the modal
+    this.handleCloseDeleteModal();
+  }
 
-    if (selected) {
-      this.selectedEntityIds.add(entityId);
+  /**
+   * Handle confirm from confirmation modal - generate SQL and show it
+   */
+  private async handleDeleteModalConfirm() {
+    try {
+      if (this.deleteModalEntities.length === 0) return;
+
+      // Check if this is a single entity or bulk operation
+      const isBulk = this.deleteModalEntities.length > 1;
+
+      if (isBulk) {
+        // Bulk operation - generate SQL for all selected entities
+        await this.generateBulkSqlAfterConfirmation();
+      } else {
+        // Single entity operation
+        const entity = this.deleteModalEntities[0];
+        await this.generateSingleEntitySqlAfterConfirmation(entity);
+      }
+    } catch (err) {
+      console.error('Error generating SQL after confirmation:', err);
+      // Close modal on error
+      this.handleCloseDeleteModal();
+    }
+  }
+
+  /**
+   * Generate SQL for a single entity after user confirms
+   */
+  private async generateSingleEntitySqlAfterConfirmation(entity: StorageEntity) {
+    // Determine origin based on which tables the entity is in
+    let origin: string;
+    let count: number;
+
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
+
+    if (inStates && inStatistics) {
+      origin = 'States+Statistics';
+      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+    } else if (inStates) {
+      origin = 'States';
+      count = entity.states_count;
+    } else if (inStatistics) {
+      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+        origin = 'Both';
+      } else if (entity.in_statistics_long_term) {
+        origin = 'Long-term';
+      } else {
+        origin = 'Short-term';
+      }
+      count = entity.stats_short_count + entity.stats_long_count;
     } else {
-      this.selectedEntityIds.delete(entityId);
+      // Not in any table - shouldn't happen
+      return;
     }
 
-    // Trigger re-render by creating new Set
-    this.selectedEntityIds = new Set(this.selectedEntityIds);
+    // Update modal data
+    const modalData: DeleteModalData = {
+      entityId: entity.entity_id,
+      metadataId: entity.metadata_id || 0,
+      origin: origin as any,
+      status: 'deleted', // We're deleting statistics for both deleted and disabled entities
+      count: count
+    };
+
+    // Dispatch event to parent to fetch SQL
+    this.dispatchEvent(new CustomEvent('generate-sql', {
+      detail: {
+        entity_id: entity.entity_id,
+        in_states_meta: inStates,
+        in_statistics_meta: inStatistics,
+        metadata_id: entity.metadata_id,
+        origin: origin,
+        entity: modalData
+      },
+      bubbles: true,
+      composed: true
+    }));
   }
 
   /**
-   * Handle select all filtered deleted entities
+   * Generate bulk SQL for multiple entities after user confirms
    */
-  private handleSelectAll() {
-    this.selectedEntityIds = new Set(
-      this.selectableEntities.map(e => e.entity_id)
-    );
-  }
-
-  /**
-   * Handle deselect all
-   */
-  private handleDeselectAll() {
-    this.selectedEntityIds = new Set();
-  }
-
-  /**
-   * Handle bulk SQL generation for selected entities
-   */
-  private async handleGenerateBulkSql() {
-    if (this.selectedEntityIds.size === 0) return;
+  private async generateBulkSqlAfterConfirmation() {
+    if (this.deleteModalEntities.length === 0) return;
 
     try {
       // Validate hass connection
@@ -647,7 +812,7 @@ export class StorageOverviewView extends LitElement {
       }
 
       this.isGeneratingBulkSql = true;
-      this.bulkSqlTotal = this.selectedEntityIds.size;
+      this.bulkSqlTotal = this.deleteModalEntities.length;
       this.bulkSqlProgress = 0;
 
       const apiService = new ApiService(this.hass);
@@ -659,13 +824,8 @@ export class StorageOverviewView extends LitElement {
         error_count: 0
       };
 
-      // Get selected entities with full data
-      const selectedEntities = this.entities.filter(e =>
-        this.selectedEntityIds.has(e.entity_id)
-      );
-
       // Generate SQL for each entity sequentially
-      for (const entity of selectedEntities) {
+      for (const entity of this.deleteModalEntities) {
         this.bulkSqlProgress++;
 
         try {
@@ -738,17 +898,15 @@ export class StorageOverviewView extends LitElement {
         })
         .join('\n\n');
 
-      // Show modal with bulk results
-      const modalData: DeleteModalData = {
+      // Update modal to display mode with SQL
+      this.deleteModalMode = 'display';
+      this.deleteModalData = {
         entityId: `${results.success_count} entities`,
         metadataId: 0,
         origin: 'Both' as any,
         status: 'deleted',
         count: results.total_count
       };
-
-      await this._loadDeleteSqlModal();
-      this.deleteModalData = modalData;
       this.deleteSql = combinedSql;
       this.deleteStorageSaved = results.total_storage_saved;
 
@@ -756,13 +914,81 @@ export class StorageOverviewView extends LitElement {
       this.selectedEntityIds = new Set();
     } catch (err) {
       console.error('Error in bulk SQL generation:', err);
-      // Keep selection so user can retry
+      // Close modal on error
+      this.handleCloseDeleteModal();
     } finally {
       this.isGeneratingBulkSql = false;
       this.bulkSqlProgress = 0;
       this.bulkSqlTotal = 0;
     }
   }
+
+  /**
+   * Handle selection change from table checkbox
+   */
+  private handleSelectionChanged(e: CustomEvent) {
+    const { entityId, selected } = e.detail;
+
+    if (selected) {
+      this.selectedEntityIds.add(entityId);
+    } else {
+      this.selectedEntityIds.delete(entityId);
+    }
+
+    // Trigger re-render by creating new Set
+    this.selectedEntityIds = new Set(this.selectedEntityIds);
+  }
+
+  /**
+   * Handle select all filtered deleted entities
+   */
+  private handleSelectAll() {
+    this.selectedEntityIds = new Set(
+      this.selectableEntities.map(e => e.entity_id)
+    );
+  }
+
+  /**
+   * Handle deselect all
+   */
+  private handleDeselectAll() {
+    this.selectedEntityIds = new Set();
+  }
+
+  /**
+   * Handle bulk SQL generation for selected entities
+   */
+  private async handleGenerateBulkSql() {
+    if (this.selectedEntityIds.size === 0) return;
+
+    try {
+      // Load the modal component first
+      await this._loadDeleteSqlModal();
+
+      // Get breakdown of selected entities
+      const { deleted, disabled } = this.selectionBreakdown;
+
+      // Show confirmation modal first (for both deleted and disabled)
+      this.deleteModalMode = 'confirm';
+      this.deleteModalEntities = [...deleted, ...disabled];
+      this.deleteModalDeletedCount = deleted.length;
+      this.deleteModalDisabledCount = disabled.length;
+
+      // Trigger modal to show by setting a placeholder data object
+      const totalCount = deleted.length + disabled.length;
+      this.deleteModalData = {
+        entityId: `${totalCount} entities`,
+        metadataId: 0,
+        origin: 'Both' as any, // Will be set properly after confirmation
+        status: 'deleted',
+        count: 0 // Will be set properly after confirmation
+      };
+    } catch (err) {
+      console.error('Error showing confirmation modal:', err);
+      // Fail gracefully
+    }
+  }
+
 
   render() {
     const hasActiveFilters =
@@ -814,6 +1040,7 @@ export class StorageOverviewView extends LitElement {
         .showCheckboxes=${true}
         .selectedIds=${this.selectedEntityIds}
         .selectableEntityIds=${this.selectableEntityIds}
+        .disabledEntityIds=${this.disabledEntityIds}
         @sort-changed=${this.handleSortChanged}
         @selection-changed=${this.handleSelectionChanged}
       ></entity-table>
@@ -831,7 +1058,13 @@ export class StorageOverviewView extends LitElement {
           .data=${this.deleteModalData}
           .sql=${this.deleteSql}
           .storageSaved=${this.deleteStorageSaved}
+          .mode=${this.deleteModalMode}
+          .entities=${this.deleteModalEntities}
+          .deletedCount=${this.deleteModalDeletedCount}
+          .disabledCount=${this.deleteModalDisabledCount}
           @close-modal=${this.handleCloseDeleteModal}
+          @cancel=${this.handleDeleteModalCancel}
+          @confirm=${this.handleDeleteModalConfirm}
         ></delete-sql-modal>
       ` : ''}
 
@@ -842,6 +1075,8 @@ export class StorageOverviewView extends LitElement {
           .isGenerating=${this.isGeneratingBulkSql}
           .generatingProgress=${this.bulkSqlProgress}
           .generatingTotal=${this.bulkSqlTotal}
+          .deletedCount=${this.selectionBreakdown.deleted.length}
+          .disabledCount=${this.selectionBreakdown.disabled.length}
           @select-all=${this.handleSelectAll}
           @deselect-all=${this.handleDeselectAll}
           @generate-bulk-sql=${this.handleGenerateBulkSql}

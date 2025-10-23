@@ -1558,6 +1558,7 @@ const _EntityTable = class _EntityTable extends i$1 {
     this.showCheckboxes = false;
     this.selectedIds = /* @__PURE__ */ new Set();
     this.selectableEntityIds = /* @__PURE__ */ new Set();
+    this.disabledEntityIds = /* @__PURE__ */ new Set();
   }
   handleSort(columnId) {
     if (!this.sortable) return;
@@ -1669,17 +1670,34 @@ const _EntityTable = class _EntityTable extends i$1 {
       const entityId = entity.entity_id;
       const isSelectable = this.selectableEntityIds.has(entityId);
       const isSelected = this.selectedIds.has(entityId);
+      const isDisabled = this.disabledEntityIds.has(entityId);
+      let tooltipText = "";
+      if (isSelectable) {
+        if (isDisabled) {
+          tooltipText = "Select this DISABLED entity (statistics older than 90 days)";
+        } else {
+          tooltipText = "Select this deleted entity";
+        }
+      } else {
+        if (entity.registry_status === "Disabled") {
+          tooltipText = "Cannot delete - statistics updated within last 90 days";
+        } else {
+          tooltipText = "Cannot delete - entity still exists or has no statistics";
+        }
+      }
+      const rowClasses = isDisabled && isSelectable ? "disabled-entity-row" : "";
       return x`
-                  <tr>
+                  <tr class=${rowClasses}>
                     ${this.showCheckboxes ? x`
                       <td class="checkbox-column sticky-column">
                         <div class="checkbox-cell">
                           <input
                             type="checkbox"
+                            class=${isDisabled && isSelectable ? "disabled-entity" : ""}
                             .checked=${isSelected}
                             ?disabled=${!isSelectable}
                             @change=${(e2) => this.handleCheckboxChange(entity, e2)}
-                            title=${isSelectable ? "Select this entity" : "This entity cannot be deleted"}
+                            title=${tooltipText}
                           />
                         </div>
                       </td>
@@ -1771,9 +1789,21 @@ _EntityTable.styles = [
         accent-color: var(--primary-color);
       }
 
+      input[type="checkbox"].disabled-entity {
+        accent-color: #FF9800;
+      }
+
       input[type="checkbox"]:disabled {
         cursor: not-allowed;
         opacity: 0.3;
+      }
+
+      .disabled-entity-row {
+        background: rgba(255, 152, 0, 0.02);
+      }
+
+      .disabled-entity-row:hover {
+        background: rgba(255, 152, 0, 0.05);
       }
     `
 ];
@@ -1805,6 +1835,9 @@ __decorateClass$3([
 __decorateClass$3([
   n({ type: Object })
 ], EntityTable.prototype, "selectableEntityIds");
+__decorateClass$3([
+  n({ type: Object })
+], EntityTable.prototype, "disabledEntityIds");
 if (!customElements.get("entity-table")) {
   customElements.define("entity-table", EntityTable);
 }
@@ -1822,6 +1855,8 @@ const _SelectionPanel = class _SelectionPanel extends i$1 {
     super(...arguments);
     this.selectedCount = 0;
     this.selectableCount = 0;
+    this.deletedCount = 0;
+    this.disabledCount = 0;
     this.isGenerating = false;
     this.generatingProgress = 0;
     this.generatingTotal = 0;
@@ -1846,11 +1881,30 @@ const _SelectionPanel = class _SelectionPanel extends i$1 {
   }
   render() {
     const allSelected = this.selectedCount === this.selectableCount && this.selectableCount > 0;
+    const hasBreakdown = this.disabledCount > 0;
     return x`
       <div class="selection-panel">
         <div class="left-section">
-          <div class="count">
-            ${this.selectedCount} ${this.selectedCount === 1 ? "entity" : "entities"} selected
+          <div>
+            <div class="count">
+              ${this.selectedCount} ${this.selectedCount === 1 ? "entity" : "entities"} selected
+            </div>
+            ${hasBreakdown && !this.isGenerating ? x`
+              <div class="breakdown">
+                ${this.deletedCount > 0 ? x`
+                  <div class="breakdown-item deleted">
+                    <span class="breakdown-dot deleted"></span>
+                    ${this.deletedCount} deleted
+                  </div>
+                ` : ""}
+                ${this.disabledCount > 0 ? x`
+                  <div class="breakdown-item disabled">
+                    <span class="breakdown-dot disabled"></span>
+                    ${this.disabledCount} disabled
+                  </div>
+                ` : ""}
+              </div>
+            ` : ""}
           </div>
           ${this.isGenerating ? x`
             <div class="progress-text">
@@ -1944,6 +1998,43 @@ _SelectionPanel.styles = [
       .progress-text {
         font-size: 14px;
         color: var(--secondary-text-color);
+      }
+
+      .breakdown {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--secondary-text-color);
+        margin-top: 4px;
+      }
+
+      .breakdown-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .breakdown-item.deleted {
+        color: var(--primary-color);
+      }
+
+      .breakdown-item.disabled {
+        color: #FF9800;
+      }
+
+      .breakdown-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .breakdown-dot.deleted {
+        background: var(--primary-color);
+      }
+
+      .breakdown-dot.disabled {
+        background: #FF9800;
       }
 
       .actions {
@@ -2053,6 +2144,12 @@ __decorateClass$2([
   n({ type: Number })
 ], SelectionPanel.prototype, "selectableCount");
 __decorateClass$2([
+  n({ type: Number })
+], SelectionPanel.prototype, "deletedCount");
+__decorateClass$2([
+  n({ type: Number })
+], SelectionPanel.prototype, "disabledCount");
+__decorateClass$2([
   n({ type: Boolean })
 ], SelectionPanel.prototype, "isGenerating");
 __decorateClass$2([
@@ -2091,6 +2188,10 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     this.deleteModalData = null;
     this.deleteSql = "";
     this.deleteStorageSaved = 0;
+    this.deleteModalMode = "display";
+    this.deleteModalEntities = [];
+    this.deleteModalDeletedCount = 0;
+    this.deleteModalDisabledCount = 0;
     this.selectedEntityIds = /* @__PURE__ */ new Set();
     this.isGeneratingBulkSql = false;
     this.bulkSqlProgress = 0;
@@ -2105,7 +2206,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BAvsEzzr.js");
+      await import("./entity-details-modal-BGvYOPD-.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2114,7 +2215,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-DxDAvZRD.js");
+      await import("./delete-sql-modal-DuWYxlCH.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2129,18 +2230,115 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     }
   }
   /**
-   * Get entities that are eligible for deletion (deleted entities only)
+   * Check if entity has been disabled with stale statistics (90+ days)
+   *
+   * Note: Home Assistant doesn't track WHEN entities were disabled, only WHO disabled them.
+   * We use last_stats_update as a proxy - if entity is disabled AND statistics haven't
+   * been updated in 90+ days, it's likely been abandoned and safe to delete.
+   */
+  isDisabledForAtLeast90Days(entity) {
+    try {
+      if (!entity || entity.registry_status !== "Disabled") return false;
+      if (!entity.last_stats_update) return false;
+      const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1e3;
+      const lastUpdate = new Date(entity.last_stats_update).getTime();
+      if (isNaN(lastUpdate)) {
+        console.warn("[StorageOverviewView] Invalid date for entity:", entity.entity_id, entity.last_stats_update);
+        return false;
+      }
+      const age = Date.now() - lastUpdate;
+      return age >= NINETY_DAYS_MS;
+    } catch (err) {
+      console.warn("[StorageOverviewView] Error in isDisabledForAtLeast90Days:", entity?.entity_id, err);
+      return false;
+    }
+  }
+  /**
+   * Get entity selection type for UI differentiation
+   */
+  getEntitySelectionType(entity) {
+    const hasData = entity.in_states_meta || entity.in_statistics_meta;
+    if (!hasData) return "not-selectable";
+    if (!entity.in_entity_registry && !entity.in_state_machine) {
+      return "deleted";
+    }
+    if (this.isDisabledForAtLeast90Days(entity)) {
+      return "disabled";
+    }
+    return "not-selectable";
+  }
+  /**
+   * Get entities that are eligible for deletion
+   * Includes both deleted entities and disabled entities (>90 days)
    */
   get selectableEntities() {
-    return this.filteredEntities.filter(
-      (entity) => !entity.in_entity_registry && !entity.in_state_machine && (entity.in_states_meta || entity.in_statistics_meta)
-    );
+    return this.filteredEntities.filter((entity) => {
+      const hasData = entity.in_states_meta || entity.in_statistics_meta;
+      if (!hasData) return false;
+      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
+      const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
+      return isDeleted || isDisabledLongEnough;
+    });
   }
   /**
    * Get Set of selectable entity IDs for efficient lookups
    */
   get selectableEntityIds() {
     return new Set(this.selectableEntities.map((e2) => e2.entity_id));
+  }
+  /**
+   * Get set of disabled entity IDs (for visual differentiation)
+   */
+  get disabledEntityIds() {
+    if (!this.entities || !Array.isArray(this.entities) || this.entities.length === 0) {
+      return /* @__PURE__ */ new Set();
+    }
+    try {
+      return new Set(
+        this.entities.filter((e2) => e2 && this.isDisabledForAtLeast90Days(e2)).map((e2) => e2.entity_id)
+      );
+    } catch (err) {
+      console.warn("[StorageOverviewView] Error computing disabledEntityIds:", err);
+      return /* @__PURE__ */ new Set();
+    }
+  }
+  /**
+   * Get breakdown of selected entities by type (deleted vs disabled)
+   */
+  get selectionBreakdown() {
+    const deleted = [];
+    const disabled = [];
+    this.selectedEntityIds.forEach((entityId) => {
+      const entity = this.entities.find((e2) => e2.entity_id === entityId);
+      if (!entity) return;
+      const type = this.getEntitySelectionType(entity);
+      if (type === "deleted") deleted.push(entity);
+      if (type === "disabled") disabled.push(entity);
+    });
+    return { deleted, disabled };
+  }
+  /**
+   * Format how long ago statistics were last updated for a disabled entity
+   * This gives users context about data staleness
+   */
+  formatDisabledDuration(entity) {
+    if (!entity.last_stats_update) return "unknown duration";
+    const lastUpdate = new Date(entity.last_stats_update).getTime();
+    const ageMs = Date.now() - lastUpdate;
+    const days = Math.floor(ageMs / (24 * 60 * 60 * 1e3));
+    if (days < 1) return "stats updated today";
+    if (days === 1) return "stats 1 day old";
+    if (days < 30) return `stats ${days} days old`;
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return months === 1 ? "stats 1 month old" : `stats ${months} months old`;
+    }
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor(days % 365 / 30);
+    if (remainingMonths === 0) {
+      return years === 1 ? "stats 1 year old" : `stats ${years} years old`;
+    }
+    return `stats ${years} year${years === 1 ? "" : "s"}, ${remainingMonths} month${remainingMonths === 1 ? "" : "s"} old`;
   }
   get filteredEntities() {
     const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.statesFilter}|${this.statisticsFilter}|${this.sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
@@ -2361,7 +2559,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         width: "80px",
         className: "group-border-left",
         render: (entity) => {
-          const isDeleted = !entity.in_entity_registry && !entity.in_state_machine && (entity.in_states_meta || entity.in_statistics_meta);
+          const isSelectable = this.selectableEntityIds.has(entity.entity_id);
           return x`
             <div style="display: flex; gap: 4px; justify-content: center;">
               <button
@@ -2376,7 +2574,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
                   <circle cx="50.831" cy="19.591" r="6.171" fill="white"/>
                 </svg>
               </button>
-              ${isDeleted ? x`
+              ${isSelectable ? x`
                 <button
                   class="secondary-button"
                   @click=${() => this.handleGenerateSql(entity)}
@@ -2475,62 +2673,38 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       console.error("Error opening more info dialog:", err);
     }
   }
-  handleGenerateSql(entity) {
+  async handleGenerateSql(entity) {
     try {
       if (!this.hass) {
         console.warn("Cannot generate SQL: Home Assistant connection not available");
         return;
       }
-      let origin;
-      let count;
-      const inStates = entity.in_states_meta;
-      const inStatistics = entity.in_statistics_meta;
-      if (inStates && inStatistics) {
-        origin = "States+Statistics";
-        count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-      } else if (inStates) {
-        origin = "States";
-        count = entity.states_count;
-      } else if (inStatistics) {
-        if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-          origin = "Both";
-        } else if (entity.in_statistics_long_term) {
-          origin = "Long-term";
-        } else {
-          origin = "Short-term";
-        }
-        count = entity.stats_short_count + entity.stats_long_count;
-      } else {
-        return;
-      }
-      const modalData = {
+      await this._loadDeleteSqlModal();
+      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
+      const isDisabled = entity.registry_status === "Disabled";
+      this.deleteModalMode = "confirm";
+      this.deleteModalEntities = [entity];
+      this.deleteModalDeletedCount = isDeleted ? 1 : 0;
+      this.deleteModalDisabledCount = isDisabled ? 1 : 0;
+      this.deleteModalData = {
         entityId: entity.entity_id,
         metadataId: entity.metadata_id || 0,
-        // Will be looked up by backend for states_meta
-        origin,
+        origin: "Both",
+        // Will be set properly after confirmation
         status: "deleted",
-        count
+        // Both deleted and disabled entities get their stats deleted
+        count: 0
+        // Will be set properly after confirmation
       };
-      this.dispatchEvent(new CustomEvent("generate-sql", {
-        detail: {
-          entity_id: entity.entity_id,
-          in_states_meta: inStates,
-          in_statistics_meta: inStatistics,
-          metadata_id: entity.metadata_id,
-          origin,
-          entity: modalData
-        },
-        bubbles: true,
-        composed: true
-      }));
     } catch (err) {
-      console.error("Error generating SQL:", err);
+      console.error("Error showing confirmation modal:", err);
     }
   }
-  // Called by parent when SQL is ready
+  // Called by parent when SQL is ready (for single entity operations)
   async showDeleteModal(data, sql, storageSaved) {
     try {
       await this._loadDeleteSqlModal();
+      this.deleteModalMode = "display";
       this.deleteModalData = data;
       this.deleteSql = sql;
       this.deleteStorageSaved = storageSaved;
@@ -2542,45 +2716,94 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     this.deleteModalData = null;
     this.deleteSql = "";
     this.deleteStorageSaved = 0;
+    this.deleteModalMode = "display";
+    this.deleteModalEntities = [];
+    this.deleteModalDeletedCount = 0;
+    this.deleteModalDisabledCount = 0;
   }
   /**
-   * Handle selection change from table checkbox
+   * Handle cancel from confirmation modal
    */
-  handleSelectionChanged(e2) {
-    const { entityId, selected } = e2.detail;
-    if (selected) {
-      this.selectedEntityIds.add(entityId);
-    } else {
-      this.selectedEntityIds.delete(entityId);
+  handleDeleteModalCancel() {
+    this.handleCloseDeleteModal();
+  }
+  /**
+   * Handle confirm from confirmation modal - generate SQL and show it
+   */
+  async handleDeleteModalConfirm() {
+    try {
+      if (this.deleteModalEntities.length === 0) return;
+      const isBulk = this.deleteModalEntities.length > 1;
+      if (isBulk) {
+        await this.generateBulkSqlAfterConfirmation();
+      } else {
+        const entity = this.deleteModalEntities[0];
+        await this.generateSingleEntitySqlAfterConfirmation(entity);
+      }
+    } catch (err) {
+      console.error("Error generating SQL after confirmation:", err);
+      this.handleCloseDeleteModal();
     }
-    this.selectedEntityIds = new Set(this.selectedEntityIds);
   }
   /**
-   * Handle select all filtered deleted entities
+   * Generate SQL for a single entity after user confirms
    */
-  handleSelectAll() {
-    this.selectedEntityIds = new Set(
-      this.selectableEntities.map((e2) => e2.entity_id)
-    );
+  async generateSingleEntitySqlAfterConfirmation(entity) {
+    let origin;
+    let count;
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
+    if (inStates && inStatistics) {
+      origin = "States+Statistics";
+      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+    } else if (inStates) {
+      origin = "States";
+      count = entity.states_count;
+    } else if (inStatistics) {
+      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+        origin = "Both";
+      } else if (entity.in_statistics_long_term) {
+        origin = "Long-term";
+      } else {
+        origin = "Short-term";
+      }
+      count = entity.stats_short_count + entity.stats_long_count;
+    } else {
+      return;
+    }
+    const modalData = {
+      entityId: entity.entity_id,
+      metadataId: entity.metadata_id || 0,
+      origin,
+      status: "deleted",
+      // We're deleting statistics for both deleted and disabled entities
+      count
+    };
+    this.dispatchEvent(new CustomEvent("generate-sql", {
+      detail: {
+        entity_id: entity.entity_id,
+        in_states_meta: inStates,
+        in_statistics_meta: inStatistics,
+        metadata_id: entity.metadata_id,
+        origin,
+        entity: modalData
+      },
+      bubbles: true,
+      composed: true
+    }));
   }
   /**
-   * Handle deselect all
+   * Generate bulk SQL for multiple entities after user confirms
    */
-  handleDeselectAll() {
-    this.selectedEntityIds = /* @__PURE__ */ new Set();
-  }
-  /**
-   * Handle bulk SQL generation for selected entities
-   */
-  async handleGenerateBulkSql() {
-    if (this.selectedEntityIds.size === 0) return;
+  async generateBulkSqlAfterConfirmation() {
+    if (this.deleteModalEntities.length === 0) return;
     try {
       if (!this.hass) {
         console.error("Cannot generate SQL: Home Assistant connection not available");
         return;
       }
       this.isGeneratingBulkSql = true;
-      this.bulkSqlTotal = this.selectedEntityIds.size;
+      this.bulkSqlTotal = this.deleteModalEntities.length;
       this.bulkSqlProgress = 0;
       const apiService = new ApiService(this.hass);
       const results = {
@@ -2590,10 +2813,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         success_count: 0,
         error_count: 0
       };
-      const selectedEntities = this.entities.filter(
-        (e2) => this.selectedEntityIds.has(e2.entity_id)
-      );
-      for (const entity of selectedEntities) {
+      for (const entity of this.deleteModalEntities) {
         this.bulkSqlProgress++;
         try {
           const inStates = entity.in_states_meta;
@@ -2655,24 +2875,76 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         return `-- Entity: ${e2.entity_id} (${e2.count.toLocaleString()} records, ${storageMB} MB saved)
 ${e2.sql}`;
       }).join("\n\n");
-      const modalData = {
+      this.deleteModalMode = "display";
+      this.deleteModalData = {
         entityId: `${results.success_count} entities`,
         metadataId: 0,
         origin: "Both",
         status: "deleted",
         count: results.total_count
       };
-      await this._loadDeleteSqlModal();
-      this.deleteModalData = modalData;
       this.deleteSql = combinedSql;
       this.deleteStorageSaved = results.total_storage_saved;
       this.selectedEntityIds = /* @__PURE__ */ new Set();
     } catch (err) {
       console.error("Error in bulk SQL generation:", err);
+      this.handleCloseDeleteModal();
     } finally {
       this.isGeneratingBulkSql = false;
       this.bulkSqlProgress = 0;
       this.bulkSqlTotal = 0;
+    }
+  }
+  /**
+   * Handle selection change from table checkbox
+   */
+  handleSelectionChanged(e2) {
+    const { entityId, selected } = e2.detail;
+    if (selected) {
+      this.selectedEntityIds.add(entityId);
+    } else {
+      this.selectedEntityIds.delete(entityId);
+    }
+    this.selectedEntityIds = new Set(this.selectedEntityIds);
+  }
+  /**
+   * Handle select all filtered deleted entities
+   */
+  handleSelectAll() {
+    this.selectedEntityIds = new Set(
+      this.selectableEntities.map((e2) => e2.entity_id)
+    );
+  }
+  /**
+   * Handle deselect all
+   */
+  handleDeselectAll() {
+    this.selectedEntityIds = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Handle bulk SQL generation for selected entities
+   */
+  async handleGenerateBulkSql() {
+    if (this.selectedEntityIds.size === 0) return;
+    try {
+      await this._loadDeleteSqlModal();
+      const { deleted, disabled } = this.selectionBreakdown;
+      this.deleteModalMode = "confirm";
+      this.deleteModalEntities = [...deleted, ...disabled];
+      this.deleteModalDeletedCount = deleted.length;
+      this.deleteModalDisabledCount = disabled.length;
+      const totalCount = deleted.length + disabled.length;
+      this.deleteModalData = {
+        entityId: `${totalCount} entities`,
+        metadataId: 0,
+        origin: "Both",
+        // Will be set properly after confirmation
+        status: "deleted",
+        count: 0
+        // Will be set properly after confirmation
+      };
+    } catch (err) {
+      console.error("Error showing confirmation modal:", err);
     }
   }
   render() {
@@ -2719,6 +2991,7 @@ ${e2.sql}`;
         .showCheckboxes=${true}
         .selectedIds=${this.selectedEntityIds}
         .selectableEntityIds=${this.selectableEntityIds}
+        .disabledEntityIds=${this.disabledEntityIds}
         @sort-changed=${this.handleSortChanged}
         @selection-changed=${this.handleSelectionChanged}
       ></entity-table>
@@ -2736,7 +3009,13 @@ ${e2.sql}`;
           .data=${this.deleteModalData}
           .sql=${this.deleteSql}
           .storageSaved=${this.deleteStorageSaved}
+          .mode=${this.deleteModalMode}
+          .entities=${this.deleteModalEntities}
+          .deletedCount=${this.deleteModalDeletedCount}
+          .disabledCount=${this.deleteModalDisabledCount}
           @close-modal=${this.handleCloseDeleteModal}
+          @cancel=${this.handleDeleteModalCancel}
+          @confirm=${this.handleDeleteModalConfirm}
         ></delete-sql-modal>
       ` : ""}
 
@@ -2747,6 +3026,8 @@ ${e2.sql}`;
           .isGenerating=${this.isGeneratingBulkSql}
           .generatingProgress=${this.bulkSqlProgress}
           .generatingTotal=${this.bulkSqlTotal}
+          .deletedCount=${this.selectionBreakdown.deleted.length}
+          .disabledCount=${this.selectionBreakdown.disabled.length}
           @select-all=${this.handleSelectAll}
           @deselect-all=${this.handleDeselectAll}
           @generate-bulk-sql=${this.handleGenerateBulkSql}
@@ -2830,6 +3111,18 @@ __decorateClass$1([
 ], StorageOverviewView.prototype, "deleteStorageSaved");
 __decorateClass$1([
   r()
+], StorageOverviewView.prototype, "deleteModalMode");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "deleteModalEntities");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "deleteModalDeletedCount");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "deleteModalDisabledCount");
+__decorateClass$1([
+  r()
 ], StorageOverviewView.prototype, "selectedEntityIds");
 __decorateClass$1([
   r()
@@ -2907,19 +3200,18 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     super.willUpdate(changedProperties);
     if (changedProperties.has("hass")) {
       const oldHass = changedProperties.get("hass");
-      if (this.hass) {
-        this.apiService = new ApiService(this.hass);
-        console.debug("[Panel] Home Assistant connection available");
-        if (this.error?.includes("connection") || this.error?.includes("Connection")) {
-          this.error = null;
-        }
-        if (!oldHass && this.hass) {
-          console.log("[Panel] Home Assistant connection restored");
-        }
-      } else {
+      if (this.hass && !oldHass) {
+        console.log("[Panel] Home Assistant connection established");
+      } else if (!this.hass && oldHass) {
         console.warn("[Panel] Home Assistant connection lost");
         if (!this.error) {
           this.error = "Connection to Home Assistant lost. Waiting for reconnection...";
+        }
+      }
+      if (this.hass) {
+        this.apiService = new ApiService(this.hass);
+        if (this.error?.includes("connection") || this.error?.includes("Connection")) {
+          this.error = null;
         }
       }
     }
@@ -3355,4 +3647,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DnUliVsH.js.map
+//# sourceMappingURL=statistics-orphan-panel-DguQAEQg.js.map
