@@ -294,6 +294,14 @@ export class StorageOverviewView extends LitElement {
       filtered = filtered.filter(e => e.in_state_machine);
     } else if (this.basicFilter === 'deleted') {
       filtered = filtered.filter(e => !e.in_entity_registry && !e.in_state_machine);
+    } else if (this.basicFilter === 'numeric_sensors_no_stats') {
+      filtered = filtered.filter(e =>
+        e.entity_id.startsWith('sensor.') &&
+        e.in_states_meta &&
+        !e.in_statistics_meta &&
+        e.statistics_eligibility_reason &&
+        !e.statistics_eligibility_reason.includes("is not numeric")
+      );
     }
 
     // Registry status filter
@@ -575,6 +583,9 @@ export class StorageOverviewView extends LitElement {
         break;
       case 'optimize_storage':
         this.advancedFilter = 'only_states';
+        break;
+      case 'review_numeric_sensors':
+        this.basicFilter = 'numeric_sensors_no_stats';
         break;
     }
   }

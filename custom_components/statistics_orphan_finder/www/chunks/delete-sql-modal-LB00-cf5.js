@@ -1,5 +1,5 @@
 import { a as i, i as i$1, x, n, r } from "./lit-core-Bxp6o0XG.js";
-import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-DguQAEQg.js";
+import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-BT2ai0xn.js";
 var __defProp = Object.defineProperty;
 var __decorateClass = (decorators, target, key, kind) => {
   var result = void 0;
@@ -390,4 +390,4 @@ if (!customElements.get("delete-sql-modal")) {
 export {
   DeleteSqlModal
 };
-//# sourceMappingURL=delete-sql-modal-DuWYxlCH.js.map
+//# sourceMappingURL=delete-sql-modal-LB00-cf5.js.map

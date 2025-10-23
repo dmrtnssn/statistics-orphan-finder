@@ -957,8 +957,6 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
     const deleted = this.summary.deleted_from_registry;
     const unavailableLong = this.getUnavailableLongTerm();
     const disabled = this.summary.registry_disabled;
-    const onlyStates = this.summary.only_in_states;
-    const onlyStats = this.summary.only_in_statistics;
     const active = this.summary.state_available;
     const total = this.summary.total_entities;
     if (deleted > 0) {
@@ -990,13 +988,16 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
         button: "Review"
       });
     }
-    if (onlyStates > 0 || onlyStats > 0) {
-      const totalSingle = onlyStates + onlyStats;
+    const sensorsMissingStats = this.entities.filter(
+      (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && // Exclude non-numeric sensors
+      e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
+    ).length;
+    if (sensorsMissingStats > 0) {
       actions.push({
         priority: "warning",
         icon: "⚠️",
-        text: `${formatNumber(totalSingle)} entities in single storage (${formatNumber(onlyStates)} states, ${formatNumber(onlyStats)} stats)`,
-        action: "optimize_storage",
+        text: `${formatNumber(sensorsMissingStats)} numeric sensors missing statistics`,
+        action: "review_numeric_sensors",
         button: "Review"
       });
     }
@@ -2206,7 +2207,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BGvYOPD-.js");
+      await import("./entity-details-modal-BjfAVK9s.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2215,7 +2216,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-DuWYxlCH.js");
+      await import("./delete-sql-modal-LB00-cf5.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2356,6 +2357,10 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       filtered = filtered.filter((e2) => e2.in_state_machine);
     } else if (this.basicFilter === "deleted") {
       filtered = filtered.filter((e2) => !e2.in_entity_registry && !e2.in_state_machine);
+    } else if (this.basicFilter === "numeric_sensors_no_stats") {
+      filtered = filtered.filter(
+        (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
+      );
     }
     if (this.registryFilter) {
       filtered = filtered.filter((e2) => e2.registry_status === this.registryFilter);
@@ -2611,6 +2616,9 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         break;
       case "optimize_storage":
         this.advancedFilter = "only_states";
+        break;
+      case "review_numeric_sensors":
+        this.basicFilter = "numeric_sensors_no_stats";
         break;
     }
   }
@@ -3647,4 +3655,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DguQAEQg.js.map
+//# sourceMappingURL=statistics-orphan-panel-BT2ai0xn.js.map

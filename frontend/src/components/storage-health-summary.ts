@@ -552,8 +552,6 @@ export class StorageHealthSummary extends LitElement {
     const deleted = this.summary.deleted_from_registry;
     const unavailableLong = this.getUnavailableLongTerm();
     const disabled = this.summary.registry_disabled;
-    const onlyStates = this.summary.only_in_states;
-    const onlyStats = this.summary.only_in_statistics;
     const active = this.summary.state_available;
     const total = this.summary.total_entities;
 
@@ -592,14 +590,23 @@ export class StorageHealthSummary extends LitElement {
       });
     }
 
-    // Warning: Single storage system
-    if (onlyStates > 0 || onlyStats > 0) {
-      const totalSingle = onlyStates + onlyStats;
+    // Warning: Numeric sensors missing statistics
+    // Count sensor entities that are numeric but don't have statistics recorded
+    const sensorsMissingStats = this.entities.filter(e =>
+      e.entity_id.startsWith('sensor.') &&
+      e.in_states_meta &&
+      !e.in_statistics_meta &&
+      // Exclude non-numeric sensors
+      e.statistics_eligibility_reason &&
+      !e.statistics_eligibility_reason.includes("is not numeric")
+    ).length;
+
+    if (sensorsMissingStats > 0) {
       actions.push({
         priority: 'warning',
         icon: '⚠️',
-        text: `${formatNumber(totalSingle)} entities in single storage (${formatNumber(onlyStates)} states, ${formatNumber(onlyStats)} stats)`,
-        action: 'optimize_storage',
+        text: `${formatNumber(sensorsMissingStats)} numeric sensors missing statistics`,
+        action: 'review_numeric_sensors',
         button: 'Review'
       });
     }
