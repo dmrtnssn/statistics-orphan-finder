@@ -18,6 +18,7 @@ export class EntityTable extends LitElement {
   @property({ type: Boolean }) showCheckboxes = false;
   @property({ type: Object }) selectedIds: Set<string> = new Set();
   @property({ type: Object }) selectableEntityIds: Set<string> = new Set();
+  @property({ type: Object }) disabledEntityIds: Set<string> = new Set();
 
   static styles = [
     sharedStyles,
@@ -83,9 +84,21 @@ export class EntityTable extends LitElement {
         accent-color: var(--primary-color);
       }
 
+      input[type="checkbox"].disabled-entity {
+        accent-color: #FF9800;
+      }
+
       input[type="checkbox"]:disabled {
         cursor: not-allowed;
         opacity: 0.3;
+      }
+
+      .disabled-entity-row {
+        background: rgba(255, 152, 0, 0.02);
+      }
+
+      .disabled-entity-row:hover {
+        background: rgba(255, 152, 0, 0.05);
       }
     `
   ];
@@ -217,18 +230,38 @@ export class EntityTable extends LitElement {
                 const entityId = entity.entity_id;
                 const isSelectable = this.selectableEntityIds.has(entityId);
                 const isSelected = this.selectedIds.has(entityId);
+                const isDisabled = this.disabledEntityIds.has(entityId);
+
+                // Determine tooltip text
+                let tooltipText = '';
+                if (isSelectable) {
+                  if (isDisabled) {
+                    tooltipText = 'Select this DISABLED entity (statistics older than 90 days)';
+                  } else {
+                    tooltipText = 'Select this deleted entity';
+                  }
+                } else {
+                  if (entity.registry_status === 'Disabled') {
+                    tooltipText = 'Cannot delete - statistics updated within last 90 days';
+                  } else {
+                    tooltipText = 'Cannot delete - entity still exists or has no statistics';
+                  }
+                }
+
+                const rowClasses = isDisabled && isSelectable ? 'disabled-entity-row' : '';
 
                 return html`
-                  <tr>
+                  <tr class=${rowClasses}>
                     ${this.showCheckboxes ? html`
                       <td class="checkbox-column sticky-column">
                         <div class="checkbox-cell">
                           <input
                             type="checkbox"
+                            class=${isDisabled && isSelectable ? 'disabled-entity' : ''}
                             .checked=${isSelected}
                             ?disabled=${!isSelectable}
                             @change=${(e: Event) => this.handleCheckboxChange(entity, e)}
-                            title=${isSelectable ? 'Select this entity' : 'This entity cannot be deleted'}
+                            title=${tooltipText}
                           />
                         </div>
                       </td>
