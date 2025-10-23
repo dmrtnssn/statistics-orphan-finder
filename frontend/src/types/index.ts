@@ -234,7 +234,7 @@ export interface EntityDetailsModalData {
 // API Action Types
 // ============================================================================
 
-export type ApiAction = 'database_size' | 'entity_storage_overview' | 'generate_delete_sql';
+export type ApiAction = 'database_size' | 'generate_delete_sql';
 
 export interface ApiParams {
   action: ApiAction;

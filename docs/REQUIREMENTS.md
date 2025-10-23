@@ -181,26 +181,7 @@ Triggered by clicking info icon or entity ID. Shows:
 - Error states shown with message
 
 ### 5. API Integration
-Four endpoints on `/api/statistics_orphan_finder`:
-
-**GET ?action=list**
-Response:
-```json
-{
-  "orphans": [
-    {
-      "entity_id": "sensor.old_sensor",
-      "count": 12345,
-      "status": "deleted",
-      "last_update": "2024-10-01T12:00:00",
-      "origin": "Both",
-      "metadata_id": 123
-    }
-  ],
-  "deleted_storage": 1048576,
-  "unavailable_storage": 524288
-}
-```
+Three endpoints on `/api/statistics_orphan_finder`:
 
 **GET ?action=database_size**
 Response:
@@ -217,8 +198,42 @@ Response:
 }
 ```
 
-**GET ?action=entity_storage_overview**
-Response:
+**GET ?action=entity_storage_overview_step&step=N** (N = 0-8)
+Step-by-step API for fetching entity storage overview with progress feedback.
+
+Step 0: Initialize
+```json
+{
+  "status": "initialized",
+  "total_steps": 8
+}
+```
+
+Steps 1-5: Database scanning steps (return entity counts)
+```json
+{
+  "status": "complete",
+  "entities_found": 1234
+}
+```
+
+Step 6: Enrich with registry data
+```json
+{
+  "status": "complete",
+  "total_entities": 1234
+}
+```
+
+Step 7: Calculate deleted storage
+```json
+{
+  "status": "complete",
+  "deleted_storage_bytes": 10485760
+}
+```
+
+Step 8: Finalize - Returns complete overview
 ```json
 {
   "entities": [
@@ -270,12 +285,14 @@ Response:
     "in_both_states_and_stats": 300,
     "orphaned_states_meta": 0,
     "orphaned_statistics_meta": 10,
-    "deleted_from_registry": 30
+    "deleted_from_registry": 30,
+    "deleted_storage_bytes": 10485760,
+    "disabled_storage_bytes": 5242880
   }
 }
 ```
 
-**GET ?action=generate_delete_sql&metadata_id=X&origin=Y**
+**GET ?action=generate_delete_sql&entity_id=X&origin=Y&in_states_meta=true&in_statistics_meta=true**
 Response:
 ```json
 {

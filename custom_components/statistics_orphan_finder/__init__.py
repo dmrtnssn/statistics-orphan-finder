@@ -125,9 +125,6 @@ class StatisticsOrphanView(HomeAssistantView):
         if action == "database_size":
             db_size = await self.coordinator.async_get_database_size()
             return web.json_response(db_size)
-        elif action == "entity_storage_overview":
-            overview = await self.coordinator.async_get_entity_storage_overview()
-            return web.json_response(overview)
         elif action == "entity_storage_overview_step":
             # New action for step-by-step fetching
             step_param = request.query.get("step")

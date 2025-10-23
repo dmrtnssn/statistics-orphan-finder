@@ -41,18 +41,6 @@ export class ApiService {
   }
 
   /**
-   * Fetch entity storage overview
-   */
-  async fetchEntityStorageOverview(): Promise<EntityStorageOverviewResponse> {
-    this.validateConnection();
-    try {
-      return await this.hass.callApi<EntityStorageOverviewResponse>('GET', `${API_BASE}?action=entity_storage_overview`);
-    } catch (err) {
-      throw new Error(`Failed to fetch entity storage overview: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
    * Fetch entity storage overview step by step
    */
   async fetchEntityStorageOverviewStep(step: number): Promise<any> {
