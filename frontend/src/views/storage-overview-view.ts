@@ -134,33 +134,18 @@ export class StorageOverviewView extends LitElement {
   ];
 
   /**
-   * Check if entity has been disabled with stale statistics (90+ days)
+   * Check if entity has been disabled and has statistics data
    *
-   * Note: Home Assistant doesn't track WHEN entities were disabled, only WHO disabled them.
-   * We use last_stats_update as a proxy - if entity is disabled AND statistics haven't
-   * been updated in 90+ days, it's likely been abandoned and safe to delete.
+   * Note: Disabled entities with statistics are eligible for cleanup.
+   * This allows users to delete historical data for entities they've disabled.
    */
   private isDisabledForAtLeast90Days(entity: StorageEntity): boolean {
     try {
       // Entity must be disabled
       if (!entity || entity.registry_status !== 'Disabled') return false;
 
-      // Must have statistics data (otherwise nothing to delete)
-      if (!entity.last_stats_update) return false;
-
-      // Check if statistics are stale (90+ days old)
-      const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000; // 7,776,000,000 milliseconds
-      const lastUpdate = new Date(entity.last_stats_update).getTime();
-
-      // Validate the parsed date
-      if (isNaN(lastUpdate)) {
-        console.warn('[StorageOverviewView] Invalid date for entity:', entity.entity_id, entity.last_stats_update);
-        return false;
-      }
-
-      const age = Date.now() - lastUpdate;
-
-      return age >= NINETY_DAYS_MS;
+      // Must have statistics or states data (otherwise nothing to delete)
+      return !!(entity.in_states_meta || entity.in_statistics_meta);
     } catch (err) {
       console.warn('[StorageOverviewView] Error in isDisabledForAtLeast90Days:', entity?.entity_id, err);
       return false;
@@ -179,7 +164,7 @@ export class StorageOverviewView extends LitElement {
       return 'deleted';
     }
 
-    // Disabled entities (in registry, disabled for >90 days)
+    // Disabled entities (in registry, disabled)
     if (this.isDisabledForAtLeast90Days(entity)) {
       return 'disabled';
     }
@@ -189,7 +174,7 @@ export class StorageOverviewView extends LitElement {
 
   /**
    * Get entities that are eligible for deletion
-   * Includes both deleted entities and disabled entities (>90 days)
+   * Includes both deleted entities and disabled entities
    */
   private get selectableEntities(): StorageEntity[] {
     return this.filteredEntities.filter(entity => {
@@ -199,7 +184,7 @@ export class StorageOverviewView extends LitElement {
       // Deleted entities (existing behavior)
       const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
 
-      // Disabled entities (NEW - with 90-day check)
+      // Disabled entities with statistics
       const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
 
       return isDeleted || isDisabledLongEnough;
@@ -534,7 +519,7 @@ export class StorageOverviewView extends LitElement {
         width: '80px',
         className: 'group-border-left',
         render: (entity: StorageEntity) => {
-          // Show delete button for both deleted entities AND disabled entities with 90+ day old stats
+          // Show delete button for both deleted entities AND disabled entities
           const isSelectable = this.selectableEntityIds.has(entity.entity_id);
 
           return html`
