@@ -121,6 +121,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 'stats_long_count': 0,
                 'last_state_update': None,
                 'last_stats_update': None,
+                'metadata_id': None,
             }),
             'current_step': 0
         }
@@ -161,13 +162,16 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_3_statistics_meta(self) -> dict[str, Any]:
-        """Step 3: Fetch statistics_meta entities."""
+        """Step 3: Fetch statistics_meta entities with metadata_id."""
         engine = self._get_engine()
         with engine.connect() as conn:
-            query = text("SELECT DISTINCT statistic_id FROM statistics_meta")
+            # Fetch both id and statistic_id to avoid N+1 queries later
+            query = text("SELECT id, statistic_id FROM statistics_meta")
             result = conn.execute(query)
             for row in result:
-                self._step_data['entity_map'][row[0]]['in_statistics_meta'] = True
+                entity_id = row[1]
+                self._step_data['entity_map'][entity_id]['in_statistics_meta'] = True
+                self._step_data['entity_map'][entity_id]['metadata_id'] = row[0]
 
         entity_count = sum(1 for e in self._step_data['entity_map'].values() if e['in_statistics_meta'])
         return {'status': 'complete', 'entities_found': entity_count}
@@ -308,7 +312,8 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                     statistics_eligibility_reason = "Unable to determine eligibility"
 
             # Get metadata_id and origin for Generate SQL functionality
-            metadata_id = None
+            # metadata_id was already fetched in step 3
+            metadata_id = info.get('metadata_id')
             origin = None
             if info['in_statistics_meta']:
                 if info['in_statistics_long_term'] and info['in_statistics_short_term']:
@@ -364,14 +369,10 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                     not entity['in_state_machine'] and
                     (entity['in_states_meta'] or entity['in_statistics_meta'])):
                     try:
-                        metadata_id = None
-                        if entity['in_statistics_meta']:
-                            meta_query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
-                            meta_result = conn.execute(meta_query, {"entity_id": entity['entity_id']})
-                            meta_row = meta_result.fetchone()
-                            if meta_row:
-                                metadata_id = meta_row[0]
-                                entity['metadata_id'] = metadata_id
+                        # Get metadata_id from entity_map (already fetched in step 3)
+                        metadata_id = self._step_data['entity_map'][entity['entity_id']].get('metadata_id')
+                        if metadata_id:
+                            entity['metadata_id'] = metadata_id
 
                         # Determine origin
                         if entity['in_states_meta'] and entity['in_statistics_meta']:
@@ -410,13 +411,8 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 if (entity['registry_status'] == 'Disabled' and
                     (entity['in_states_meta'] or entity['in_statistics_meta'])):
                     try:
-                        metadata_id = None
-                        if entity['in_statistics_meta']:
-                            meta_query = text("SELECT id FROM statistics_meta WHERE statistic_id = :entity_id")
-                            meta_result = conn.execute(meta_query, {"entity_id": entity['entity_id']})
-                            meta_row = meta_result.fetchone()
-                            if meta_row:
-                                metadata_id = meta_row[0]
+                        # Get metadata_id from entity_map (already fetched in step 3)
+                        metadata_id = self._step_data['entity_map'][entity['entity_id']].get('metadata_id')
 
                         # Determine origin
                         if entity['in_states_meta'] and entity['in_statistics_meta']:
