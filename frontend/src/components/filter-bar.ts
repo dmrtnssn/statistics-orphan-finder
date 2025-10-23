@@ -6,7 +6,7 @@
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
-import { debounce } from '../services/formatters';
+import { debounce } from '../services/timing-utils';
 
 interface FilterButton {
   id: string;

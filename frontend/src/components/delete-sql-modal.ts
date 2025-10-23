@@ -6,7 +6,8 @@
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
-import { formatBytes, copyToClipboard } from '../services/formatters';
+import { formatBytes } from '../services/formatters';
+import { copyToClipboard } from '../services/dom-utils';
 import type { DeleteModalData, StorageEntity } from '../types';
 
 export class DeleteSqlModal extends LitElement {
