@@ -1,5 +1,22 @@
 import { a as i, i as i$1, x, n, r } from "./lit-core-Bxp6o0XG.js";
-import { s as sharedStyles, c as copyToClipboard, b as formatBytes } from "./statistics-orphan-panel-BT2ai0xn.js";
+import { s as sharedStyles, b as formatBytes } from "./statistics-orphan-panel-C_4E-zqd.js";
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand("copy");
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
+}
 var __defProp = Object.defineProperty;
 var __decorateClass = (decorators, target, key, kind) => {
   var result = void 0;
@@ -390,4 +407,4 @@ if (!customElements.get("delete-sql-modal")) {
 export {
   DeleteSqlModal
 };
-//# sourceMappingURL=delete-sql-modal-LB00-cf5.js.map
+//# sourceMappingURL=delete-sql-modal-BwYnNVYr.js.map

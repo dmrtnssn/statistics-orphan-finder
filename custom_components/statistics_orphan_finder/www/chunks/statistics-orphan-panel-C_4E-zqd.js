@@ -450,17 +450,6 @@ class ApiService {
     }
   }
   /**
-   * Fetch entity storage overview
-   */
-  async fetchEntityStorageOverview() {
-    this.validateConnection();
-    try {
-      return await this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview`);
-    } catch (err) {
-      throw new Error(`Failed to fetch entity storage overview: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-  }
-  /**
    * Fetch entity storage overview step by step
    */
   async fetchEntityStorageOverviewStep(step) {
@@ -674,36 +663,6 @@ function formatDuration(seconds) {
     const days = Math.floor(seconds / 86400);
     return `${days} day${days > 1 ? "s" : ""}`;
   }
-}
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (err) {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.left = "-999999px";
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand("copy");
-    } finally {
-      document.body.removeChild(textArea);
-    }
-  }
-}
-function debounce(func, wait) {
-  let timeout = null;
-  return function(...args) {
-    const context = this;
-    if (timeout) {
-      clearTimeout(timeout);
-    }
-    timeout = setTimeout(() => {
-      func.apply(context, args);
-      timeout = null;
-    }, wait);
-  };
 }
 var __defProp$5 = Object.defineProperty;
 var __decorateClass$5 = (decorators, target, key, kind) => {
@@ -1421,6 +1380,19 @@ __decorateClass$5([
 if (!customElements.get("storage-health-summary")) {
   customElements.define("storage-health-summary", StorageHealthSummary);
 }
+function debounce(func, wait) {
+  let timeout = null;
+  return function(...args) {
+    const context = this;
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => {
+      func.apply(context, args);
+      timeout = null;
+    }, wait);
+  };
+}
 var __defProp$4 = Object.defineProperty;
 var __decorateClass$4 = (decorators, target, key, kind) => {
   var result = void 0;
@@ -1959,8 +1931,9 @@ _SelectionPanel.styles = [
       .selection-panel {
         position: fixed;
         bottom: 0;
-        left: 0;
-        right: 0;
+        /* Account for Home Assistant sidebar (256px) + app padding (16px) */
+        left: max(272px, calc(256px + 16px));
+        right: 16px;
         background: var(--card-background-color);
         border-top: 2px solid var(--primary-color);
         padding: 16px 24px;
@@ -1971,6 +1944,13 @@ _SelectionPanel.styles = [
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+      }
+
+      /* Adjust for narrow sidebar */
+      @media (max-width: 870px) {
+        .selection-panel {
+          left: 80px; /* Narrow sidebar + padding */
+        }
       }
 
       @keyframes slideUp {
@@ -2120,6 +2100,7 @@ _SelectionPanel.styles = [
 
       @media (max-width: 768px) {
         .selection-panel {
+          left: 16px; /* Mobile - no sidebar */
           flex-direction: column;
           align-items: stretch;
           gap: 12px;
@@ -2207,7 +2188,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BjfAVK9s.js");
+      await import("./entity-details-modal-XRLv_kr_.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2216,7 +2197,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-LB00-cf5.js");
+      await import("./delete-sql-modal-BwYnNVYr.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2231,24 +2212,15 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     }
   }
   /**
-   * Check if entity has been disabled with stale statistics (90+ days)
+   * Check if entity has been disabled and has statistics data
    *
-   * Note: Home Assistant doesn't track WHEN entities were disabled, only WHO disabled them.
-   * We use last_stats_update as a proxy - if entity is disabled AND statistics haven't
-   * been updated in 90+ days, it's likely been abandoned and safe to delete.
+   * Note: Disabled entities with statistics are eligible for cleanup.
+   * This allows users to delete historical data for entities they've disabled.
    */
   isDisabledForAtLeast90Days(entity) {
     try {
       if (!entity || entity.registry_status !== "Disabled") return false;
-      if (!entity.last_stats_update) return false;
-      const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1e3;
-      const lastUpdate = new Date(entity.last_stats_update).getTime();
-      if (isNaN(lastUpdate)) {
-        console.warn("[StorageOverviewView] Invalid date for entity:", entity.entity_id, entity.last_stats_update);
-        return false;
-      }
-      const age = Date.now() - lastUpdate;
-      return age >= NINETY_DAYS_MS;
+      return !!(entity.in_states_meta || entity.in_statistics_meta);
     } catch (err) {
       console.warn("[StorageOverviewView] Error in isDisabledForAtLeast90Days:", entity?.entity_id, err);
       return false;
@@ -2270,7 +2242,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
   }
   /**
    * Get entities that are eligible for deletion
-   * Includes both deleted entities and disabled entities (>90 days)
+   * Includes both deleted entities and disabled entities
    */
   get selectableEntities() {
     return this.filteredEntities.filter((entity) => {
@@ -2990,19 +2962,21 @@ ${e2.sql}`;
         <button class="secondary-button" @click=${this.handleClearSort}>Clear Sort</button>
       </div>
 
-      <entity-table
-        .entities=${this.filteredEntities}
-        .columns=${this.tableColumns}
-        .sortStack=${this.sortStack}
-        .stickyFirstColumn=${true}
-        .emptyMessage=${"No entities found"}
-        .showCheckboxes=${true}
-        .selectedIds=${this.selectedEntityIds}
-        .selectableEntityIds=${this.selectableEntityIds}
-        .disabledEntityIds=${this.disabledEntityIds}
-        @sort-changed=${this.handleSortChanged}
-        @selection-changed=${this.handleSelectionChanged}
-      ></entity-table>
+      <div class="table-container ${this.selectedEntityIds.size > 0 ? "has-selections" : ""}">
+        <entity-table
+          .entities=${this.filteredEntities}
+          .columns=${this.tableColumns}
+          .sortStack=${this.sortStack}
+          .stickyFirstColumn=${true}
+          .emptyMessage=${"No entities found"}
+          .showCheckboxes=${true}
+          .selectedIds=${this.selectedEntityIds}
+          .selectableEntityIds=${this.selectableEntityIds}
+          .disabledEntityIds=${this.disabledEntityIds}
+          @sort-changed=${this.handleSortChanged}
+          @selection-changed=${this.handleSelectionChanged}
+        ></entity-table>
+      </div>
 
       ${this.selectedEntity ? x`
         <entity-details-modal
@@ -3065,6 +3039,16 @@ _StorageOverviewView.styles = [
 
       .search-and-sort-row filter-bar {
         flex: 1;
+      }
+
+      .table-container {
+        /* Add bottom padding when selection panel is visible to prevent last row from being covered */
+        padding-bottom: 0;
+        transition: padding-bottom 0.3s ease-out;
+      }
+
+      .table-container.has-selections {
+        padding-bottom: 100px;
       }
     `
 ];
@@ -3651,8 +3635,7 @@ export {
   StatisticsOrphanPanel as S,
   formatDuration as a,
   formatBytes as b,
-  copyToClipboard as c,
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BT2ai0xn.js.map
+//# sourceMappingURL=statistics-orphan-panel-C_4E-zqd.js.map
