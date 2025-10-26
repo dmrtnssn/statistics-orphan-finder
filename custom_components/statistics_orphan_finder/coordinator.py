@@ -1,6 +1,8 @@
 """DataUpdateCoordinator for Statistics Orphan Finder."""
+import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -60,7 +62,19 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
     async def async_get_database_size(self) -> dict[str, Any]:
         """Get database size information."""
-        return await self.db_service.async_get_database_size()
+        result = await self.db_service.async_get_database_size()
+
+        # Add version from manifest.json
+        try:
+            manifest_path = Path(__file__).parent / "manifest.json"
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+                result["version"] = manifest.get("version", "unknown")
+        except Exception as err:
+            _LOGGER.warning("Could not read version from manifest.json: %s", err)
+            result["version"] = "unknown"
+
+        return result
 
     def _calculate_entity_storage(
         self,

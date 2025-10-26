@@ -51,6 +51,7 @@ export interface DatabaseSize {
   statistics_size: number;
   statistics_short_term_size: number;
   other_size: number;
+  version?: string;
 }
 
 export interface GenerateSqlResponse {

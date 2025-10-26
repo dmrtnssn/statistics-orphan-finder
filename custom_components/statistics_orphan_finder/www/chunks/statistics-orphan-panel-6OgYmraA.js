@@ -2205,7 +2205,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-81J59SZO.js");
+      await import("./entity-details-modal-CAcuuVmT.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2214,7 +2214,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-VeGEX9Lz.js");
+      await import("./delete-sql-modal-BG2BDwPZ.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -3196,6 +3196,7 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     }
     const cacheLoaded = this.loadFromCache();
     console.debug("[Panel] Cache load attempt:", cacheLoaded ? "success" : "no cache found");
+    this.fetchDatabaseSizeOnly();
     this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
     document.addEventListener("visibilitychange", this.boundVisibilityHandler);
   }
@@ -3317,6 +3318,21 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     this.loadStorageOverviewData();
   }
   /**
+   * Fetch only database size (lightweight call for version and metadata)
+   */
+  async fetchDatabaseSizeOnly() {
+    try {
+      if (!this.hass || !this.apiService) {
+        console.debug("[Panel] Skipping database size fetch - hass not ready");
+        return;
+      }
+      this.databaseSize = await this.apiService.fetchDatabaseSize();
+      console.debug("[Panel] Database size fetched (version:", this.databaseSize.version, ")");
+    } catch (err) {
+      console.debug("[Panel] Failed to fetch database size:", err);
+    }
+  }
+  /**
    * Load data from cache if available
    */
   loadFromCache() {
@@ -3419,7 +3435,12 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
   render() {
     return x`
       <div class="header">
-        <h1>Statistics Orphan Finder</h1>
+        <div class="header-left">
+          <h1>Statistics Orphan Finder</h1>
+          ${this.databaseSize?.version ? x`
+            <div class="version">v${this.databaseSize.version}</div>
+          ` : ""}
+        </div>
         <div style="display: flex; align-items: center; gap: 12px;">
           ${this.cacheTimestamp ? x`
             <span class="cache-indicator">
@@ -3512,6 +3533,18 @@ _StatisticsOrphanPanel.styles = [
         margin-bottom: 16px;
         padding-bottom: 16px;
         border-bottom: 1px solid var(--divider-color);
+      }
+
+      .header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .version {
+        font-size: 0.75rem;
+        color: #888;
+        font-weight: normal;
       }
 
       .loading-overlay {
@@ -3679,4 +3712,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-vuh8mCUe.js.map
+//# sourceMappingURL=statistics-orphan-panel-6OgYmraA.js.map

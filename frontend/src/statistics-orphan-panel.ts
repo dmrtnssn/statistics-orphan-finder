@@ -58,6 +58,18 @@ export class StatisticsOrphanPanel extends LitElement {
         border-bottom: 1px solid var(--divider-color);
       }
 
+      .header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .version {
+        font-size: 0.75rem;
+        color: #888;
+        font-weight: normal;
+      }
+
       .loading-overlay {
         position: fixed;
         top: 0;
@@ -182,6 +194,9 @@ export class StatisticsOrphanPanel extends LitElement {
     // This ensures the panel has data to render even after being recreated
     const cacheLoaded = this.loadFromCache();
     console.debug('[Panel] Cache load attempt:', cacheLoaded ? 'success' : 'no cache found');
+
+    // Always fetch database size on load to get version and latest metadata
+    this.fetchDatabaseSizeOnly();
 
     // Add visibility change listener for recovery
     this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
@@ -350,6 +365,23 @@ export class StatisticsOrphanPanel extends LitElement {
   }
 
   /**
+   * Fetch only database size (lightweight call for version and metadata)
+   */
+  private async fetchDatabaseSizeOnly() {
+    try {
+      if (!this.hass || !this.apiService) {
+        console.debug('[Panel] Skipping database size fetch - hass not ready');
+        return;
+      }
+      this.databaseSize = await this.apiService.fetchDatabaseSize();
+      console.debug('[Panel] Database size fetched (version:', this.databaseSize.version, ')');
+    } catch (err) {
+      console.debug('[Panel] Failed to fetch database size:', err);
+      // Don't set error state - this is a non-critical background fetch
+    }
+  }
+
+  /**
    * Load data from cache if available
    */
   private loadFromCache(): boolean {
@@ -476,7 +508,12 @@ export class StatisticsOrphanPanel extends LitElement {
   render() {
     return html`
       <div class="header">
-        <h1>Statistics Orphan Finder</h1>
+        <div class="header-left">
+          <h1>Statistics Orphan Finder</h1>
+          ${this.databaseSize?.version ? html`
+            <div class="version">v${this.databaseSize.version}</div>
+          ` : ''}
+        </div>
         <div style="display: flex; align-items: center; gap: 12px;">
           ${this.cacheTimestamp ? html`
             <span class="cache-indicator">
