@@ -508,6 +508,8 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
     # better UX with progress feedback and is exclusively used by the frontend.
 
     async def async_shutdown(self) -> None:
-        """Shutdown coordinator."""
-        if self._engine:
-            await self.hass.async_add_executor_job(self._engine.dispose)
+        """Shutdown coordinator and clean up resources."""
+        if self.db_service:
+            await self.hass.async_add_executor_job(self.db_service.close)
+        # Clean up any in-progress step data
+        self._step_data = None

@@ -3,7 +3,7 @@
  * Built with Lit + TypeScript for better maintainability
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, type PropertyValues } from 'lit';
 import { property, state, query } from 'lit/decorators.js';
 import { sharedStyles } from './styles/shared-styles';
 import { ApiService } from './services/api-service';
@@ -223,12 +223,12 @@ export class StatisticsOrphanPanel extends LitElement {
     }
   }
 
-  protected willUpdate(changedProperties: Map<string, any>) {
+  protected willUpdate(changedProperties: PropertyValues<this>) {
     super.willUpdate(changedProperties);
 
     // Reinitialize API service when hass connection changes
     if (changedProperties.has('hass')) {
-      const oldHass = changedProperties.get('hass');
+      const oldHass = changedProperties.get('hass') as HomeAssistant | undefined;
 
       // Only log when connection state actually changes (not on every state update)
       if (this.hass && !oldHass) {
@@ -306,9 +306,14 @@ export class StatisticsOrphanPanel extends LitElement {
 
         if (step === 8) {
           // Final step returns the complete overview
-          this.storageEntities = result.entities;
-          this.storageSummary = result.summary;
-          console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+          // Type narrowing: check if result has entities and summary
+          if ('entities' in result && 'summary' in result) {
+            this.storageEntities = result.entities;
+            this.storageSummary = result.summary;
+            console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+          } else {
+            throw new Error('Final step did not return expected data structure');
+          }
         }
 
         // Don't increment on the last step to avoid showing "Step 10 of 9"

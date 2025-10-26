@@ -5,12 +5,12 @@
 
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
-import type { ColumnConfig, SortState } from '../types';
+import type { ColumnConfig, SortState, StorageEntity } from '../types';
 import { sharedStyles } from '../styles/shared-styles';
 
-export class EntityTable extends LitElement {
-  @property({ type: Array }) entities: any[] = [];
-  @property({ type: Array }) columns: ColumnConfig[] = [];
+export class EntityTable<T extends StorageEntity = StorageEntity> extends LitElement {
+  @property({ type: Array }) entities: T[] = [];
+  @property({ type: Array }) columns: ColumnConfig<T>[] = [];
   @property({ type: Boolean }) sortable = true;
   @property({ type: Boolean }) stickyFirstColumn = false;
   @property({ type: Array }) sortStack: SortState[] = [{ column: '', direction: 'asc' }];
@@ -146,7 +146,7 @@ export class EntityTable extends LitElement {
     }));
   }
 
-  private handleRowAction(entity: any, action: string) {
+  private handleRowAction(entity: T, action: string) {
     this.dispatchEvent(new CustomEvent('row-action', {
       detail: { entity, action },
       bubbles: true,
@@ -154,7 +154,7 @@ export class EntityTable extends LitElement {
     }));
   }
 
-  private handleCheckboxChange(entity: any, event: Event) {
+  private handleCheckboxChange(entity: T, event: Event) {
     const checkbox = event.target as HTMLInputElement;
     const entityId = entity.entity_id;
 
@@ -168,17 +168,22 @@ export class EntityTable extends LitElement {
     }));
   }
 
-  private renderCell(entity: any, column: ColumnConfig) {
-    if (column.render) {
-      const content = column.render(entity);
-      if (typeof content === 'string') {
-        return html`${content}`;
+  private renderCell(entity: T, column: ColumnConfig<T>) {
+    try {
+      if (column.render) {
+        const content = column.render(entity);
+        if (typeof content === 'string') {
+          return html`${content}`;
+        }
+        return content;
       }
-      return content;
-    }
 
-    const value = column.getValue ? column.getValue(entity) : entity[column.id];
-    return html`${value ?? ''}`;
+      const value = column.getValue ? column.getValue(entity) : (entity as any)[column.id];
+      return html`${value ?? ''}`;
+    } catch (err) {
+      console.error('[EntityTable] Error rendering cell:', err);
+      return html`<span style="color: red;" title="${err instanceof Error ? err.message : 'Error'}">Error</span>`;
+    }
   }
 
   render() {
@@ -262,6 +267,7 @@ export class EntityTable extends LitElement {
                             ?disabled=${!isSelectable}
                             @change=${(e: Event) => this.handleCheckboxChange(entity, e)}
                             title=${tooltipText}
+                            aria-label="Select ${entityId}"
                           />
                         </div>
                       </td>

@@ -1,5 +1,5 @@
-import { a as i, i as i$1, x, n, r } from "./lit-core-Bxp6o0XG.js";
-import { s as sharedStyles, b as formatBytes } from "./statistics-orphan-panel-C_4E-zqd.js";
+import { a as i, i as i$1, x, n, r } from "./lit-core-eQjJmNqs.js";
+import { s as sharedStyles, b as formatBytes } from "./statistics-orphan-panel-vuh8mCUe.js";
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -407,4 +407,4 @@ if (!customElements.get("delete-sql-modal")) {
 export {
   DeleteSqlModal
 };
-//# sourceMappingURL=delete-sql-modal-BwYnNVYr.js.map
+//# sourceMappingURL=delete-sql-modal-VeGEX9Lz.js.map

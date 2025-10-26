@@ -8,7 +8,8 @@ import type {
   EntityStorageOverviewResponse,
   GenerateSqlResponse,
   OrphanOrigin,
-  HomeAssistant
+  HomeAssistant,
+  StepResponse
 } from '../types';
 
 const API_BASE = 'statistics_orphan_finder';
@@ -41,14 +42,25 @@ export class ApiService {
   }
 
   /**
-   * Fetch entity storage overview step by step
+   * Fetch entity storage overview step by step (progressive loading)
+   * Steps 0-7 return status updates, step 8 returns complete overview
    */
-  async fetchEntityStorageOverviewStep(step: number): Promise<any> {
+  async fetchEntityStorageOverviewStep(step: number): Promise<StepResponse> {
     this.validateConnection();
+
+    if (step < 0 || step > 8) {
+      throw new Error(`Invalid step: ${step}. Must be between 0-8.`);
+    }
+
     try {
-      return await this.hass.callApi<any>('GET', `${API_BASE}?action=entity_storage_overview_step&step=${step}`);
+      return await this.hass.callApi<StepResponse>(
+        'GET',
+        `${API_BASE}?action=entity_storage_overview_step&step=${step}`
+      );
     } catch (err) {
-      throw new Error(`Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : 'Unknown error'}`
+      );
     }
   }
 

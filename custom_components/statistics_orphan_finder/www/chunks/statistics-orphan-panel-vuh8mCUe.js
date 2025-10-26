@@ -1,4 +1,4 @@
-import { i, a as i$1, x, n, r, e } from "./lit-core-Bxp6o0XG.js";
+import { i, a as i$1, x, n, r, e } from "./lit-core-eQjJmNqs.js";
 const sharedStyles = i`
   /* Base styles */
   :host {
@@ -101,6 +101,7 @@ const sharedStyles = i`
     position: sticky;
     top: 0;
     z-index: 2;
+    border-bottom: 1px solid var(--divider-color);
   }
 
   th.sortable {
@@ -450,14 +451,23 @@ class ApiService {
     }
   }
   /**
-   * Fetch entity storage overview step by step
+   * Fetch entity storage overview step by step (progressive loading)
+   * Steps 0-7 return status updates, step 8 returns complete overview
    */
   async fetchEntityStorageOverviewStep(step) {
     this.validateConnection();
+    if (step < 0 || step > 8) {
+      throw new Error(`Invalid step: ${step}. Must be between 0-8.`);
+    }
     try {
-      return await this.hass.callApi("GET", `${API_BASE}?action=entity_storage_overview_step&step=${step}`);
+      return await this.hass.callApi(
+        "GET",
+        `${API_BASE}?action=entity_storage_overview_step&step=${step}`
+      );
     } catch (err) {
-      throw new Error(`Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : "Unknown error"}`);
+      throw new Error(
+        `Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
     }
   }
   /**
@@ -1456,6 +1466,7 @@ const _FilterBar = class _FilterBar extends i$1 {
               placeholder=${this.searchPlaceholder}
               .value=${this.searchValue}
               @input=${this.handleSearchInput}
+              aria-label=${this.searchPlaceholder}
             />
           </div>
         ` : ""}
@@ -1586,15 +1597,20 @@ const _EntityTable = class _EntityTable extends i$1 {
     }));
   }
   renderCell(entity, column) {
-    if (column.render) {
-      const content = column.render(entity);
-      if (typeof content === "string") {
-        return x`${content}`;
+    try {
+      if (column.render) {
+        const content = column.render(entity);
+        if (typeof content === "string") {
+          return x`${content}`;
+        }
+        return content;
       }
-      return content;
+      const value = column.getValue ? column.getValue(entity) : entity[column.id];
+      return x`${value ?? ""}`;
+    } catch (err) {
+      console.error("[EntityTable] Error rendering cell:", err);
+      return x`<span style="color: red;" title="${err instanceof Error ? err.message : "Error"}">Error</span>`;
     }
-    const value = column.getValue ? column.getValue(entity) : entity[column.id];
-    return x`${value ?? ""}`;
   }
   render() {
     if (this.entities.length === 0) {
@@ -1671,6 +1687,7 @@ const _EntityTable = class _EntityTable extends i$1 {
                             ?disabled=${!isSelectable}
                             @change=${(e2) => this.handleCheckboxChange(entity, e2)}
                             title=${tooltipText}
+                            aria-label="Select ${entityId}"
                           />
                         </div>
                       </td>
@@ -2188,7 +2205,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-XRLv_kr_.js");
+      await import("./entity-details-modal-81J59SZO.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2197,7 +2214,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BwYnNVYr.js");
+      await import("./delete-sql-modal-VeGEX9Lz.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2569,7 +2586,11 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     ];
   }
   handleHealthAction(e2) {
-    const action = e2.detail.action;
+    const action = e2.detail?.action;
+    if (!action) {
+      console.warn("[StorageOverviewView] Health action called without action detail");
+      return;
+    }
     this.basicFilter = null;
     this.registryFilter = null;
     this.stateFilter = null;
@@ -2646,8 +2667,13 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         console.warn("Cannot open more info: Home Assistant connection not available");
         return;
       }
+      const entityId = e2.detail?.entityId;
+      if (!entityId) {
+        console.warn("Cannot open more info: No entity ID provided");
+        return;
+      }
       const event = new Event("hass-more-info", { bubbles: true, composed: true });
-      event.detail = { entityId: e2.detail.entityId };
+      event.detail = { entityId };
       this.dispatchEvent(event);
     } catch (err) {
       console.error("Error opening more info dialog:", err);
@@ -2786,7 +2812,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       this.bulkSqlTotal = this.deleteModalEntities.length;
       this.bulkSqlProgress = 0;
       const apiService = new ApiService(this.hass);
-      const results = {
+      const resultsBuilder = {
         entities: [],
         total_storage_saved: 0,
         total_count: 0,
@@ -2824,28 +2850,39 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
             inStates,
             inStatistics
           );
-          results.entities.push({
+          resultsBuilder.entities.push({
             entity_id: entity.entity_id,
             sql: response.sql,
             storage_saved: response.storage_saved,
             count
           });
-          results.total_storage_saved += response.storage_saved;
-          results.total_count += count;
-          results.success_count++;
+          resultsBuilder.total_storage_saved += response.storage_saved;
+          resultsBuilder.total_count += count;
+          resultsBuilder.success_count++;
         } catch (err) {
           console.error(`Error generating SQL for ${entity.entity_id}:`, err);
-          results.entities.push({
+          resultsBuilder.entities.push({
             entity_id: entity.entity_id,
             sql: "",
             storage_saved: 0,
             count: 0,
             error: err instanceof Error ? err.message : "Unknown error"
           });
-          results.error_count++;
+          resultsBuilder.error_count++;
         }
       }
-      const combinedSql = results.entities.map((e2) => {
+      const results = resultsBuilder.error_count > 0 ? {
+        status: "partial",
+        ...resultsBuilder
+      } : {
+        status: "success",
+        entities: resultsBuilder.entities,
+        total_storage_saved: resultsBuilder.total_storage_saved,
+        total_count: resultsBuilder.total_count,
+        success_count: resultsBuilder.success_count,
+        error_count: 0
+      };
+      const combinedSql = resultsBuilder.entities.map((e2) => {
         if (e2.error) {
           return `-- Entity: ${e2.entity_id}
 -- ERROR: ${e2.error}
@@ -2857,14 +2894,14 @@ ${e2.sql}`;
       }).join("\n\n");
       this.deleteModalMode = "display";
       this.deleteModalData = {
-        entityId: `${results.success_count} entities`,
+        entityId: `${resultsBuilder.success_count} entities`,
         metadataId: 0,
         origin: "Both",
         status: "deleted",
-        count: results.total_count
+        count: resultsBuilder.total_count
       };
       this.deleteSql = combinedSql;
-      this.deleteStorageSaved = results.total_storage_saved;
+      this.deleteStorageSaved = resultsBuilder.total_storage_saved;
       this.selectedEntityIds = /* @__PURE__ */ new Set();
     } catch (err) {
       console.error("Error in bulk SQL generation:", err);
@@ -3248,9 +3285,13 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
         console.debug(`[Panel] Executing step ${step + 1}/9`);
         const result = await this.apiService.fetchEntityStorageOverviewStep(step);
         if (step === 8) {
-          this.storageEntities = result.entities;
-          this.storageSummary = result.summary;
-          console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+          if ("entities" in result && "summary" in result) {
+            this.storageEntities = result.entities;
+            this.storageSummary = result.summary;
+            console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+          } else {
+            throw new Error("Final step did not return expected data structure");
+          }
         }
         if (step < 8) {
           this.completeCurrentStep();
@@ -3638,4 +3679,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-C_4E-zqd.js.map
+//# sourceMappingURL=statistics-orphan-panel-vuh8mCUe.js.map

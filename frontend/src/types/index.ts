@@ -58,19 +58,39 @@ export interface GenerateSqlResponse {
   storage_saved: number;
 }
 
-export interface BulkSqlGenerationResult {
-  entities: Array<{
-    entity_id: string;
-    sql: string;
-    storage_saved: number;
-    count: number;
-    error?: string;
-  }>;
-  total_storage_saved: number;
-  total_count: number;
-  success_count: number;
-  error_count: number;
-}
+// Discriminated union for bulk SQL generation results
+export type BulkSqlGenerationResult =
+  | {
+      status: 'success';
+      entities: Array<{
+        entity_id: string;
+        sql: string;
+        storage_saved: number;
+        count: number;
+      }>;
+      total_storage_saved: number;
+      total_count: number;
+      success_count: number;
+      error_count: 0;
+    }
+  | {
+      status: 'partial';
+      entities: Array<{
+        entity_id: string;
+        sql: string;
+        storage_saved: number;
+        count: number;
+        error?: string;
+      }>;
+      total_storage_saved: number;
+      total_count: number;
+      success_count: number;
+      error_count: number;
+    }
+  | {
+      status: 'error';
+      error: string;
+    };
 
 // ============================================================================
 // Storage Overview Types
@@ -140,6 +160,19 @@ export interface EntityStorageOverviewResponse {
   entities: StorageEntity[];
   summary: StorageSummary;
 }
+
+// Step response for progressive loading
+export type StepResponse =
+  | { status: 'initialized'; total_steps: number }
+  | { status: 'complete'; entities_found: number }
+  | { status: 'complete'; total_entities: number }
+  | { status: 'complete'; deleted_storage_bytes: number }
+  | EntityStorageOverviewResponse;
+
+// API Result types with discriminated unions
+export type ApiResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 // ============================================================================
 // Table Component Types

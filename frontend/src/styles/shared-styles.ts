@@ -107,6 +107,7 @@ export const sharedStyles = css`
     position: sticky;
     top: 0;
     z-index: 2;
+    border-bottom: 1px solid var(--divider-color);
   }
 
   th.sortable {

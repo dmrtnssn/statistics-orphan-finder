@@ -1,6 +1,7 @@
 """Database service for Statistics Orphan Finder."""
 import logging
 from typing import Any
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,11 +31,14 @@ class DatabaseService:
             username = self.entry.data.get(CONF_USERNAME)
             password = self.entry.data.get(CONF_PASSWORD)
 
-            # Build connection string
+            # Build connection string with proper URL encoding for credentials
             if username and password:
                 if "://" in db_url:
                     protocol, rest = db_url.split("://", 1)
-                    db_url = f"{protocol}://{username}:{password}@{rest}"
+                    # URL-encode credentials to handle special characters
+                    encoded_username = quote_plus(username)
+                    encoded_password = quote_plus(password)
+                    db_url = f"{protocol}://{encoded_username}:{encoded_password}@{rest}"
 
             self._engine = create_engine(db_url, pool_pre_ping=True)
 

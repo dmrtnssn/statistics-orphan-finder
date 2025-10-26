@@ -3,7 +3,7 @@
  * This component solves the table width problem with horizontal scroll + sticky first column
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, type PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
 import { formatNumber } from '../services/formatters';
@@ -83,7 +83,7 @@ export class StorageOverviewView extends LitElement {
     }
   }
 
-  protected willUpdate(changedProperties: Map<string, any>) {
+  protected willUpdate(changedProperties: PropertyValues<this>) {
     super.willUpdate(changedProperties);
 
     // Clear cache when entities array changes
@@ -554,8 +554,13 @@ export class StorageOverviewView extends LitElement {
     ];
   }
 
-  private handleHealthAction(e: CustomEvent) {
-    const action = e.detail.action;
+  private handleHealthAction(e: CustomEvent<{ action: string }>) {
+    const action = e.detail?.action;
+
+    if (!action) {
+      console.warn('[StorageOverviewView] Health action called without action detail');
+      return;
+    }
 
     // Clear all filters first
     this.basicFilter = null;
@@ -641,14 +646,21 @@ export class StorageOverviewView extends LitElement {
     this.selectedEntity = null;
   }
 
-  private handleOpenMoreInfo(e: CustomEvent) {
+  private handleOpenMoreInfo(e: CustomEvent<{ entityId: string }>) {
     try {
       if (!this.hass) {
         console.warn('Cannot open more info: Home Assistant connection not available');
         return;
       }
+
+      const entityId = e.detail?.entityId;
+      if (!entityId) {
+        console.warn('Cannot open more info: No entity ID provided');
+        return;
+      }
+
       const event = new Event('hass-more-info', { bubbles: true, composed: true });
-      (event as any).detail = { entityId: e.detail.entityId };
+      (event as any).detail = { entityId };
       this.dispatchEvent(event);
     } catch (err) {
       console.error('Error opening more info dialog:', err);
@@ -822,8 +834,16 @@ export class StorageOverviewView extends LitElement {
       this.bulkSqlProgress = 0;
 
       const apiService = new ApiService(this.hass);
-      const results: BulkSqlGenerationResult = {
-        entities: [],
+
+      // Use a mutable object while building results
+      const resultsBuilder = {
+        entities: [] as Array<{
+          entity_id: string;
+          sql: string;
+          storage_saved: number;
+          count: number;
+          error?: string;
+        }>,
         total_storage_saved: 0,
         total_count: 0,
         success_count: 0,
@@ -870,32 +890,47 @@ export class StorageOverviewView extends LitElement {
             inStatistics
           );
 
-          results.entities.push({
+          resultsBuilder.entities.push({
             entity_id: entity.entity_id,
             sql: response.sql,
             storage_saved: response.storage_saved,
             count: count
           });
 
-          results.total_storage_saved += response.storage_saved;
-          results.total_count += count;
-          results.success_count++;
+          resultsBuilder.total_storage_saved += response.storage_saved;
+          resultsBuilder.total_count += count;
+          resultsBuilder.success_count++;
         } catch (err) {
           console.error(`Error generating SQL for ${entity.entity_id}:`, err);
-          results.entities.push({
+          resultsBuilder.entities.push({
             entity_id: entity.entity_id,
             sql: '',
             storage_saved: 0,
             count: 0,
             error: err instanceof Error ? err.message : 'Unknown error'
           });
-          results.error_count++;
+          resultsBuilder.error_count++;
         }
       }
 
+      // Create properly typed result based on error count
+      const results: BulkSqlGenerationResult = resultsBuilder.error_count > 0
+        ? {
+            status: 'partial',
+            ...resultsBuilder
+          }
+        : {
+            status: 'success',
+            entities: resultsBuilder.entities,
+            total_storage_saved: resultsBuilder.total_storage_saved,
+            total_count: resultsBuilder.total_count,
+            success_count: resultsBuilder.success_count,
+            error_count: 0
+          };
+
       // Format combined SQL
-      const combinedSql = results.entities
-        .map(e => {
+      const combinedSql = resultsBuilder.entities
+        .map((e) => {
           if (e.error) {
             return `-- Entity: ${e.entity_id}\n-- ERROR: ${e.error}\n`;
           }
@@ -907,14 +942,14 @@ export class StorageOverviewView extends LitElement {
       // Update modal to display mode with SQL
       this.deleteModalMode = 'display';
       this.deleteModalData = {
-        entityId: `${results.success_count} entities`,
+        entityId: `${resultsBuilder.success_count} entities`,
         metadataId: 0,
         origin: 'Both' as any,
         status: 'deleted',
-        count: results.total_count
+        count: resultsBuilder.total_count
       };
       this.deleteSql = combinedSql;
-      this.deleteStorageSaved = results.total_storage_saved;
+      this.deleteStorageSaved = resultsBuilder.total_storage_saved;
 
       // Clear selection after successful generation
       this.selectedEntityIds = new Set();

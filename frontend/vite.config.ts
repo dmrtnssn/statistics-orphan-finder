@@ -24,16 +24,17 @@ export default defineConfig({
         chunkFileNames: 'chunks/[name]-[hash].js'
       }
     },
-    minify: 'terser',
-    terserOptions: {
-      format: {
-        comments: false
-      }
-    }
+    minify: 'terser'
+    // Note: Terser options are configured via build.minify
+    // For advanced terser config, use esbuild.minifyOptions or a rollup plugin
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
     }
+  },
+  esbuild: {
+    // Remove comments during build
+    legalComments: 'none'
   }
 });

@@ -17,17 +17,21 @@ async def validate_db_connection(hass: HomeAssistant, data: dict[str, Any]) -> d
     """Validate the database connection."""
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import SQLAlchemyError
+    from urllib.parse import quote_plus
 
     db_url = data[CONF_DB_URL]
     username = data.get(CONF_USERNAME)
     password = data.get(CONF_PASSWORD)
 
-    # Build connection string
+    # Build connection string with proper URL encoding for credentials
     if username and password:
         # Insert credentials into URL
         if "://" in db_url:
             protocol, rest = db_url.split("://", 1)
-            db_url = f"{protocol}://{username}:{password}@{rest}"
+            # URL-encode credentials to handle special characters
+            encoded_username = quote_plus(username)
+            encoded_password = quote_plus(password)
+            db_url = f"{protocol}://{encoded_username}:{encoded_password}@{rest}"
 
     try:
         # Test connection

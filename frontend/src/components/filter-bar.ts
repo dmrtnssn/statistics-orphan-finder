@@ -90,6 +90,7 @@ export class FilterBar extends LitElement {
               placeholder=${this.searchPlaceholder}
               .value=${this.searchValue}
               @input=${this.handleSearchInput}
+              aria-label=${this.searchPlaceholder}
             />
           </div>
         ` : ''}

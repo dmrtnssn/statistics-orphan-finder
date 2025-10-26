@@ -125,6 +125,7 @@ class StatisticsOrphanView(HomeAssistantView):
         if action == "database_size":
             db_size = await self.coordinator.async_get_database_size()
             return web.json_response(db_size)
+
         elif action == "entity_storage_overview_step":
             # New action for step-by-step fetching
             step_param = request.query.get("step")
@@ -133,18 +134,38 @@ class StatisticsOrphanView(HomeAssistantView):
 
             try:
                 step = int(step_param)
+                # Validate step range (0-8 as per architecture)
+                if not 0 <= step <= 8:
+                    return web.json_response(
+                        {"error": f"Step must be between 0 and 8, got {step}"},
+                        status=400
+                    )
                 result = await self.coordinator.async_execute_overview_step(step)
                 return web.json_response(result)
             except ValueError as err:
-                return web.json_response({"error": f"Invalid step: {err}"}, status=400)
+                return web.json_response({"error": f"Invalid step parameter: {err}"}, status=400)
             except Exception as err:
+                _LOGGER.error("Error executing step %s: %s", step_param, err, exc_info=True)
                 return web.json_response({"error": f"Error executing step: {err}"}, status=500)
+
         elif action == "generate_delete_sql":
             origin = request.query.get("origin")
             entity_id = request.query.get("entity_id")
 
             if not origin or not entity_id:
                 return web.json_response({"error": "Missing origin or entity_id"}, status=400)
+
+            # Validate entity_id format (domain.entity)
+            if "." not in entity_id or len(entity_id.split(".")) != 2:
+                return web.json_response({"error": "Invalid entity_id format (must be domain.entity)"}, status=400)
+
+            # Validate origin value
+            valid_origins = {"States", "Short-term", "Long-term", "Both", "States+Statistics"}
+            if origin not in valid_origins:
+                return web.json_response(
+                    {"error": f"Invalid origin. Must be one of: {', '.join(sorted(valid_origins))}"},
+                    status=400
+                )
 
             try:
                 in_states_meta = request.query.get("in_states_meta", "false").lower() == "true"
@@ -169,5 +190,8 @@ class StatisticsOrphanView(HomeAssistantView):
                 })
             except ValueError as err:
                 return web.json_response({"error": f"Invalid parameters: {err}"}, status=400)
+            except Exception as err:
+                _LOGGER.error("Error generating SQL for %s: %s", entity_id, err, exc_info=True)
+                return web.json_response({"error": f"Error generating SQL: {err}"}, status=500)
 
         return web.json_response({"error": "Invalid action"}, status=400)

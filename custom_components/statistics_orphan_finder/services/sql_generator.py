@@ -30,6 +30,23 @@ class SqlGenerator:
     ) -> str:
         """Generate SQL DELETE statement for removing orphaned entity.
 
+        **SECURITY NOTICE**:
+        The generated SQL is intended for MANUAL REVIEW AND EXECUTION by
+        administrators only. This integration NEVER executes these statements
+        automatically. The statements use direct integer interpolation for
+        metadata_id values, which is safe because:
+
+        1. metadata_id values are fetched directly from the database as integers
+        2. They are never derived from user input
+        3. The SQL is displayed to users for review before execution
+        4. Users must manually copy and execute the SQL in their own database client
+
+        The entity_id parameter uses proper parameterized queries when looking up
+        metadata_id values, preventing any SQL injection through that vector.
+
+        **WARNING**: Never modify this code to automatically execute the generated
+        SQL without explicit user confirmation and review.
+
         Args:
             engine: Database engine
             entity_id: The entity_id to delete
@@ -39,7 +56,7 @@ class SqlGenerator:
             metadata_id_statistics: Optional metadata_id for statistics (if known)
 
         Returns:
-            SQL DELETE statement wrapped in a transaction
+            SQL DELETE statement wrapped in a transaction for manual execution
         """
         # Determine database type
         db_url = self.entry.data[CONF_DB_URL]

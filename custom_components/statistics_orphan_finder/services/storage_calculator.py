@@ -168,7 +168,27 @@ class StorageCalculator:
         is_mysql: bool,
         is_postgres: bool
     ) -> int:
-        """Calculate storage size for a specific table."""
+        """Calculate storage size for a specific table.
+
+        Args:
+            conn: Database connection
+            table_name: Name of the table (must be in allowed list)
+            metadata_id: Metadata ID to filter by
+            is_sqlite: Whether database is SQLite
+            is_mysql: Whether database is MySQL/MariaDB
+            is_postgres: Whether database is PostgreSQL
+
+        Returns:
+            Estimated storage size in bytes
+
+        Raises:
+            ValueError: If table_name is not in the allowed list
+        """
+        # Validate table name against whitelist to prevent SQL injection
+        ALLOWED_TABLES = {'statistics', 'statistics_short_term', 'states'}
+        if table_name not in ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table_name}. Must be one of: {', '.join(ALLOWED_TABLES)}")
+
         count_query = text(f"SELECT COUNT(*) FROM {table_name} WHERE metadata_id = :metadata_id")
         count_result = conn.execute(count_query, {"metadata_id": metadata_id})
         row_count = count_result.fetchone()[0]
