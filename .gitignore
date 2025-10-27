@@ -39,4 +39,11 @@ CLAUDE.local.md
 # Resources
 .resources/
 
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+venv/
+*.coverage
+
 check_hacs_compliance.sh
