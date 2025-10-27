@@ -676,17 +676,17 @@ export class StorageHealthSummary extends LitElement {
                 class="filter-btn ${this.activeRegistry === 'Enabled' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('registry', 'Enabled')}
                 @click=${() => this.handleFilterClick('registry', 'Enabled')}
-              >Enabled</button>
+              >Enabled (${this.getFilterCount('registry', 'Enabled')})</button>
               <button
                 class="filter-btn ${this.activeRegistry === 'Disabled' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('registry', 'Disabled')}
                 @click=${() => this.handleFilterClick('registry', 'Disabled')}
-              >Disabled</button>
+              >Disabled (${this.getFilterCount('registry', 'Disabled')})</button>
               <button
                 class="filter-btn ${this.activeRegistry === 'Not in Registry' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('registry', 'Not in Registry')}
                 @click=${() => this.handleFilterClick('registry', 'Not in Registry')}
-              >Not present</button>
+              >Not present (${this.getFilterCount('registry', 'Not in Registry')})</button>
             </div>
           </div>
 
@@ -697,17 +697,17 @@ export class StorageHealthSummary extends LitElement {
                 class="filter-btn ${this.activeState === 'Available' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('state', 'Available')}
                 @click=${() => this.handleFilterClick('state', 'Available')}
-              >Available</button>
+              >Available (${this.getFilterCount('state', 'Available')})</button>
               <button
                 class="filter-btn ${this.activeState === 'Unavailable' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('state', 'Unavailable')}
                 @click=${() => this.handleFilterClick('state', 'Unavailable')}
-              >Unavailable</button>
+              >Unavailable (${this.getFilterCount('state', 'Unavailable')})</button>
               <button
                 class="filter-btn ${this.activeState === 'Not Present' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('state', 'Not Present')}
                 @click=${() => this.handleFilterClick('state', 'Not Present')}
-              >Not present</button>
+              >Not present (${this.getFilterCount('state', 'Not Present')})</button>
             </div>
           </div>
 
@@ -718,12 +718,12 @@ export class StorageHealthSummary extends LitElement {
                 class="filter-btn ${this.activeStates === 'in_states' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('states', 'in_states')}
                 @click=${() => this.handleFilterClick('states', 'in_states')}
-              >In states</button>
+              >In states (${this.getFilterCount('states', 'in_states')})</button>
               <button
                 class="filter-btn ${this.activeStates === 'not_in_states' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('states', 'not_in_states')}
                 @click=${() => this.handleFilterClick('states', 'not_in_states')}
-              >Not in states</button>
+              >Not in states (${this.getFilterCount('states', 'not_in_states')})</button>
             </div>
           </div>
 
@@ -734,12 +734,12 @@ export class StorageHealthSummary extends LitElement {
                 class="filter-btn ${this.activeStatistics === 'in_statistics' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('statistics', 'in_statistics')}
                 @click=${() => this.handleFilterClick('statistics', 'in_statistics')}
-              >In statistics</button>
+              >In statistics (${this.getFilterCount('statistics', 'in_statistics')})</button>
               <button
                 class="filter-btn ${this.activeStatistics === 'not_in_statistics' ? 'active' : ''}"
                 ?disabled=${this.isFilterDisabled('statistics', 'not_in_statistics')}
                 @click=${() => this.handleFilterClick('statistics', 'not_in_statistics')}
-              >Not in statistics</button>
+              >Not in statistics (${this.getFilterCount('statistics', 'not_in_statistics')})</button>
             </div>
           </div>
         </div>

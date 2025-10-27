@@ -94,6 +94,16 @@ export type BulkSqlGenerationResult =
     };
 
 // ============================================================================
+// Message Histogram Types
+// ============================================================================
+
+export interface MessageHistogramResponse {
+  hourly_counts: number[];
+  total_messages: number;
+  time_range_hours: number;
+}
+
+// ============================================================================
 // Storage Overview Types
 // ============================================================================
 

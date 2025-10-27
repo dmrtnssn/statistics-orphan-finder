@@ -158,7 +158,11 @@ class EntityAnalyzer:
 
     @staticmethod
     def calculate_update_frequency(engine: Engine, entity_id: str) -> dict[str, Any] | None:
-        """Calculate update frequency from states table.
+        """Calculate update frequency from states table using 24-hour average.
+
+        Uses the count of messages in the last 24 hours to calculate the true average
+        interval, including idle periods. This provides a more accurate representation
+        for entities that burst activity then go idle (e.g., motion sensors).
 
         Args:
             engine: Database engine
@@ -168,22 +172,7 @@ class EntityAnalyzer:
             Dictionary with interval_seconds, update_count_24h, and interval_text, or None if insufficient data
         """
         with engine.connect() as conn:
-            # Get last 50 state updates for interval calculation
-            query = text("""
-                SELECT last_updated_ts
-                FROM states s
-                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
-                WHERE sm.entity_id = :entity_id
-                ORDER BY last_updated_ts DESC
-                LIMIT 50
-            """)
-            result = conn.execute(query, {"entity_id": entity_id})
-            timestamps = [row[0] for row in result]
-
-            if len(timestamps) < 2:
-                return None
-
-            # Get precise count of updates in last 24 hours
+            # Get count of updates in last 24 hours
             cutoff_ts = datetime.now(timezone.utc).timestamp() - 86400
             count_query = text("""
                 SELECT COUNT(*)
@@ -195,18 +184,14 @@ class EntityAnalyzer:
             count_result = conn.execute(count_query, {"entity_id": entity_id, "cutoff": cutoff_ts})
             count_24h = count_result.scalar()
 
-            # Calculate intervals between consecutive updates
-            intervals = []
-            for i in range(len(timestamps) - 1):
-                interval = timestamps[i] - timestamps[i+1]
-                intervals.append(interval)
-
-            if not intervals:
+            # Need at least 2 messages to calculate meaningful interval
+            if count_24h < 2:
                 return None
 
-            avg_interval = sum(intervals) / len(intervals)
+            # Calculate average interval: 24 hours / message count
+            # This gives true average including idle periods
+            interval_seconds = 86400 // count_24h
 
-            interval_seconds = int(avg_interval)
             return {
                 'interval_seconds': interval_seconds,
                 'update_count_24h': count_24h,
@@ -244,3 +229,81 @@ class EntityAnalyzer:
                 return f"{hours:.1f}h"
             else:
                 return f"{hours:.2f}h"
+
+    @staticmethod
+    def get_hourly_message_counts(engine: Engine, entity_id: str, hours: int) -> dict[str, Any]:
+        """Get message counts per hour for the specified time range.
+
+        Groups state updates by hour to show activity patterns (e.g., burst vs idle periods).
+        Useful for visualizing when entities are most active.
+
+        Args:
+            engine: Database engine
+            entity_id: Entity ID to analyze
+            hours: Time range in hours (24, 48, or 168 for 7 days)
+
+        Returns:
+            Dictionary with:
+            - hourly_counts: List of message counts per hour (length = hours)
+            - total_messages: Total number of messages in the time range
+            - time_range_hours: The requested time range
+        """
+        with engine.connect() as conn:
+            # Use UTC for consistent timestamp calculations
+            now = datetime.now(timezone.utc)
+
+            # Round down to the start of the current hour for aligned buckets
+            # This ensures buckets align to clock hours (e.g., 14:00-15:00, 15:00-16:00)
+            current_hour_start = now.replace(minute=0, second=0, microsecond=0)
+            end_cutoff = current_hour_start.timestamp()
+
+            # Go back the specified number of hours from the current hour start
+            cutoff_ts = end_cutoff - (hours * 3600)
+
+            # Get message counts grouped by hour
+            # hour_bucket 0 = oldest hour, hour_bucket N-1 = most recent hour
+            # Using FLOOR instead of CAST for more consistent behavior across databases
+            query = text("""
+                SELECT
+                    FLOOR((last_updated_ts - :cutoff) / 3600.0) as hour_bucket,
+                    COUNT(*) as count
+                FROM states s
+                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
+                WHERE sm.entity_id = :entity_id
+                AND s.last_updated_ts >= :cutoff
+                AND s.last_updated_ts < :end_cutoff
+                GROUP BY hour_bucket
+                ORDER BY hour_bucket
+            """)
+
+            result = conn.execute(query, {
+                "entity_id": entity_id,
+                "cutoff": cutoff_ts,
+                "end_cutoff": end_cutoff
+            })
+
+            # Create array with all hours (0 to hours-1), fill missing hours with 0
+            hourly_counts = [0] * hours
+            total = 0
+
+            for row in result:
+                # Ensure hour_bucket is an integer
+                hour_bucket = int(row[0]) if row[0] is not None else -1
+                count = row[1]
+
+                # Validate bounds to prevent array index errors
+                if 0 <= hour_bucket < hours:
+                    hourly_counts[hour_bucket] = count
+                    total += count
+                else:
+                    # Log unexpected hour buckets (shouldn't happen with proper query)
+                    _LOGGER.warning(
+                        "Unexpected hour_bucket %s for entity %s (hours=%s). Skipping.",
+                        hour_bucket, entity_id, hours
+                    )
+
+            return {
+                "hourly_counts": hourly_counts,
+                "total_messages": total,
+                "time_range_hours": hours
+            }

@@ -7,6 +7,7 @@ import type {
   DatabaseSize,
   EntityStorageOverviewResponse,
   GenerateSqlResponse,
+  MessageHistogramResponse,
   OrphanOrigin,
   HomeAssistant,
   StepResponse
@@ -84,6 +85,27 @@ export class ApiService {
       return await this.hass.callApi<GenerateSqlResponse>('GET', url);
     } catch (err) {
       throw new Error(`Failed to generate delete SQL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Fetch hourly message histogram for an entity
+   */
+  async fetchMessageHistogram(entityId: string, hours: number): Promise<MessageHistogramResponse> {
+    this.validateConnection();
+
+    if (![24, 48, 168].includes(hours)) {
+      throw new Error(`Invalid hours parameter: ${hours}. Must be 24, 48, or 168.`);
+    }
+
+    try {
+      const url = `${API_BASE}?action=entity_message_histogram` +
+        `&entity_id=${encodeURIComponent(entityId)}` +
+        `&hours=${hours}`;
+
+      return await this.hass.callApi<MessageHistogramResponse>('GET', url);
+    } catch (err) {
+      throw new Error(`Failed to fetch message histogram: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   }
 

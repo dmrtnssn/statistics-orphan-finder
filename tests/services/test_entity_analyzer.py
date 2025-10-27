@@ -373,6 +373,45 @@ class TestEntityAnalyzerUpdateFrequency:
 
         assert result is None
 
+    def test_calculate_update_frequency_24h_average(
+        self, populated_sqlite_engine: Engine
+    ):
+        """Test that frequency calculation uses 24-hour average, not last N messages."""
+        from datetime import datetime, timezone
+
+        # Create entity with burst activity pattern:
+        # 10 messages in last hour (frequent), then idle for 23 hours
+        now = datetime.now(timezone.utc).timestamp()
+
+        with populated_sqlite_engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO states_meta (entity_id) VALUES ('sensor.burst_activity')
+            """))
+
+            # Insert 10 states in the last hour (every 6 minutes)
+            for i in range(10):
+                timestamp = now - (i * 360)  # 360 seconds = 6 minutes apart
+                conn.execute(text("""
+                    INSERT INTO states (metadata_id, state, last_updated_ts)
+                    SELECT metadata_id, '1', :ts
+                    FROM states_meta WHERE entity_id = 'sensor.burst_activity'
+                """), {"ts": timestamp})
+
+            conn.commit()
+
+        result = EntityAnalyzer.calculate_update_frequency(
+            populated_sqlite_engine, "sensor.burst_activity"
+        )
+
+        assert result is not None
+        # With 10 messages in 24h: 86400 / 10 = 8640 seconds = 2.4 hours
+        # Should be around 8640 seconds (allowing for small timing variations)
+        assert result["interval_seconds"] >= 8600
+        assert result["interval_seconds"] <= 8700
+        assert result["update_count_24h"] == 10
+        # Should format as hours, not seconds (shows true average, not burst interval)
+        assert "h" in result["interval_text"]
+
     def test_format_interval_seconds(self):
         """Test formatting intervals in seconds."""
         assert EntityAnalyzer.format_interval(30) == "30s"

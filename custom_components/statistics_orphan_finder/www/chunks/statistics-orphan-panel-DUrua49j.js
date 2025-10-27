@@ -483,6 +483,21 @@ class ApiService {
     }
   }
   /**
+   * Fetch hourly message histogram for an entity
+   */
+  async fetchMessageHistogram(entityId, hours) {
+    this.validateConnection();
+    if (![24, 48, 168].includes(hours)) {
+      throw new Error(`Invalid hours parameter: ${hours}. Must be 24, 48, or 168.`);
+    }
+    try {
+      const url = `${API_BASE}?action=entity_message_histogram&entity_id=${encodeURIComponent(entityId)}&hours=${hours}`;
+      return await this.hass.callApi("GET", url);
+    } catch (err) {
+      throw new Error(`Failed to fetch message histogram: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+  /**
    * Show Home Assistant's more-info dialog for an entity
    */
   showMoreInfo(entityId) {
@@ -660,6 +675,20 @@ function formatBytes(bytes) {
 function formatNumber(num) {
   return num.toLocaleString();
 }
+function formatInterval(seconds) {
+  if (seconds === null || seconds === 0) {
+    return "";
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  } else if (seconds < 3600) {
+    const minutes = seconds / 60;
+    return minutes >= 10 ? `${minutes.toFixed(1)}min` : `${minutes.toFixed(2)}min`;
+  } else {
+    const hours = seconds / 3600;
+    return hours >= 10 ? `${hours.toFixed(1)}h` : `${hours.toFixed(2)}h`;
+  }
+}
 function formatDuration(seconds) {
   if (seconds < 60) {
     return `${seconds}s`;
@@ -674,13 +703,13 @@ function formatDuration(seconds) {
     return `${days} day${days > 1 ? "s" : ""}`;
   }
 }
-var __defProp$5 = Object.defineProperty;
-var __decorateClass$5 = (decorators, target, key, kind) => {
+var __defProp$6 = Object.defineProperty;
+var __decorateClass$6 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$5(target, key, result);
+  if (result) __defProp$6(target, key, result);
   return result;
 };
 const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
@@ -1030,17 +1059,17 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
                 class="filter-btn ${this.activeRegistry === "Enabled" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("registry", "Enabled")}
                 @click=${() => this.handleFilterClick("registry", "Enabled")}
-              >Enabled</button>
+              >Enabled (${this.getFilterCount("registry", "Enabled")})</button>
               <button
                 class="filter-btn ${this.activeRegistry === "Disabled" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("registry", "Disabled")}
                 @click=${() => this.handleFilterClick("registry", "Disabled")}
-              >Disabled</button>
+              >Disabled (${this.getFilterCount("registry", "Disabled")})</button>
               <button
                 class="filter-btn ${this.activeRegistry === "Not in Registry" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("registry", "Not in Registry")}
                 @click=${() => this.handleFilterClick("registry", "Not in Registry")}
-              >Not present</button>
+              >Not present (${this.getFilterCount("registry", "Not in Registry")})</button>
             </div>
           </div>
 
@@ -1051,17 +1080,17 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
                 class="filter-btn ${this.activeState === "Available" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("state", "Available")}
                 @click=${() => this.handleFilterClick("state", "Available")}
-              >Available</button>
+              >Available (${this.getFilterCount("state", "Available")})</button>
               <button
                 class="filter-btn ${this.activeState === "Unavailable" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("state", "Unavailable")}
                 @click=${() => this.handleFilterClick("state", "Unavailable")}
-              >Unavailable</button>
+              >Unavailable (${this.getFilterCount("state", "Unavailable")})</button>
               <button
                 class="filter-btn ${this.activeState === "Not Present" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("state", "Not Present")}
                 @click=${() => this.handleFilterClick("state", "Not Present")}
-              >Not present</button>
+              >Not present (${this.getFilterCount("state", "Not Present")})</button>
             </div>
           </div>
 
@@ -1072,12 +1101,12 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
                 class="filter-btn ${this.activeStates === "in_states" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("states", "in_states")}
                 @click=${() => this.handleFilterClick("states", "in_states")}
-              >In states</button>
+              >In states (${this.getFilterCount("states", "in_states")})</button>
               <button
                 class="filter-btn ${this.activeStates === "not_in_states" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("states", "not_in_states")}
                 @click=${() => this.handleFilterClick("states", "not_in_states")}
-              >Not in states</button>
+              >Not in states (${this.getFilterCount("states", "not_in_states")})</button>
             </div>
           </div>
 
@@ -1088,12 +1117,12 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
                 class="filter-btn ${this.activeStatistics === "in_statistics" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("statistics", "in_statistics")}
                 @click=${() => this.handleFilterClick("statistics", "in_statistics")}
-              >In statistics</button>
+              >In statistics (${this.getFilterCount("statistics", "in_statistics")})</button>
               <button
                 class="filter-btn ${this.activeStatistics === "not_in_statistics" ? "active" : ""}"
                 ?disabled=${this.isFilterDisabled("statistics", "not_in_statistics")}
                 @click=${() => this.handleFilterClick("statistics", "not_in_statistics")}
-              >Not in statistics</button>
+              >Not in statistics (${this.getFilterCount("statistics", "not_in_statistics")})</button>
             </div>
           </div>
         </div>
@@ -1363,28 +1392,28 @@ _StorageHealthSummary.styles = [
     `
 ];
 let StorageHealthSummary = _StorageHealthSummary;
-__decorateClass$5([
+__decorateClass$6([
   n({ type: Object })
 ], StorageHealthSummary.prototype, "summary");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: Array })
 ], StorageHealthSummary.prototype, "entities");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: Object })
 ], StorageHealthSummary.prototype, "databaseSize");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeFilter");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeRegistry");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeState");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeStates");
-__decorateClass$5([
+__decorateClass$6([
   n({ type: String })
 ], StorageHealthSummary.prototype, "activeStatistics");
 if (!customElements.get("storage-health-summary")) {
@@ -1403,13 +1432,13 @@ function debounce(func, wait) {
     }, wait);
   };
 }
-var __defProp$4 = Object.defineProperty;
-var __decorateClass$4 = (decorators, target, key, kind) => {
+var __defProp$5 = Object.defineProperty;
+var __decorateClass$5 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$4(target, key, result);
+  if (result) __defProp$5(target, key, result);
   return result;
 };
 const _FilterBar = class _FilterBar extends i$1 {
@@ -1503,31 +1532,31 @@ _FilterBar.styles = [
     `
 ];
 let FilterBar = _FilterBar;
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Array })
 ], FilterBar.prototype, "filters");
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Boolean })
 ], FilterBar.prototype, "showSearch");
-__decorateClass$4([
+__decorateClass$5([
   n({ type: String })
 ], FilterBar.prototype, "searchPlaceholder");
-__decorateClass$4([
+__decorateClass$5([
   n({ type: String })
 ], FilterBar.prototype, "searchValue");
-__decorateClass$4([
+__decorateClass$5([
   n({ type: Boolean })
 ], FilterBar.prototype, "showClearButton");
 if (!customElements.get("filter-bar")) {
   customElements.define("filter-bar", FilterBar);
 }
-var __defProp$3 = Object.defineProperty;
-var __decorateClass$3 = (decorators, target, key, kind) => {
+var __defProp$4 = Object.defineProperty;
+var __decorateClass$4 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$3(target, key, result);
+  if (result) __defProp$4(target, key, result);
   return result;
 };
 const _EntityTable = class _EntityTable extends i$1 {
@@ -1798,46 +1827,46 @@ _EntityTable.styles = [
     `
 ];
 let EntityTable = _EntityTable;
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Array })
 ], EntityTable.prototype, "entities");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Array })
 ], EntityTable.prototype, "columns");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Boolean })
 ], EntityTable.prototype, "sortable");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Boolean })
 ], EntityTable.prototype, "stickyFirstColumn");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Array })
 ], EntityTable.prototype, "sortStack");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: String })
 ], EntityTable.prototype, "emptyMessage");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Boolean })
 ], EntityTable.prototype, "showCheckboxes");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Object })
 ], EntityTable.prototype, "selectedIds");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Object })
 ], EntityTable.prototype, "selectableEntityIds");
-__decorateClass$3([
+__decorateClass$4([
   n({ type: Object })
 ], EntityTable.prototype, "disabledEntityIds");
 if (!customElements.get("entity-table")) {
   customElements.define("entity-table", EntityTable);
 }
-var __defProp$2 = Object.defineProperty;
-var __decorateClass$2 = (decorators, target, key, kind) => {
+var __defProp$3 = Object.defineProperty;
+var __decorateClass$3 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$2(target, key, result);
+  if (result) __defProp$3(target, key, result);
   return result;
 };
 const _SelectionPanel = class _SelectionPanel extends i$1 {
@@ -2136,29 +2165,297 @@ _SelectionPanel.styles = [
     `
 ];
 let SelectionPanel = _SelectionPanel;
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "selectedCount");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "selectableCount");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "deletedCount");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "disabledCount");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Boolean })
 ], SelectionPanel.prototype, "isGenerating");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "generatingProgress");
-__decorateClass$2([
+__decorateClass$3([
   n({ type: Number })
 ], SelectionPanel.prototype, "generatingTotal");
 if (!customElements.get("selection-panel")) {
   customElements.define("selection-panel", SelectionPanel);
+}
+var __defProp$2 = Object.defineProperty;
+var __decorateClass$2 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$2(target, key, result);
+  return result;
+};
+const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
+  constructor() {
+    super(...arguments);
+    this.timeRange = 24;
+    this.loading = false;
+    this.hourlyCounts = [];
+    this.totalMessages = 0;
+    this.error = null;
+    this.currentLoadRequest = 0;
+  }
+  async connectedCallback() {
+    super.connectedCallback();
+    await this.loadData();
+  }
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    if (changedProperties.has("entityId")) {
+      this.loadData();
+    }
+  }
+  async loadData() {
+    this.loading = true;
+    this.error = null;
+    this.currentLoadRequest++;
+    const thisRequestId = this.currentLoadRequest;
+    const apiService = new ApiService(this.hass);
+    try {
+      const data = await apiService.fetchMessageHistogram(this.entityId, this.timeRange);
+      if (thisRequestId === this.currentLoadRequest) {
+        this.hourlyCounts = data.hourly_counts;
+        this.totalMessages = data.total_messages;
+      }
+    } catch (err) {
+      if (thisRequestId === this.currentLoadRequest) {
+        console.error("Failed to load histogram:", err);
+        this.error = err instanceof Error ? err.message : "Failed to load data";
+      }
+    } finally {
+      if (thisRequestId === this.currentLoadRequest) {
+        this.loading = false;
+      }
+    }
+  }
+  async handleTimeRangeChange(range) {
+    if (this.timeRange === range) return;
+    this.timeRange = range;
+    await this.loadData();
+  }
+  render() {
+    return x`
+      <div class="header">
+        <div class="entity-name" title="${this.entityId}">${this.entityId}</div>
+        <div class="time-selector">
+          <button
+            class="time-btn ${this.timeRange === 24 ? "active" : ""}"
+            @click=${() => this.handleTimeRangeChange(24)}
+            ?disabled=${this.loading}
+          >24h</button>
+          <button
+            class="time-btn ${this.timeRange === 48 ? "active" : ""}"
+            @click=${() => this.handleTimeRangeChange(48)}
+            ?disabled=${this.loading}
+          >48h</button>
+          <button
+            class="time-btn ${this.timeRange === 168 ? "active" : ""}"
+            @click=${() => this.handleTimeRangeChange(168)}
+            ?disabled=${this.loading}
+          >7d</button>
+        </div>
+      </div>
+
+      ${this.renderContent()}
+    `;
+  }
+  renderContent() {
+    if (this.loading) {
+      return x`<div class="loading">Loading...</div>`;
+    }
+    if (this.error) {
+      return x`<div class="error">${this.error}</div>`;
+    }
+    if (this.hourlyCounts.length === 0) {
+      return x`<div class="stats">No data available</div>`;
+    }
+    const maxCount = Math.max(...this.hourlyCounts, 1);
+    const avgPerHour = this.totalMessages / this.timeRange;
+    const now = /* @__PURE__ */ new Date();
+    const currentHourStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0);
+    return x`
+      <div class="chart">
+        ${this.hourlyCounts.map((count, index) => {
+      const height = count / maxCount * 100;
+      const isEmpty = count === 0;
+      const hoursFromStart = index;
+      const startTime = new Date(currentHourStart.getTime() - (this.hourlyCounts.length - hoursFromStart) * 3600 * 1e3);
+      const endTime = new Date(startTime.getTime() + 3600 * 1e3);
+      const timeRangeStr = `${this.formatTime(startTime)}-${this.formatTime(endTime)}`;
+      const intervalSeconds = count > 0 ? Math.round(3600 / count) : 0;
+      const intervalStr = formatInterval(intervalSeconds);
+      const tooltipText = count > 0 ? `${count} messages (I: ${intervalStr}) ${timeRangeStr}` : `0 messages ${timeRangeStr}`;
+      return x`
+            <div
+              class="bar ${isEmpty ? "empty" : ""}"
+              style="height: ${height}%"
+              title="${tooltipText}"
+            ></div>
+          `;
+    })}
+      </div>
+
+      <div class="stats">
+        ${this.totalMessages.toLocaleString()} messages in last ${this.timeRange}h
+        (avg: ${avgPerHour.toFixed(1)}/hour)
+      </div>
+    `;
+  }
+  /**
+   * Format time as HH:MM
+   */
+  formatTime(date) {
+    const hours = date.getHours().toString().padStart(2, "0");
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+};
+_MessageHistogramTooltip.styles = [
+  sharedStyles,
+  i`
+      :host {
+        display: block;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 450px;
+        max-width: 750px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        gap: 8px;
+      }
+
+      .entity-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      .time-selector {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .time-btn {
+        padding: 2px 8px;
+        font-size: 11px;
+        border: 1px solid var(--divider-color);
+        background: var(--secondary-background-color);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: var(--primary-text-color);
+      }
+
+      .time-btn:hover {
+        background: var(--divider-color);
+      }
+
+      .time-btn.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+      }
+
+      .chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 120px;
+        margin: 12px 0;
+        padding: 0 4px;
+      }
+
+      .bar {
+        flex: 1;
+        background: var(--primary-color);
+        min-height: 2px;
+        transition: background 0.2s, opacity 0.2s;
+        border-radius: 2px 2px 0 0;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .bar:hover {
+        background: var(--accent-color);
+        opacity: 0.8;
+      }
+
+      .bar.empty {
+        background: var(--divider-color);
+        opacity: 0.3;
+      }
+
+      .stats {
+        font-size: 11px;
+        color: var(--secondary-text-color);
+        text-align: center;
+        padding: 4px 0;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: var(--secondary-text-color);
+      }
+
+      .error {
+        text-align: center;
+        padding: 20px;
+        color: var(--error-color);
+        font-size: 12px;
+      }
+    `
+];
+let MessageHistogramTooltip = _MessageHistogramTooltip;
+__decorateClass$2([
+  n({ type: Object })
+], MessageHistogramTooltip.prototype, "hass");
+__decorateClass$2([
+  n({ type: String })
+], MessageHistogramTooltip.prototype, "entityId");
+__decorateClass$2([
+  r()
+], MessageHistogramTooltip.prototype, "timeRange");
+__decorateClass$2([
+  r()
+], MessageHistogramTooltip.prototype, "loading");
+__decorateClass$2([
+  r()
+], MessageHistogramTooltip.prototype, "hourlyCounts");
+__decorateClass$2([
+  r()
+], MessageHistogramTooltip.prototype, "totalMessages");
+__decorateClass$2([
+  r()
+], MessageHistogramTooltip.prototype, "error");
+if (!customElements.get("message-histogram-tooltip")) {
+  customElements.define("message-histogram-tooltip", MessageHistogramTooltip);
 }
 var __defProp$1 = Object.defineProperty;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -2199,13 +2496,16 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     this._lastFilterKey = "";
     this._entityDetailsModalLoaded = false;
     this._deleteSqlModalLoaded = false;
+    this.histogramEntityId = null;
+    this.histogramPosition = { x: 0, y: 0 };
+    this.histogramHideTimeout = null;
   }
   /**
    * Lazy load the entity details modal component
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-CAcuuVmT.js");
+      await import("./entity-details-modal-Bf5hVWQE.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2214,7 +2514,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BG2BDwPZ.js");
+      await import("./delete-sql-modal-k7xk6m56.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2493,7 +2793,15 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
         label: "Message\nInterval",
         sortable: true,
         align: "right",
-        render: (entity) => entity.update_interval || ""
+        render: (entity) => x`
+          <div
+            class="message-interval-cell"
+            @mouseenter=${(e2) => this.handleShowHistogram(entity.entity_id, e2)}
+            @mouseleave=${() => this.handleHideHistogram()}
+          >
+            ${entity.update_interval || ""}
+          </div>
+        `
       },
       {
         id: "last_state_update",
@@ -2964,6 +3272,54 @@ ${e2.sql}`;
       console.error("Error showing confirmation modal:", err);
     }
   }
+  /**
+   * Show message histogram tooltip for an entity
+   */
+  handleShowHistogram(entityId, event) {
+    if (this.histogramHideTimeout !== null) {
+      window.clearTimeout(this.histogramHideTimeout);
+      this.histogramHideTimeout = null;
+    }
+    const tooltipWidth = 525;
+    const tooltipHeight = 270;
+    const offset = 10;
+    let x2 = event.clientX + offset;
+    let y = event.clientY + offset;
+    if (x2 + tooltipWidth > window.innerWidth) {
+      x2 = event.clientX - tooltipWidth - offset;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = event.clientY - tooltipHeight - offset;
+    }
+    x2 = Math.max(offset, x2);
+    y = Math.max(offset, y);
+    this.histogramPosition = { x: x2, y };
+    this.histogramEntityId = entityId;
+  }
+  /**
+   * Hide message histogram tooltip with a small delay
+   */
+  handleHideHistogram() {
+    this.histogramHideTimeout = window.setTimeout(() => {
+      this.histogramEntityId = null;
+      this.histogramHideTimeout = null;
+    }, 300);
+  }
+  /**
+   * Keep histogram visible when mouse enters it
+   */
+  handleHistogramMouseEnter() {
+    if (this.histogramHideTimeout !== null) {
+      window.clearTimeout(this.histogramHideTimeout);
+      this.histogramHideTimeout = null;
+    }
+  }
+  /**
+   * Hide histogram when mouse leaves it
+   */
+  handleHistogramMouseLeave() {
+    this.histogramEntityId = null;
+  }
   render() {
     const hasActiveFilters = this.searchQuery || this.basicFilter || this.registryFilter || this.stateFilter || this.advancedFilter;
     return x`
@@ -3052,6 +3408,20 @@ ${e2.sql}`;
           @generate-bulk-sql=${this.handleGenerateBulkSql}
         ></selection-panel>
       ` : ""}
+
+      ${this.histogramEntityId ? x`
+        <div
+          class="histogram-tooltip"
+          style="left: ${this.histogramPosition.x}px; top: ${this.histogramPosition.y}px;"
+          @mouseenter=${this.handleHistogramMouseEnter}
+          @mouseleave=${this.handleHistogramMouseLeave}
+        >
+          <message-histogram-tooltip
+            .hass=${this.hass}
+            .entityId=${this.histogramEntityId}
+          ></message-histogram-tooltip>
+        </div>
+      ` : ""}
     `;
   }
 };
@@ -3086,6 +3456,17 @@ _StorageOverviewView.styles = [
 
       .table-container.has-selections {
         padding-bottom: 100px;
+      }
+
+      .message-interval-cell {
+        cursor: help;
+        position: relative;
+      }
+
+      .histogram-tooltip {
+        position: fixed;
+        z-index: 9999;
+        pointer-events: auto;
       }
     `
 ];
@@ -3162,6 +3543,12 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "bulkSqlTotal");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "histogramEntityId");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "histogramPosition");
 if (!customElements.get("storage-overview-view")) {
   customElements.define("storage-overview-view", StorageOverviewView);
 }
@@ -3712,4 +4099,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-6OgYmraA.js.map
+//# sourceMappingURL=statistics-orphan-panel-DUrua49j.js.map

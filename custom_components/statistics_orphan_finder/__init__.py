@@ -148,6 +148,31 @@ class StatisticsOrphanView(HomeAssistantView):
                 _LOGGER.error("Error executing step %s: %s", step_param, err, exc_info=True)
                 return web.json_response({"error": f"Error executing step: {err}"}, status=500)
 
+        elif action == "entity_message_histogram":
+            entity_id = request.query.get("entity_id")
+            hours = request.query.get("hours", "24")
+
+            # Validate entity_id
+            if not entity_id or "." not in entity_id:
+                return web.json_response({"error": "Invalid or missing entity_id"}, status=400)
+
+            # Validate hours parameter
+            try:
+                hours_int = int(hours)
+                if hours_int not in [24, 48, 168]:  # 24h, 48h, or 7d (168h)
+                    return web.json_response(
+                        {"error": "hours must be 24, 48, or 168"},
+                        status=400
+                    )
+
+                histogram = await self.coordinator.async_get_message_histogram(entity_id, hours_int)
+                return web.json_response(histogram)
+            except ValueError as err:
+                return web.json_response({"error": f"Invalid hours parameter: {err}"}, status=400)
+            except Exception as err:
+                _LOGGER.error("Error fetching message histogram for %s: %s", entity_id, err, exc_info=True)
+                return web.json_response({"error": f"Error fetching histogram: {err}"}, status=500)
+
         elif action == "generate_delete_sql":
             origin = request.query.get("origin")
             entity_id = request.query.get("entity_id")

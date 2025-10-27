@@ -22,6 +22,7 @@ import '../components/storage-health-summary';
 import '../components/filter-bar';
 import '../components/entity-table';
 import '../components/selection-panel';
+import '../components/message-histogram-tooltip';
 // Modals are lazy-loaded to reduce initial bundle size
 
 export class StorageOverviewView extends LitElement {
@@ -62,6 +63,11 @@ export class StorageOverviewView extends LitElement {
   // Lazy loading flags for modal components
   private _entityDetailsModalLoaded = false;
   private _deleteSqlModalLoaded = false;
+
+  // Message histogram state
+  @state() private histogramEntityId: string | null = null;
+  @state() private histogramPosition = { x: 0, y: 0 };
+  private histogramHideTimeout: number | null = null;
 
   /**
    * Lazy load the entity details modal component
@@ -129,6 +135,17 @@ export class StorageOverviewView extends LitElement {
 
       .table-container.has-selections {
         padding-bottom: 100px;
+      }
+
+      .message-interval-cell {
+        cursor: help;
+        position: relative;
+      }
+
+      .histogram-tooltip {
+        position: fixed;
+        z-index: 9999;
+        pointer-events: auto;
       }
     `
   ];
@@ -459,7 +476,15 @@ export class StorageOverviewView extends LitElement {
         label: 'Message\nInterval',
         sortable: true,
         align: 'right',
-        render: (entity: StorageEntity) => entity.update_interval || ''
+        render: (entity: StorageEntity) => html`
+          <div
+            class="message-interval-cell"
+            @mouseenter=${(e: MouseEvent) => this.handleShowHistogram(entity.entity_id, e)}
+            @mouseleave=${() => this.handleHideHistogram()}
+          >
+            ${entity.update_interval || ''}
+          </div>
+        `
       },
       {
         id: 'last_state_update',
@@ -1030,6 +1055,71 @@ export class StorageOverviewView extends LitElement {
     }
   }
 
+  /**
+   * Show message histogram tooltip for an entity
+   */
+  private handleShowHistogram(entityId: string, event: MouseEvent) {
+    // Clear any pending hide timeout
+    if (this.histogramHideTimeout !== null) {
+      window.clearTimeout(this.histogramHideTimeout);
+      this.histogramHideTimeout = null;
+    }
+
+    // Position tooltip near mouse cursor with boundary checking
+    // Tooltip is 50% bigger: roughly 450px wide and 225px tall
+    const tooltipWidth = 525;
+    const tooltipHeight = 270;
+    const offset = 10;
+
+    let x = event.clientX + offset;
+    let y = event.clientY + offset;
+
+    // Check right boundary
+    if (x + tooltipWidth > window.innerWidth) {
+      x = event.clientX - tooltipWidth - offset;
+    }
+
+    // Check bottom boundary
+    if (y + tooltipHeight > window.innerHeight) {
+      y = event.clientY - tooltipHeight - offset;
+    }
+
+    // Ensure it doesn't go off left edge
+    x = Math.max(offset, x);
+    // Ensure it doesn't go off top edge
+    y = Math.max(offset, y);
+
+    this.histogramPosition = { x, y };
+    this.histogramEntityId = entityId;
+  }
+
+  /**
+   * Hide message histogram tooltip with a small delay
+   */
+  private handleHideHistogram() {
+    // Add delay so user can move mouse to tooltip
+    this.histogramHideTimeout = window.setTimeout(() => {
+      this.histogramEntityId = null;
+      this.histogramHideTimeout = null;
+    }, 300);
+  }
+
+  /**
+   * Keep histogram visible when mouse enters it
+   */
+  private handleHistogramMouseEnter() {
+    if (this.histogramHideTimeout !== null) {
+      window.clearTimeout(this.histogramHideTimeout);
+      this.histogramHideTimeout = null;
+    }
+  }
+
+  /**
+   * Hide histogram when mouse leaves it
+   */
+  private handleHistogramMouseLeave() {
+    this.histogramEntityId = null;
+  }
 
   render() {
     const hasActiveFilters =
@@ -1124,6 +1214,20 @@ export class StorageOverviewView extends LitElement {
           @deselect-all=${this.handleDeselectAll}
           @generate-bulk-sql=${this.handleGenerateBulkSql}
         ></selection-panel>
+      ` : ''}
+
+      ${this.histogramEntityId ? html`
+        <div
+          class="histogram-tooltip"
+          style="left: ${this.histogramPosition.x}px; top: ${this.histogramPosition.y}px;"
+          @mouseenter=${this.handleHistogramMouseEnter}
+          @mouseleave=${this.handleHistogramMouseLeave}
+        >
+          <message-histogram-tooltip
+            .hass=${this.hass}
+            .entityId=${this.histogramEntityId}
+          ></message-histogram-tooltip>
+        </div>
       ` : ''}
     `;
   }

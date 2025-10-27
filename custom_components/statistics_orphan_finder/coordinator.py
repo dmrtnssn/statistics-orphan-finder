@@ -60,6 +60,22 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         return EntityAnalyzer.calculate_update_frequency(engine, entity_id)
 
+    async def async_get_message_histogram(self, entity_id: str, hours: int) -> dict[str, Any]:
+        """Get hourly message counts for an entity.
+
+        Args:
+            entity_id: Entity ID to analyze
+            hours: Time range in hours (24, 48, or 168)
+
+        Returns:
+            Dictionary with hourly_counts, total_messages, and time_range_hours
+        """
+        def _fetch():
+            engine = self._get_engine()
+            return EntityAnalyzer.get_hourly_message_counts(engine, entity_id, hours)
+
+        return await self.hass.async_add_executor_job(_fetch)
+
     async def async_get_database_size(self) -> dict[str, Any]:
         """Get database size information."""
         result = await self.db_service.async_get_database_size()
