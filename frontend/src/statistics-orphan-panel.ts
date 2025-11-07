@@ -314,10 +314,18 @@ export class StatisticsOrphanPanel extends LitElement {
         throw new Error('Home Assistant connection not available. Please reload the page.');
       }
 
-      // Execute steps 0-8 sequentially
+      // Execute steps 0-8 sequentially with session tracking
+      let sessionId: string | undefined;
+
       for (let step = 0; step <= 8; step++) {
         console.debug(`[Panel] Executing step ${step + 1}/9`);
-        const result = await this.apiService.fetchEntityStorageOverviewStep(step);
+        const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
+
+        // Step 0 returns session_id that we need for subsequent steps
+        if (step === 0 && 'session_id' in result) {
+          sessionId = result.session_id;
+          console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
+        }
 
         if (step === 8) {
           // Final step returns the complete overview
@@ -346,7 +354,16 @@ export class StatisticsOrphanPanel extends LitElement {
       this.saveToCache();
       console.log('[Panel] Data load complete and cached');
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      // Provide user-friendly error messages
+      let errorMessage = 'Unknown error occurred';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        // Handle session-related errors with helpful guidance
+        if (errorMessage.includes('session_id') || errorMessage.includes('Invalid or missing session_id')) {
+          errorMessage = 'Session expired. Please refresh the page to reload data.';
+        }
+      }
+      this.error = errorMessage;
       console.error('[Panel] Error loading storage overview data:', err);
     } finally {
       this.loading = false;
