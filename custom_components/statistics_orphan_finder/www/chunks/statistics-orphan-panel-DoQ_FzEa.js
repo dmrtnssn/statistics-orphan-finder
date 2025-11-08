@@ -452,18 +452,23 @@ class ApiService {
   }
   /**
    * Fetch entity storage overview step by step (progressive loading)
-   * Steps 0-7 return status updates, step 8 returns complete overview
+   * Step 0 initializes and returns session_id
+   * Steps 1-8 require session_id parameter
    */
-  async fetchEntityStorageOverviewStep(step) {
+  async fetchEntityStorageOverviewStep(step, sessionId) {
     this.validateConnection();
     if (step < 0 || step > 8) {
       throw new Error(`Invalid step: ${step}. Must be between 0-8.`);
     }
+    if (step > 0 && !sessionId) {
+      throw new Error(`session_id is required for step ${step}`);
+    }
     try {
-      return await this.hass.callApi(
-        "GET",
-        `${API_BASE}?action=entity_storage_overview_step&step=${step}`
-      );
+      let url = `${API_BASE}?action=entity_storage_overview_step&step=${step}`;
+      if (sessionId) {
+        url += `&session_id=${encodeURIComponent(sessionId)}`;
+      }
+      return await this.hass.callApi("GET", url);
     } catch (err) {
       throw new Error(
         `Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -2505,7 +2510,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-Bf5hVWQE.js");
+      await import("./entity-details-modal-CX4cCxQN.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2514,7 +2519,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-k7xk6m56.js");
+      await import("./delete-sql-modal-DQm-PM6o.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -3669,9 +3674,14 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
       if (!this.hass) {
         throw new Error("Home Assistant connection not available. Please reload the page.");
       }
+      let sessionId;
       for (let step = 0; step <= 8; step++) {
         console.debug(`[Panel] Executing step ${step + 1}/9`);
-        const result = await this.apiService.fetchEntityStorageOverviewStep(step);
+        const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
+        if (step === 0 && "session_id" in result) {
+          sessionId = result.session_id;
+          console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
+        }
         if (step === 8) {
           if ("entities" in result && "summary" in result) {
             this.storageEntities = result.entities;
@@ -3690,7 +3700,14 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
       this.saveToCache();
       console.log("[Panel] Data load complete and cached");
     } catch (err) {
-      this.error = err instanceof Error ? err.message : "Unknown error occurred";
+      let errorMessage = "Unknown error occurred";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        if (errorMessage.includes("session_id") || errorMessage.includes("Invalid or missing session_id")) {
+          errorMessage = "Session expired. Please refresh the page to reload data.";
+        }
+      }
+      this.error = errorMessage;
       console.error("[Panel] Error loading storage overview data:", err);
     } finally {
       this.loading = false;
@@ -4099,4 +4116,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DUrua49j.js.map
+//# sourceMappingURL=statistics-orphan-panel-DoQ_FzEa.js.map
