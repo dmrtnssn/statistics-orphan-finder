@@ -174,7 +174,7 @@ export interface EntityStorageOverviewResponse {
 
 // Step response for progressive loading
 export type StepResponse =
-  | { status: 'initialized'; total_steps: number }
+  | { status: 'initialized'; total_steps: number; session_id: string }
   | { status: 'complete'; entities_found: number }
   | { status: 'complete'; total_entities: number }
   | { status: 'complete'; deleted_storage_bytes: number }

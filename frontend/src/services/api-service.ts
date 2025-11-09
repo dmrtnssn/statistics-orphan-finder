@@ -44,20 +44,29 @@ export class ApiService {
 
   /**
    * Fetch entity storage overview step by step (progressive loading)
-   * Steps 0-7 return status updates, step 8 returns complete overview
+   * Step 0 initializes and returns session_id
+   * Steps 1-8 require session_id parameter
    */
-  async fetchEntityStorageOverviewStep(step: number): Promise<StepResponse> {
+  async fetchEntityStorageOverviewStep(step: number, sessionId?: string): Promise<StepResponse> {
     this.validateConnection();
 
     if (step < 0 || step > 8) {
       throw new Error(`Invalid step: ${step}. Must be between 0-8.`);
     }
 
+    // Steps 1-8 require session_id
+    if (step > 0 && !sessionId) {
+      throw new Error(`session_id is required for step ${step}`);
+    }
+
     try {
-      return await this.hass.callApi<StepResponse>(
-        'GET',
-        `${API_BASE}?action=entity_storage_overview_step&step=${step}`
-      );
+      // Build URL with optional session_id parameter
+      let url = `${API_BASE}?action=entity_storage_overview_step&step=${step}`;
+      if (sessionId) {
+        url += `&session_id=${encodeURIComponent(sessionId)}`;
+      }
+
+      return await this.hass.callApi<StepResponse>('GET', url);
     } catch (err) {
       throw new Error(
         `Failed to fetch overview step ${step}: ${err instanceof Error ? err.message : 'Unknown error'}`

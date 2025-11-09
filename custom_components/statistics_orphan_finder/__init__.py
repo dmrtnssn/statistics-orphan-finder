@@ -127,8 +127,10 @@ class StatisticsOrphanView(HomeAssistantView):
             return web.json_response(db_size)
 
         elif action == "entity_storage_overview_step":
-            # New action for step-by-step fetching
+            # New action for step-by-step fetching with session isolation
             step_param = request.query.get("step")
+            session_id = request.query.get("session_id")  # Optional for step 0, required for 1-8
+
             if not step_param:
                 return web.json_response({"error": "Missing step parameter"}, status=400)
 
@@ -140,13 +142,25 @@ class StatisticsOrphanView(HomeAssistantView):
                         {"error": f"Step must be between 0 and 8, got {step}"},
                         status=400
                     )
-                result = await self.coordinator.async_execute_overview_step(step)
+
+                # For steps 1-8, session_id is required
+                if step > 0 and not session_id:
+                    return web.json_response(
+                        {"error": "session_id parameter required for steps 1-8"},
+                        status=400
+                    )
+
+                result = await self.coordinator.async_execute_overview_step(step, session_id)
                 return web.json_response(result)
             except ValueError as err:
-                return web.json_response({"error": f"Invalid step parameter: {err}"}, status=400)
+                # Sanitize error message for client (log full error server-side)
+                _LOGGER.warning("Invalid parameter in step %s: %s", step_param, err)
+                return web.json_response({"error": "Invalid parameters provided"}, status=400)
             except Exception as err:
-                _LOGGER.error("Error executing step %s: %s", step_param, err, exc_info=True)
-                return web.json_response({"error": f"Error executing step: {err}"}, status=500)
+                # Sanitize error message to prevent information disclosure
+                _LOGGER.error("Error executing step %s (session %s): %s",
+                             step_param, session_id[:8] if session_id else "None", err, exc_info=True)
+                return web.json_response({"error": "An error occurred processing the request"}, status=500)
 
         elif action == "entity_message_histogram":
             entity_id = request.query.get("entity_id")
@@ -168,10 +182,13 @@ class StatisticsOrphanView(HomeAssistantView):
                 histogram = await self.coordinator.async_get_message_histogram(entity_id, hours_int)
                 return web.json_response(histogram)
             except ValueError as err:
-                return web.json_response({"error": f"Invalid hours parameter: {err}"}, status=400)
+                # Sanitize error message for client
+                _LOGGER.warning("Invalid hours parameter for histogram: %s", err)
+                return web.json_response({"error": "Invalid hours parameter"}, status=400)
             except Exception as err:
+                # Sanitize error message to prevent information disclosure
                 _LOGGER.error("Error fetching message histogram for %s: %s", entity_id, err, exc_info=True)
-                return web.json_response({"error": f"Error fetching histogram: {err}"}, status=500)
+                return web.json_response({"error": "An error occurred fetching histogram data"}, status=500)
 
         elif action == "generate_delete_sql":
             origin = request.query.get("origin")
@@ -214,9 +231,12 @@ class StatisticsOrphanView(HomeAssistantView):
                     "storage_saved": storage_saved
                 })
             except ValueError as err:
-                return web.json_response({"error": f"Invalid parameters: {err}"}, status=400)
+                # Sanitize error message for client
+                _LOGGER.warning("Invalid parameters for SQL generation: %s", err)
+                return web.json_response({"error": "Invalid parameters provided"}, status=400)
             except Exception as err:
+                # Sanitize error message to prevent information disclosure
                 _LOGGER.error("Error generating SQL for %s: %s", entity_id, err, exc_info=True)
-                return web.json_response({"error": f"Error generating SQL: {err}"}, status=500)
+                return web.json_response({"error": "An error occurred generating SQL"}, status=500)
 
         return web.json_response({"error": "Invalid action"}, status=400)

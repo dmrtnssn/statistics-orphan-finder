@@ -184,25 +184,33 @@ class StorageCalculator:
         Raises:
             ValueError: If table_name is not in the allowed list
         """
+        from sqlalchemy import column, literal
+
         # Validate table name against whitelist to prevent SQL injection
         ALLOWED_TABLES = {'statistics', 'statistics_short_term', 'states'}
         if table_name not in ALLOWED_TABLES:
             raise ValueError(f"Invalid table name: {table_name}. Must be one of: {', '.join(ALLOWED_TABLES)}")
 
+        # Use parameterized query with :table_name binding for count
+        # Note: SQLAlchemy text() doesn't support table name parameters, so we use validated whitelist + string formatting
+        # This is safe because table_name has been validated against ALLOWED_TABLES above
         count_query = text(f"SELECT COUNT(*) FROM {table_name} WHERE metadata_id = :metadata_id")
         count_result = conn.execute(count_query, {"metadata_id": metadata_id})
         row_count = count_result.fetchone()[0]
 
         if is_mysql:
-            size_query = text(f"""
+            # Use parameterized query for table name in information_schema
+            size_query = text("""
                 SELECT avg_row_length
                 FROM information_schema.tables
-                WHERE table_schema = DATABASE() AND table_name = '{table_name}'
+                WHERE table_schema = DATABASE() AND table_name = :table_name
             """)
-            size_result = conn.execute(size_query)
+            size_result = conn.execute(size_query, {"table_name": table_name})
             avg_row_length = size_result.fetchone()[0] or 100
             return row_count * avg_row_length
         elif is_postgres:
+            # For PostgreSQL, use proper type casting and parameterization where possible
+            # pg_total_relation_size requires string literal, so we use validated table_name
             size_query = text(f"""
                 SELECT pg_total_relation_size('{table_name}') / NULLIF((SELECT COUNT(*) FROM {table_name}), 0) as avg_row_size
             """)
