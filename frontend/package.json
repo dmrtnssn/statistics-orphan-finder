@@ -1,6 +1,6 @@
 {
   "name": "statistics-orphan-finder",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Statistics Orphan Finder - Lit + TypeScript",
   "type": "module",
   "scripts": {
