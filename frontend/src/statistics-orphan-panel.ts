@@ -165,19 +165,58 @@ export class StatisticsOrphanPanel extends LitElement {
         flex-shrink: 0;
       }
 
-      .cache-indicator {
-        font-size: 12px;
-        color: var(--secondary-text-color);
-        padding: 4px 8px;
-        border-radius: 4px;
-        background: rgba(0, 0, 0, 0.05);
-        display: inline-flex;
+      .cache-and-refresh {
+        display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 12px;
       }
 
       .refresh-button {
-        margin-left: 16px;
+        min-width: 96px;
+      }
+
+      .cache-indicator {
+        font-size: 12px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+
+      .cache-indicator .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .cache-indicator.live {
+        background: rgba(76, 175, 80, 0.15);
+        color: #2e7d32;
+      }
+
+      .cache-indicator.live .status-dot {
+        background: #2e7d32;
+      }
+
+      .cache-indicator.cached {
+        background: rgba(33, 150, 243, 0.15);
+        color: #1565c0;
+      }
+
+      .cache-indicator.cached .status-dot {
+        background: #1565c0;
+      }
+
+      .cache-indicator.stale {
+        background: rgba(255, 193, 7, 0.2);
+        color: #8d6e00;
+        border: 1px solid rgba(255, 193, 7, 0.6);
+      }
+
+      .cache-indicator.stale .status-dot {
+        background: #ff9800;
       }
     `
   ];
@@ -211,6 +250,7 @@ export class StatisticsOrphanPanel extends LitElement {
     if (this.boundVisibilityHandler) {
       document.removeEventListener('visibilitychange', this.boundVisibilityHandler);
     }
+
   }
 
   /**
@@ -474,6 +514,34 @@ export class StatisticsOrphanPanel extends LitElement {
     return ageStr;
   }
 
+
+  private getCacheBadgeInfo(): { label: string; status: 'live' | 'cached' | 'stale' } | null {
+    if (!this.cacheTimestamp) {
+      return null;
+    }
+
+    const age = Date.now() - this.cacheTimestamp;
+    const ageLabel = this.getCacheAgeString();
+    const isStale = age > 30 * 60 * 1000; // 30 minutes
+    const source = this.dataSource ?? 'live';
+
+    let status: 'live' | 'cached' | 'stale' = source === 'live' ? 'live' : 'cached';
+    if (isStale) {
+      status = 'stale';
+    }
+
+    const descriptor = status === 'live'
+      ? 'live data'
+      : status === 'cached'
+        ? 'cached data'
+        : 'stale cache';
+
+    return {
+      label: `Last updated ${ageLabel} · ${descriptor}`,
+      status
+    };
+  }
+
   /**
    * Dismiss the stale data banner
    */
@@ -523,6 +591,8 @@ export class StatisticsOrphanPanel extends LitElement {
   }
 
   render() {
+    const cacheBadge = this.getCacheBadgeInfo();
+
     return html`
       <div class="header">
         <div class="header-left">
@@ -531,10 +601,11 @@ export class StatisticsOrphanPanel extends LitElement {
             <div class="version">v${this.databaseSize.version}</div>
           ` : ''}
         </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          ${this.cacheTimestamp ? html`
-            <span class="cache-indicator">
-              Refreshed ${this.getCacheAgeString()}
+        <div class="cache-and-refresh">
+          ${cacheBadge ? html`
+            <span class="cache-indicator ${cacheBadge.status}">
+              <span class="status-dot"></span>
+              ${cacheBadge.label}
             </span>
           ` : ''}
           <button class="refresh-button" @click=${this.handleRefresh}>

@@ -6,7 +6,7 @@
 import { LitElement, html, css, type PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared-styles';
-import { formatNumber } from '../services/formatters';
+import { formatNumber, formatRelativeTime, formatFullTimestamp } from '../services/formatters';
 import type {
   StorageEntity,
   StorageSummary,
@@ -66,6 +66,7 @@ export class StorageOverviewView extends LitElement {
 
   // Message histogram state
   @state() private histogramEntityId: string | null = null;
+  @state() private histogramLastUpdate: string | null = null;
   @state() private histogramPosition = { x: 0, y: 0 };
   private histogramHideTimeout: number | null = null;
 
@@ -120,7 +121,7 @@ export class StorageOverviewView extends LitElement {
         display: flex;
         gap: 8px;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
       }
 
       .search-and-sort-row filter-bar {
@@ -423,7 +424,7 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'registry',
-        label: 'ENTITY\nREGISTRY',
+        label: 'Registry',
         sortable: true,
         align: 'center',
         render: (entity: StorageEntity) => {
@@ -437,7 +438,7 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'state',
-        label: 'STATE\nMACHINE',
+        label: 'State machine',
         sortable: true,
         align: 'center',
         render: (entity: StorageEntity) => {
@@ -451,7 +452,7 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'states_meta',
-        label: 'States\nMeta',
+        label: 'States meta',
         sortable: true,
         align: 'center',
         className: 'group-border-left',
@@ -459,21 +460,21 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'states',
-        label: 'States',
+        label: 'States table',
         sortable: true,
         align: 'center',
         render: (entity: StorageEntity) => entity.in_states ? '✓' : ''
       },
       {
         id: 'states_count',
-        label: 'States #',
+        label: 'States records',
         sortable: true,
         align: 'right',
         render: (entity: StorageEntity) => formatNumber(entity.states_count)
       },
       {
         id: 'update_interval',
-        label: 'Message\nInterval',
+        label: 'Message cadence',
         sortable: true,
         align: 'right',
         render: (entity: StorageEntity) => html`
@@ -488,14 +489,22 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'last_state_update',
-        label: 'Last State\nUpdate',
+        label: 'Last state update',
         sortable: true,
         align: 'center',
-        render: (entity: StorageEntity) => entity.last_state_update || ''
+        render: (entity: StorageEntity) => html`
+          <div
+            class="message-interval-cell"
+            @mouseenter=${(e: MouseEvent) => this.handleShowHistogram(entity.entity_id, e, entity.last_state_update)}
+            @mouseleave=${() => this.handleHideHistogram()}
+          >
+            ${formatRelativeTime(entity.last_state_update)}
+          </div>
+        `
       },
       {
         id: 'stats_meta',
-        label: 'Stats\nMeta',
+        label: 'Stats meta',
         sortable: true,
         align: 'center',
         className: 'group-border-left',
@@ -503,42 +512,46 @@ export class StorageOverviewView extends LitElement {
       },
       {
         id: 'stats_short',
-        label: 'Stats\nShort',
+        label: 'Short stats',
         sortable: true,
         align: 'center',
         render: (entity: StorageEntity) => entity.in_statistics_short_term ? '✓' : ''
       },
       {
         id: 'stats_long',
-        label: 'Stats\nLong',
+        label: 'Long stats',
         sortable: true,
         align: 'center',
         render: (entity: StorageEntity) => entity.in_statistics_long_term ? '✓' : ''
       },
       {
         id: 'stats_short_count',
-        label: 'Short #',
+        label: 'Short records',
         sortable: true,
         align: 'right',
         render: (entity: StorageEntity) => formatNumber(entity.stats_short_count)
       },
       {
         id: 'stats_long_count',
-        label: 'Long #',
+        label: 'Long records',
         sortable: true,
         align: 'right',
         render: (entity: StorageEntity) => formatNumber(entity.stats_long_count)
       },
       {
         id: 'last_stats_update',
-        label: 'Last Stats\nUpdate',
+        label: 'Last stats update',
         sortable: true,
         align: 'center',
-        render: (entity: StorageEntity) => entity.last_stats_update || ''
+        render: (entity: StorageEntity) => html`
+          <span title="${formatFullTimestamp(entity.last_stats_update)}">
+            ${formatRelativeTime(entity.last_stats_update)}
+          </span>
+        `
       },
       {
         id: 'actions',
-        label: 'ACTIONS',
+        label: 'Actions',
         sortable: false,
         align: 'center',
         width: '80px',
@@ -619,14 +632,24 @@ export class StorageOverviewView extends LitElement {
     this.searchQuery = e.detail.query;
   }
 
-  private handleClearFilters() {
-    this.searchQuery = '';
+  private resetFilters(includeSearch = true) {
+    if (includeSearch) {
+      this.searchQuery = '';
+    }
     this.basicFilter = null;
     this.registryFilter = null;
     this.stateFilter = null;
     this.advancedFilter = null;
     this.statesFilter = null;
     this.statisticsFilter = null;
+  }
+
+  private handleClearFilters() {
+    this.resetFilters(true);
+  }
+
+  private handlePanelFilterReset() {
+    this.resetFilters(false);
   }
 
   private handleFilterPanelChange(e: CustomEvent) {
@@ -1058,39 +1081,37 @@ export class StorageOverviewView extends LitElement {
   /**
    * Show message histogram tooltip for an entity
    */
-  private handleShowHistogram(entityId: string, event: MouseEvent) {
+  private handleShowHistogram(entityId: string, event: MouseEvent, lastUpdate: string | null = null) {
     // Clear any pending hide timeout
     if (this.histogramHideTimeout !== null) {
       window.clearTimeout(this.histogramHideTimeout);
       this.histogramHideTimeout = null;
     }
 
-    // Position tooltip near mouse cursor with boundary checking
-    // Tooltip is 50% bigger: roughly 450px wide and 225px tall
-    const tooltipWidth = 525;
-    const tooltipHeight = 270;
-    const offset = 10;
+    const target = event.currentTarget as HTMLElement;
+    const cellRect = target.getBoundingClientRect();
 
-    let x = event.clientX + offset;
-    let y = event.clientY + offset;
+    const tooltipWidth = 420;
+    const tooltipHeight = 220;
+    const offset = 16;
 
-    // Check right boundary
+    let x = cellRect.right + offset;
+    let y = cellRect.top;
+
     if (x + tooltipWidth > window.innerWidth) {
-      x = event.clientX - tooltipWidth - offset;
+      x = cellRect.left - tooltipWidth - offset;
     }
 
-    // Check bottom boundary
     if (y + tooltipHeight > window.innerHeight) {
-      y = event.clientY - tooltipHeight - offset;
+      y = window.innerHeight - tooltipHeight - offset;
     }
 
-    // Ensure it doesn't go off left edge
     x = Math.max(offset, x);
-    // Ensure it doesn't go off top edge
     y = Math.max(offset, y);
 
     this.histogramPosition = { x, y };
     this.histogramEntityId = entityId;
+    this.histogramLastUpdate = lastUpdate;
   }
 
   /**
@@ -1127,7 +1148,9 @@ export class StorageOverviewView extends LitElement {
       this.basicFilter ||
       this.registryFilter ||
       this.stateFilter ||
-      this.advancedFilter;
+      this.advancedFilter ||
+      this.statesFilter ||
+      this.statisticsFilter;
 
     return html`
       <div class="description">
@@ -1146,6 +1169,7 @@ export class StorageOverviewView extends LitElement {
         .activeStatistics=${this.statisticsFilter}
         @action-clicked=${this.handleHealthAction}
         @filter-changed=${this.handleFilterPanelChange}
+        @filter-reset=${this.handlePanelFilterReset}
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
@@ -1226,6 +1250,7 @@ export class StorageOverviewView extends LitElement {
           <message-histogram-tooltip
             .hass=${this.hass}
             .entityId=${this.histogramEntityId}
+            .lastUpdate=${this.histogramLastUpdate}
           ></message-histogram-tooltip>
         </div>
       ` : ''}

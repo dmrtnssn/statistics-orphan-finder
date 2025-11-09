@@ -708,6 +708,53 @@ function formatDuration(seconds) {
     return `${days} day${days > 1 ? "s" : ""}`;
   }
 }
+function formatRelativeTime(isoString) {
+  if (!isoString) return "-";
+  try {
+    const date = new Date(isoString);
+    const now = /* @__PURE__ */ new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1e3);
+    if (diffSeconds < 60) {
+      return `${diffSeconds}s`;
+    }
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m`;
+    }
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `${diffHours}h`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) {
+      return `${diffDays}d`;
+    }
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) {
+      return `${diffMonths}mo`;
+    }
+    const diffYears = Math.floor(diffDays / 365);
+    return `${diffYears}y`;
+  } catch {
+    return "-";
+  }
+}
+function formatFullTimestamp(isoString) {
+  if (!isoString) return "Never updated";
+  try {
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  } catch {
+    return isoString;
+  }
+}
 var __defProp$6 = Object.defineProperty;
 var __decorateClass$6 = (decorators, target, key, kind) => {
   var result = void 0;
@@ -755,44 +802,45 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
     return this.estimateStorageMB(entityCount);
   }
   getFilterCount(group, value) {
-    if (!this.entities || this.entities.length === 0) {
+    const source = this.entities;
+    if (!source || source.length === 0) {
       return 0;
     }
     switch (group) {
       case "registry":
         switch (value) {
           case "Enabled":
-            return this.entities.filter((e2) => e2.registry_status === "Enabled").length;
+            return source.filter((e2) => e2.registry_status === "Enabled").length;
           case "Disabled":
-            return this.entities.filter((e2) => e2.registry_status === "Disabled").length;
+            return source.filter((e2) => e2.registry_status === "Disabled").length;
           case "Not in Registry":
-            return this.entities.filter((e2) => e2.registry_status === "Not in Registry").length;
+            return source.filter((e2) => e2.registry_status === "Not in Registry").length;
         }
         break;
       case "state":
         switch (value) {
           case "Available":
-            return this.entities.filter((e2) => e2.state_status === "Available").length;
+            return source.filter((e2) => e2.state_status === "Available").length;
           case "Unavailable":
-            return this.entities.filter((e2) => e2.state_status === "Unavailable").length;
+            return source.filter((e2) => e2.state_status === "Unavailable").length;
           case "Not Present":
-            return this.entities.filter((e2) => e2.state_status === "Not Present").length;
+            return source.filter((e2) => e2.state_status === "Not Present").length;
         }
         break;
       case "states":
         switch (value) {
           case "in_states":
-            return this.entities.filter((e2) => e2.in_states).length;
+            return source.filter((e2) => e2.in_states).length;
           case "not_in_states":
-            return this.entities.filter((e2) => !e2.in_states).length;
+            return source.filter((e2) => !e2.in_states).length;
         }
         break;
       case "statistics":
         switch (value) {
           case "in_statistics":
-            return this.entities.filter((e2) => e2.in_statistics_meta).length;
+            return source.filter((e2) => e2.in_statistics_long_term || e2.in_statistics_short_term).length;
           case "not_in_statistics":
-            return this.entities.filter((e2) => !e2.in_statistics_meta).length;
+            return source.filter((e2) => !e2.in_statistics_long_term && !e2.in_statistics_short_term).length;
         }
         break;
     }
@@ -826,9 +874,21 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
       composed: true
     }));
   }
+  handleActionKey(event, action) {
+    if (action && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      this.handleAction(action);
+    }
+  }
   handleFilterClick(group, value) {
     this.dispatchEvent(new CustomEvent("filter-changed", {
       detail: { group, value },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleFilterReset() {
+    this.dispatchEvent(new CustomEvent("filter-reset", {
       bubbles: true,
       composed: true
     }));
@@ -1022,17 +1082,24 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
     }
     return x`
       <div class="action-list">
-        ${actions.map((item) => x`
-          <div class="action-item ${item.priority}">
-            <span class="action-icon">${item.icon}</span>
-            <span class="action-text">${item.text}</span>
-            ${item.button ? x`
-              <button class="action-btn" @click=${() => this.handleAction(item.action)}>
-                ${item.button}
-              </button>
-            ` : ""}
-          </div>
-        `)}
+        ${actions.map((item) => {
+      const isClickable = !!item.action;
+      return x`
+            <div
+              class="action-item ${item.priority} ${isClickable ? "clickable" : ""}"
+              role=${isClickable ? "button" : "presentation"}
+              tabindex=${isClickable ? "0" : "-1"}
+              @click=${isClickable ? () => this.handleAction(item.action) : null}
+              @keydown=${isClickable ? (e2) => this.handleActionKey(e2, item.action) : null}
+            >
+              <span class="action-icon">${item.icon}</span>
+              <span class="action-text">${item.text}</span>
+              ${item.button ? x`
+                <span class="action-btn">${item.button}</span>
+              ` : ""}
+            </div>
+          `;
+    })}
       </div>
     `;
   }
@@ -1055,7 +1122,12 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
 
         <!-- Column 3: Filter Panel -->
         <div class="column filter-panel-column">
-          <div class="filter-panel-title">Filters</div>
+          <div class="filter-panel-header">
+            <div class="filter-panel-title">Filters</div>
+            <button class="filter-reset-btn" @click=${this.handleFilterReset}>
+              Reset
+            </button>
+          </div>
 
           <div class="filter-group">
             <div class="filter-group-label">Registry:</div>
@@ -1288,6 +1360,21 @@ _StorageHealthSummary.styles = [
         border-left-color: #4CAF50;
       }
 
+      .action-item.clickable {
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.1s ease;
+      }
+
+      .action-item.clickable:hover {
+        background: rgba(0, 0, 0, 0.05);
+        transform: translateY(-1px);
+      }
+
+      .action-item.clickable:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+      }
+
       .action-icon {
         font-size: 18px;
         min-width: 22px;
@@ -1301,21 +1388,14 @@ _StorageHealthSummary.styles = [
       }
 
       .action-btn {
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        background: var(--primary-color);
-        color: var(--text-primary-color);
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.2);
+        color: inherit;
+        border: 1px solid currentColor;
+        border-radius: 999px;
         white-space: nowrap;
-      }
-
-      .action-btn:hover {
-        background: var(--dark-primary-color);
-        transform: translateY(-1px);
       }
 
       .no-issues {
@@ -1332,11 +1412,32 @@ _StorageHealthSummary.styles = [
         gap: 12px;
       }
 
+      .filter-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
       .filter-panel-title {
         font-size: 18px;
         font-weight: 600;
-        margin-bottom: 4px;
         color: var(--primary-text-color);
+      }
+
+      .filter-reset-btn {
+        background: transparent;
+        color: var(--primary-color);
+        border: none;
+        font-size: 12px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .filter-reset-btn:hover {
+        background: rgba(50, 136, 203, 0.12);
       }
 
       .filter-group {
@@ -1354,39 +1455,41 @@ _StorageHealthSummary.styles = [
       .filter-buttons {
         display: flex;
         gap: 6px;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
       }
 
       .filter-btn {
-        padding: 4px 8px;
-        font-size: 11px;
+        padding: 6px 12px;
+        font-size: 12px;
         background: var(--secondary-background-color);
-        border: 1px solid var(--divider-color);
-        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
         color: var(--primary-text-color);
-        min-width: 50px;
+        min-width: 60px;
         text-align: center;
-        line-height: 1.3;
+        line-height: 1.2;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
       }
 
-      .filter-btn:hover {
-        background: var(--divider-color);
+      .filter-btn:hover:not(:disabled),
+      .filter-btn:focus-visible {
+        background: rgba(50, 136, 203, 0.08);
+        border-color: rgba(50, 136, 203, 0.3);
+        outline: none;
       }
 
       .filter-btn.active {
-        background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.3));
-        border-color: rgba(255, 193, 7, 0.8);
+        background: linear-gradient(135deg, rgba(50, 136, 203, 0.22), rgba(35, 84, 140, 0.3));
+        border-color: rgba(50, 136, 203, 0.8);
+        color: var(--text-primary-color, #fff);
+        box-shadow: 0 4px 10px rgba(50, 136, 203, 0.2);
       }
 
       .filter-btn:disabled {
-        opacity: 0.4;
+        opacity: 0.45;
         cursor: not-allowed;
-      }
-
-      .filter-btn:disabled:hover {
-        background: var(--secondary-background-color);
       }
 
       @media (max-width: 1200px) {
@@ -1829,6 +1932,7 @@ _EntityTable.styles = [
       .disabled-entity-row:hover {
         background: rgba(255, 152, 0, 0.05);
       }
+
     `
 ];
 let EntityTable = _EntityTable;
@@ -2206,6 +2310,7 @@ var __decorateClass$2 = (decorators, target, key, kind) => {
 const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
   constructor() {
     super(...arguments);
+    this.lastUpdate = null;
     this.timeRange = 24;
     this.loading = false;
     this.hourlyCounts = [];
@@ -2317,6 +2422,12 @@ const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
         ${this.totalMessages.toLocaleString()} messages in last ${this.timeRange}h
         (avg: ${avgPerHour.toFixed(1)}/hour)
       </div>
+
+      ${this.lastUpdate ? x`
+        <div class="timestamp">
+          Last update: ${formatFullTimestamp(this.lastUpdate)}
+        </div>
+      ` : ""}
     `;
   }
   /**
@@ -2423,6 +2534,16 @@ _MessageHistogramTooltip.styles = [
         padding: 4px 0;
       }
 
+      .timestamp {
+        font-size: 10px;
+        color: var(--secondary-text-color);
+        text-align: center;
+        padding: 4px 0 0 0;
+        margin-top: 4px;
+        border-top: 1px solid var(--divider-color);
+        opacity: 0.8;
+      }
+
       .loading {
         text-align: center;
         padding: 20px;
@@ -2444,6 +2565,9 @@ __decorateClass$2([
 __decorateClass$2([
   n({ type: String })
 ], MessageHistogramTooltip.prototype, "entityId");
+__decorateClass$2([
+  n({ type: String })
+], MessageHistogramTooltip.prototype, "lastUpdate");
 __decorateClass$2([
   r()
 ], MessageHistogramTooltip.prototype, "timeRange");
@@ -2502,6 +2626,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     this._entityDetailsModalLoaded = false;
     this._deleteSqlModalLoaded = false;
     this.histogramEntityId = null;
+    this.histogramLastUpdate = null;
     this.histogramPosition = { x: 0, y: 0 };
     this.histogramHideTimeout = null;
   }
@@ -2510,7 +2635,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-CX4cCxQN.js");
+      await import("./entity-details-modal-BGtLaaM2.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2519,7 +2644,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-DQm-PM6o.js");
+      await import("./delete-sql-modal-BBoM18xf.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -2745,7 +2870,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "registry",
-        label: "ENTITY\nREGISTRY",
+        label: "Registry",
         sortable: true,
         align: "center",
         render: (entity) => {
@@ -2759,7 +2884,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "state",
-        label: "STATE\nMACHINE",
+        label: "State machine",
         sortable: true,
         align: "center",
         render: (entity) => {
@@ -2773,7 +2898,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "states_meta",
-        label: "States\nMeta",
+        label: "States meta",
         sortable: true,
         align: "center",
         className: "group-border-left",
@@ -2781,21 +2906,21 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "states",
-        label: "States",
+        label: "States table",
         sortable: true,
         align: "center",
         render: (entity) => entity.in_states ? "✓" : ""
       },
       {
         id: "states_count",
-        label: "States #",
+        label: "States records",
         sortable: true,
         align: "right",
         render: (entity) => formatNumber(entity.states_count)
       },
       {
         id: "update_interval",
-        label: "Message\nInterval",
+        label: "Message cadence",
         sortable: true,
         align: "right",
         render: (entity) => x`
@@ -2810,14 +2935,22 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "last_state_update",
-        label: "Last State\nUpdate",
+        label: "Last state update",
         sortable: true,
         align: "center",
-        render: (entity) => entity.last_state_update || ""
+        render: (entity) => x`
+          <div
+            class="message-interval-cell"
+            @mouseenter=${(e2) => this.handleShowHistogram(entity.entity_id, e2, entity.last_state_update)}
+            @mouseleave=${() => this.handleHideHistogram()}
+          >
+            ${formatRelativeTime(entity.last_state_update)}
+          </div>
+        `
       },
       {
         id: "stats_meta",
-        label: "Stats\nMeta",
+        label: "Stats meta",
         sortable: true,
         align: "center",
         className: "group-border-left",
@@ -2825,42 +2958,46 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       },
       {
         id: "stats_short",
-        label: "Stats\nShort",
+        label: "Short stats",
         sortable: true,
         align: "center",
         render: (entity) => entity.in_statistics_short_term ? "✓" : ""
       },
       {
         id: "stats_long",
-        label: "Stats\nLong",
+        label: "Long stats",
         sortable: true,
         align: "center",
         render: (entity) => entity.in_statistics_long_term ? "✓" : ""
       },
       {
         id: "stats_short_count",
-        label: "Short #",
+        label: "Short records",
         sortable: true,
         align: "right",
         render: (entity) => formatNumber(entity.stats_short_count)
       },
       {
         id: "stats_long_count",
-        label: "Long #",
+        label: "Long records",
         sortable: true,
         align: "right",
         render: (entity) => formatNumber(entity.stats_long_count)
       },
       {
         id: "last_stats_update",
-        label: "Last Stats\nUpdate",
+        label: "Last stats update",
         sortable: true,
         align: "center",
-        render: (entity) => entity.last_stats_update || ""
+        render: (entity) => x`
+          <span title="${formatFullTimestamp(entity.last_stats_update)}">
+            ${formatRelativeTime(entity.last_stats_update)}
+          </span>
+        `
       },
       {
         id: "actions",
-        label: "ACTIONS",
+        label: "Actions",
         sortable: false,
         align: "center",
         width: "80px",
@@ -2931,14 +3068,22 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
   handleSearchChanged(e2) {
     this.searchQuery = e2.detail.query;
   }
-  handleClearFilters() {
-    this.searchQuery = "";
+  resetFilters(includeSearch = true) {
+    if (includeSearch) {
+      this.searchQuery = "";
+    }
     this.basicFilter = null;
     this.registryFilter = null;
     this.stateFilter = null;
     this.advancedFilter = null;
     this.statesFilter = null;
     this.statisticsFilter = null;
+  }
+  handleClearFilters() {
+    this.resetFilters(true);
+  }
+  handlePanelFilterReset() {
+    this.resetFilters(false);
   }
   handleFilterPanelChange(e2) {
     const { group, value } = e2.detail;
@@ -3280,26 +3425,29 @@ ${e2.sql}`;
   /**
    * Show message histogram tooltip for an entity
    */
-  handleShowHistogram(entityId, event) {
+  handleShowHistogram(entityId, event, lastUpdate = null) {
     if (this.histogramHideTimeout !== null) {
       window.clearTimeout(this.histogramHideTimeout);
       this.histogramHideTimeout = null;
     }
-    const tooltipWidth = 525;
-    const tooltipHeight = 270;
-    const offset = 10;
-    let x2 = event.clientX + offset;
-    let y = event.clientY + offset;
+    const target = event.currentTarget;
+    const cellRect = target.getBoundingClientRect();
+    const tooltipWidth = 420;
+    const tooltipHeight = 220;
+    const offset = 16;
+    let x2 = cellRect.right + offset;
+    let y = cellRect.top;
     if (x2 + tooltipWidth > window.innerWidth) {
-      x2 = event.clientX - tooltipWidth - offset;
+      x2 = cellRect.left - tooltipWidth - offset;
     }
     if (y + tooltipHeight > window.innerHeight) {
-      y = event.clientY - tooltipHeight - offset;
+      y = window.innerHeight - tooltipHeight - offset;
     }
     x2 = Math.max(offset, x2);
     y = Math.max(offset, y);
     this.histogramPosition = { x: x2, y };
     this.histogramEntityId = entityId;
+    this.histogramLastUpdate = lastUpdate;
   }
   /**
    * Hide message histogram tooltip with a small delay
@@ -3326,7 +3474,7 @@ ${e2.sql}`;
     this.histogramEntityId = null;
   }
   render() {
-    const hasActiveFilters = this.searchQuery || this.basicFilter || this.registryFilter || this.stateFilter || this.advancedFilter;
+    const hasActiveFilters = this.searchQuery || this.basicFilter || this.registryFilter || this.stateFilter || this.advancedFilter || this.statesFilter || this.statisticsFilter;
     return x`
       <div class="description">
         Complete overview of all entities across Home Assistant's storage locations.
@@ -3344,6 +3492,7 @@ ${e2.sql}`;
         .activeStatistics=${this.statisticsFilter}
         @action-clicked=${this.handleHealthAction}
         @filter-changed=${this.handleFilterPanelChange}
+        @filter-reset=${this.handlePanelFilterReset}
       ></storage-health-summary>
 
       <h2>Entity Storage Details</h2>
@@ -3424,6 +3573,7 @@ ${e2.sql}`;
           <message-histogram-tooltip
             .hass=${this.hass}
             .entityId=${this.histogramEntityId}
+            .lastUpdate=${this.histogramLastUpdate}
           ></message-histogram-tooltip>
         </div>
       ` : ""}
@@ -3446,7 +3596,7 @@ _StorageOverviewView.styles = [
         display: flex;
         gap: 8px;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
       }
 
       .search-and-sort-row filter-bar {
@@ -3551,6 +3701,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "histogramEntityId");
+__decorateClass$1([
+  r()
+], StorageOverviewView.prototype, "histogramLastUpdate");
 __decorateClass$1([
   r()
 ], StorageOverviewView.prototype, "histogramPosition");
@@ -3799,6 +3952,24 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     }
     return ageStr;
   }
+  getCacheBadgeInfo() {
+    if (!this.cacheTimestamp) {
+      return null;
+    }
+    const age = Date.now() - this.cacheTimestamp;
+    const ageLabel = this.getCacheAgeString();
+    const isStale = age > 30 * 60 * 1e3;
+    const source = this.dataSource ?? "live";
+    let status = source === "live" ? "live" : "cached";
+    if (isStale) {
+      status = "stale";
+    }
+    const descriptor = status === "live" ? "live data" : status === "cached" ? "cached data" : "stale cache";
+    return {
+      label: `Last updated ${ageLabel} · ${descriptor}`,
+      status
+    };
+  }
   /**
    * Dismiss the stale data banner
    */
@@ -3837,6 +4008,7 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     }
   }
   render() {
+    const cacheBadge = this.getCacheBadgeInfo();
     return x`
       <div class="header">
         <div class="header-left">
@@ -3845,10 +4017,11 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
             <div class="version">v${this.databaseSize.version}</div>
           ` : ""}
         </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          ${this.cacheTimestamp ? x`
-            <span class="cache-indicator">
-              Refreshed ${this.getCacheAgeString()}
+        <div class="cache-and-refresh">
+          ${cacheBadge ? x`
+            <span class="cache-indicator ${cacheBadge.status}">
+              <span class="status-dot"></span>
+              ${cacheBadge.label}
             </span>
           ` : ""}
           <button class="refresh-button" @click=${this.handleRefresh}>
@@ -4046,19 +4219,58 @@ _StatisticsOrphanPanel.styles = [
         flex-shrink: 0;
       }
 
-      .cache-indicator {
-        font-size: 12px;
-        color: var(--secondary-text-color);
-        padding: 4px 8px;
-        border-radius: 4px;
-        background: rgba(0, 0, 0, 0.05);
-        display: inline-flex;
+      .cache-and-refresh {
+        display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 12px;
       }
 
       .refresh-button {
-        margin-left: 16px;
+        min-width: 96px;
+      }
+
+      .cache-indicator {
+        font-size: 12px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+
+      .cache-indicator .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .cache-indicator.live {
+        background: rgba(76, 175, 80, 0.15);
+        color: #2e7d32;
+      }
+
+      .cache-indicator.live .status-dot {
+        background: #2e7d32;
+      }
+
+      .cache-indicator.cached {
+        background: rgba(33, 150, 243, 0.15);
+        color: #1565c0;
+      }
+
+      .cache-indicator.cached .status-dot {
+        background: #1565c0;
+      }
+
+      .cache-indicator.stale {
+        background: rgba(255, 193, 7, 0.2);
+        color: #8d6e00;
+        border: 1px solid rgba(255, 193, 7, 0.6);
+      }
+
+      .cache-indicator.stale .status-dot {
+        background: #ff9800;
       }
     `
 ];
@@ -4116,4 +4328,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DoQ_FzEa.js.map
+//# sourceMappingURL=statistics-orphan-panel-bOpHDl0y.js.map

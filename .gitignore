@@ -35,6 +35,8 @@ Thumbs.db
 # Claude local configuration (not to be shared)
 CLAUDE.local.md
 .claude/
+.playwright-mcp/
+notes/
 
 # Resources
 .resources/

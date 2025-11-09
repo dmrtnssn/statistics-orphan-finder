@@ -100,6 +100,7 @@ export class EntityTable<T extends StorageEntity = StorageEntity> extends LitEle
       .disabled-entity-row:hover {
         background: rgba(255, 152, 0, 0.05);
       }
+
     `
   ];
 

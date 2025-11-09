@@ -166,6 +166,21 @@ export class StorageHealthSummary extends LitElement {
         border-left-color: #4CAF50;
       }
 
+      .action-item.clickable {
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.1s ease;
+      }
+
+      .action-item.clickable:hover {
+        background: rgba(0, 0, 0, 0.05);
+        transform: translateY(-1px);
+      }
+
+      .action-item.clickable:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+      }
+
       .action-icon {
         font-size: 18px;
         min-width: 22px;
@@ -179,21 +194,14 @@ export class StorageHealthSummary extends LitElement {
       }
 
       .action-btn {
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        background: var(--primary-color);
-        color: var(--text-primary-color);
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.2);
+        color: inherit;
+        border: 1px solid currentColor;
+        border-radius: 999px;
         white-space: nowrap;
-      }
-
-      .action-btn:hover {
-        background: var(--dark-primary-color);
-        transform: translateY(-1px);
       }
 
       .no-issues {
@@ -210,11 +218,32 @@ export class StorageHealthSummary extends LitElement {
         gap: 12px;
       }
 
+      .filter-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
       .filter-panel-title {
         font-size: 18px;
         font-weight: 600;
-        margin-bottom: 4px;
         color: var(--primary-text-color);
+      }
+
+      .filter-reset-btn {
+        background: transparent;
+        color: var(--primary-color);
+        border: none;
+        font-size: 12px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .filter-reset-btn:hover {
+        background: rgba(50, 136, 203, 0.12);
       }
 
       .filter-group {
@@ -232,39 +261,41 @@ export class StorageHealthSummary extends LitElement {
       .filter-buttons {
         display: flex;
         gap: 6px;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
       }
 
       .filter-btn {
-        padding: 4px 8px;
-        font-size: 11px;
+        padding: 6px 12px;
+        font-size: 12px;
         background: var(--secondary-background-color);
-        border: 1px solid var(--divider-color);
-        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
         color: var(--primary-text-color);
-        min-width: 50px;
+        min-width: 60px;
         text-align: center;
-        line-height: 1.3;
+        line-height: 1.2;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
       }
 
-      .filter-btn:hover {
-        background: var(--divider-color);
+      .filter-btn:hover:not(:disabled),
+      .filter-btn:focus-visible {
+        background: rgba(50, 136, 203, 0.08);
+        border-color: rgba(50, 136, 203, 0.3);
+        outline: none;
       }
 
       .filter-btn.active {
-        background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.3));
-        border-color: rgba(255, 193, 7, 0.8);
+        background: linear-gradient(135deg, rgba(50, 136, 203, 0.22), rgba(35, 84, 140, 0.3));
+        border-color: rgba(50, 136, 203, 0.8);
+        color: var(--text-primary-color, #fff);
+        box-shadow: 0 4px 10px rgba(50, 136, 203, 0.2);
       }
 
       .filter-btn:disabled {
-        opacity: 0.4;
+        opacity: 0.45;
         cursor: not-allowed;
-      }
-
-      .filter-btn:disabled:hover {
-        background: var(--secondary-background-color);
       }
 
       @media (max-width: 1200px) {
@@ -309,7 +340,8 @@ export class StorageHealthSummary extends LitElement {
   }
 
   private getFilterCount(group: string, value: string): number {
-    if (!this.entities || this.entities.length === 0) {
+    const source = this.entities;
+    if (!source || source.length === 0) {
       return 0;
     }
 
@@ -317,40 +349,40 @@ export class StorageHealthSummary extends LitElement {
       case 'registry':
         switch (value) {
           case 'Enabled':
-            return this.entities.filter(e => e.registry_status === 'Enabled').length;
+            return source.filter(e => e.registry_status === 'Enabled').length;
           case 'Disabled':
-            return this.entities.filter(e => e.registry_status === 'Disabled').length;
+            return source.filter(e => e.registry_status === 'Disabled').length;
           case 'Not in Registry':
-            return this.entities.filter(e => e.registry_status === 'Not in Registry').length;
+            return source.filter(e => e.registry_status === 'Not in Registry').length;
         }
         break;
 
       case 'state':
         switch (value) {
           case 'Available':
-            return this.entities.filter(e => e.state_status === 'Available').length;
+            return source.filter(e => e.state_status === 'Available').length;
           case 'Unavailable':
-            return this.entities.filter(e => e.state_status === 'Unavailable').length;
+            return source.filter(e => e.state_status === 'Unavailable').length;
           case 'Not Present':
-            return this.entities.filter(e => e.state_status === 'Not Present').length;
+            return source.filter(e => e.state_status === 'Not Present').length;
         }
         break;
 
       case 'states':
         switch (value) {
           case 'in_states':
-            return this.entities.filter(e => e.in_states).length;
+            return source.filter(e => e.in_states).length;
           case 'not_in_states':
-            return this.entities.filter(e => !e.in_states).length;
+            return source.filter(e => !e.in_states).length;
         }
         break;
 
       case 'statistics':
         switch (value) {
           case 'in_statistics':
-            return this.entities.filter(e => e.in_statistics_meta).length;
+            return source.filter(e => e.in_statistics_long_term || e.in_statistics_short_term).length;
           case 'not_in_statistics':
-            return this.entities.filter(e => !e.in_statistics_meta).length;
+            return source.filter(e => !e.in_statistics_long_term && !e.in_statistics_short_term).length;
         }
         break;
     }
@@ -393,9 +425,23 @@ export class StorageHealthSummary extends LitElement {
     }));
   }
 
+  private handleActionKey(event: KeyboardEvent, action: string) {
+    if (action && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      this.handleAction(action);
+    }
+  }
+
   private handleFilterClick(group: string, value: string) {
     this.dispatchEvent(new CustomEvent('filter-changed', {
       detail: { group, value },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  private handleFilterReset() {
+    this.dispatchEvent(new CustomEvent('filter-reset', {
       bubbles: true,
       composed: true
     }));
@@ -632,17 +678,24 @@ export class StorageHealthSummary extends LitElement {
 
     return html`
       <div class="action-list">
-        ${actions.map(item => html`
-          <div class="action-item ${item.priority}">
-            <span class="action-icon">${item.icon}</span>
-            <span class="action-text">${item.text}</span>
-            ${item.button ? html`
-              <button class="action-btn" @click=${() => this.handleAction(item.action!)}>
-                ${item.button}
-              </button>
-            ` : ''}
-          </div>
-        `)}
+        ${actions.map(item => {
+          const isClickable = !!item.action;
+          return html`
+            <div
+              class="action-item ${item.priority} ${isClickable ? 'clickable' : ''}"
+              role=${isClickable ? 'button' : 'presentation'}
+              tabindex=${isClickable ? '0' : '-1'}
+              @click=${isClickable ? () => this.handleAction(item.action!) : null}
+              @keydown=${isClickable ? (e: KeyboardEvent) => this.handleActionKey(e, item.action!) : null}
+            >
+              <span class="action-icon">${item.icon}</span>
+              <span class="action-text">${item.text}</span>
+              ${item.button ? html`
+                <span class="action-btn">${item.button}</span>
+              ` : ''}
+            </div>
+          `;
+        })}
       </div>
     `;
   }
@@ -667,7 +720,12 @@ export class StorageHealthSummary extends LitElement {
 
         <!-- Column 3: Filter Panel -->
         <div class="column filter-panel-column">
-          <div class="filter-panel-title">Filters</div>
+          <div class="filter-panel-header">
+            <div class="filter-panel-title">Filters</div>
+            <button class="filter-reset-btn" @click=${this.handleFilterReset}>
+              Reset
+            </button>
+          </div>
 
           <div class="filter-group">
             <div class="filter-group-label">Registry:</div>

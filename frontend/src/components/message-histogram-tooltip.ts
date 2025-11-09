@@ -6,13 +6,14 @@
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { ApiService } from '../services/api-service';
-import { formatInterval } from '../services/formatters';
+import { formatInterval, formatFullTimestamp } from '../services/formatters';
 import type { HomeAssistant } from '../types';
 import { sharedStyles } from '../styles/shared-styles';
 
 export class MessageHistogramTooltip extends LitElement {
   @property({ type: Object }) hass!: HomeAssistant;
   @property({ type: String }) entityId!: string;
+  @property({ type: String }) lastUpdate: string | null = null;
   @state() private timeRange: 24 | 48 | 168 = 24;
   @state() private loading = false;
   @state() private hourlyCounts: number[] = [];
@@ -113,6 +114,16 @@ export class MessageHistogramTooltip extends LitElement {
         color: var(--secondary-text-color);
         text-align: center;
         padding: 4px 0;
+      }
+
+      .timestamp {
+        font-size: 10px;
+        color: var(--secondary-text-color);
+        text-align: center;
+        padding: 4px 0 0 0;
+        margin-top: 4px;
+        border-top: 1px solid var(--divider-color);
+        opacity: 0.8;
       }
 
       .loading {
@@ -267,6 +278,12 @@ export class MessageHistogramTooltip extends LitElement {
         ${this.totalMessages.toLocaleString()} messages in last ${this.timeRange}h
         (avg: ${avgPerHour.toFixed(1)}/hour)
       </div>
+
+      ${this.lastUpdate ? html`
+        <div class="timestamp">
+          Last update: ${formatFullTimestamp(this.lastUpdate)}
+        </div>
+      ` : ''}
     `;
   }
 

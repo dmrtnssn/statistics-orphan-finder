@@ -82,3 +82,75 @@ export function formatDuration(seconds: number): string {
     return `${days} day${days > 1 ? 's' : ''}`;
   }
 }
+
+/**
+ * Format ISO timestamp to relative time
+ * Returns ultra-short format: 45s, 5m, 3h, 5d, 2mo, 1y
+ */
+export function formatRelativeTime(isoString: string | null): string {
+  if (!isoString) return '-';
+
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+
+    // Under 1 minute: show seconds
+    if (diffSeconds < 60) {
+      return `${diffSeconds}s`;
+    }
+
+    // Under 1 hour: show minutes
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m`;
+    }
+
+    // Under 1 day: show hours
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `${diffHours}h`;
+    }
+
+    // Under 30 days: show days
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) {
+      return `${diffDays}d`;
+    }
+
+    // Under 1 year: show months
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) {
+      return `${diffMonths}mo`;
+    }
+
+    // 1 year or more: show years
+    const diffYears = Math.floor(diffDays / 365);
+    return `${diffYears}y`;
+  } catch {
+    return '-';
+  }
+}
+
+/**
+ * Format ISO timestamp to full date+time without milliseconds
+ * Returns format: YYYY-MM-DD HH:MM:SS
+ */
+export function formatFullTimestamp(isoString: string | null): string {
+  if (!isoString) return 'Never updated';
+
+  try {
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  } catch {
+    return isoString;
+  }
+}
