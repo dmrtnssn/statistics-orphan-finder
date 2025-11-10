@@ -545,13 +545,13 @@ export class StorageHealthSummary extends LitElement {
       return html`<div class="no-issues">No database data<br><small>Database appears empty</small></div>`;
     }
 
-    // Define segments in fixed legend order: States, Short-term, Long-term, Other
+    // Define segments and sort by size (largest first) to match pie chart order
     const segments = [
       { percent: (states / total) * 100, color: '#2196F3', label: 'States', size: states },
       { percent: (statsShort / total) * 100, color: '#FF9800', label: 'Statistics Short-term', size: statsShort },
       { percent: (statsLong / total) * 100, color: '#4CAF50', label: 'Statistics Long-term', size: statsLong },
       { percent: (other / total) * 100, color: '#9E9E9E', label: 'Other', size: other }
-    ];
+    ].sort((a, b) => b.size - a.size);
 
     // Map segments to their record counts
     const getRecordCount = (label: string): number => {

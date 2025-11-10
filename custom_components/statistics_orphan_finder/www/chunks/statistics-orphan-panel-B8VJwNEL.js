@@ -973,7 +973,7 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
       { percent: statsShort / total * 100, color: "#FF9800", label: "Statistics Short-term", size: statsShort },
       { percent: statsLong / total * 100, color: "#4CAF50", label: "Statistics Long-term", size: statsLong },
       { percent: other / total * 100, color: "#9E9E9E", label: "Other", size: other }
-    ];
+    ].sort((a, b) => b.size - a.size);
     const getRecordCount = (label) => {
       switch (label) {
         case "States":
@@ -2635,7 +2635,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BGtLaaM2.js");
+      await import("./entity-details-modal-BbQzR4pN.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2644,7 +2644,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BBoM18xf.js");
+      await import("./delete-sql-modal-CokLZGJs.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4328,4 +4328,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-bOpHDl0y.js.map
+//# sourceMappingURL=statistics-orphan-panel-B8VJwNEL.js.map
