@@ -48,6 +48,9 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         # Key: session_id (UUID), Value: {data: dict, timestamp: float, current_step: int}
         self._step_sessions: dict[str, dict[str, Any]] = {}
 
+        # Shutdown flag to prevent processing requests during unload
+        self._is_shutting_down = False
+
     def _get_engine(self):
         """Get or create database engine."""
         return self.db_service.get_engine()
@@ -587,6 +590,10 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         Returns:
             Step result dictionary with status and data
         """
+        # Check if coordinator is shutting down
+        if self._is_shutting_down:
+            raise RuntimeError("Coordinator is shutting down, cannot process step requests")
+
         if step == 0:
             return self._init_step_data(session_id)
         elif step == 1:
@@ -647,10 +654,21 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Shutdown coordinator and clean up resources."""
-        if self.db_service:
-            await self.hass.async_add_executor_job(self.db_service.close)
+        _LOGGER.info("Starting coordinator shutdown")
+
+        # Set shutdown flag to prevent new requests
+        self._is_shutting_down = True
+
         # Clean up any in-progress step sessions
         session_count = len(self._step_sessions)
         if session_count > 0:
             _LOGGER.info("Cleaning up %d in-progress session(s) on shutdown", session_count)
         self._step_sessions.clear()
+
+        # Close database connection
+        if self.db_service:
+            _LOGGER.debug("Closing database connection")
+            await self.hass.async_add_executor_job(self.db_service.close)
+            _LOGGER.debug("Database connection closed")
+
+        _LOGGER.info("Coordinator shutdown complete")
