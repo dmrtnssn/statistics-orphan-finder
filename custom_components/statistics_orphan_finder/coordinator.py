@@ -51,9 +51,23 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         # Shutdown flag to prevent processing requests during unload
         self._is_shutting_down = False
 
+        # Cache version from manifest.json (read once at init to avoid blocking I/O)
+        self._version = self._read_version()
+
     def _get_engine(self):
         """Get or create database engine."""
         return self.db_service.get_engine()
+
+    def _read_version(self) -> str:
+        """Read version from manifest.json (synchronous, called only during __init__)."""
+        try:
+            manifest_path = Path(__file__).parent / "manifest.json"
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+                return manifest.get("version", "unknown")
+        except Exception as err:
+            _LOGGER.warning("Could not read version from manifest.json: %s", err)
+            return "unknown"
 
     def _cleanup_stale_sessions(self) -> None:
         """Clean up sessions older than SESSION_TIMEOUT."""
@@ -88,15 +102,8 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         """Get database size information."""
         result = await self.db_service.async_get_database_size()
 
-        # Add version from manifest.json
-        try:
-            manifest_path = Path(__file__).parent / "manifest.json"
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-                result["version"] = manifest.get("version", "unknown")
-        except Exception as err:
-            _LOGGER.warning("Could not read version from manifest.json: %s", err)
-            result["version"] = "unknown"
+        # Add cached version (read once during __init__)
+        result["version"] = self._version
 
         return result
 

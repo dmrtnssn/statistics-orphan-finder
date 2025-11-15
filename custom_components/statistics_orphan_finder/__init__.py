@@ -27,8 +27,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Statistics Orphan Finder from a config entry."""
     coordinator = StatisticsOrphanCoordinator(hass, entry)
 
-    # Create and register the API view
-    view = StatisticsOrphanView(coordinator)
+    # Create and register the API view (view dynamically looks up coordinator)
+    view = StatisticsOrphanView(hass, entry.entry_id)
     hass.http.register_view(view)
 
     # Store coordinator and view for later cleanup
@@ -160,14 +160,31 @@ class StatisticsOrphanView(HomeAssistantView):
     name = "api:statistics_orphan_finder"
     requires_auth = True
 
-    def __init__(self, coordinator: StatisticsOrphanCoordinator):
+    def __init__(self, hass: HomeAssistant, entry_id: str):
         """Initialize the view."""
-        self.coordinator = coordinator
+        self.hass = hass
+        self.entry_id = entry_id
+
+    def _get_coordinator(self) -> StatisticsOrphanCoordinator | None:
+        """Get the current coordinator instance from hass.data."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self.entry_id)
+        if entry_data:
+            return entry_data.get("coordinator")
+        return None
 
     async def get(self, request):
         """Handle GET request."""
+        # Get current coordinator (handles reload gracefully)
+        coordinator = self._get_coordinator()
+        if not coordinator:
+            _LOGGER.error("Coordinator not found for entry %s", self.entry_id)
+            return web.json_response(
+                {"error": "Integration not initialized"},
+                status=503
+            )
+
         # Check if coordinator is shutting down
-        if self.coordinator._is_shutting_down:
+        if coordinator._is_shutting_down:
             _LOGGER.warning("Request received during shutdown, rejecting")
             return web.json_response(
                 {"error": "Integration is reloading, please try again in a moment"},
@@ -177,7 +194,7 @@ class StatisticsOrphanView(HomeAssistantView):
         action = request.query.get("action")
 
         if action == "database_size":
-            db_size = await self.coordinator.async_get_database_size()
+            db_size = await coordinator.async_get_database_size()
             return web.json_response(db_size)
 
         elif action == "entity_storage_overview_step":
@@ -204,7 +221,7 @@ class StatisticsOrphanView(HomeAssistantView):
                         status=400
                     )
 
-                result = await self.coordinator.async_execute_overview_step(step, session_id)
+                result = await coordinator.async_execute_overview_step(step, session_id)
                 return web.json_response(result)
             except ValueError as err:
                 # Sanitize error message for client (log full error server-side)
@@ -233,7 +250,7 @@ class StatisticsOrphanView(HomeAssistantView):
                         status=400
                     )
 
-                histogram = await self.coordinator.async_get_message_histogram(entity_id, hours_int)
+                histogram = await coordinator.async_get_message_histogram(entity_id, hours_int)
                 return web.json_response(histogram)
             except ValueError as err:
                 # Sanitize error message for client
@@ -267,13 +284,13 @@ class StatisticsOrphanView(HomeAssistantView):
                 in_states_meta = request.query.get("in_states_meta", "false").lower() == "true"
                 in_statistics_meta = request.query.get("in_statistics_meta", "false").lower() == "true"
 
-                sql = self.coordinator.generate_delete_sql(
+                sql = coordinator.generate_delete_sql(
                     entity_id=entity_id,
                     origin=origin,
                     in_states_meta=in_states_meta,
                     in_statistics_meta=in_statistics_meta
                 )
-                storage_saved = self.coordinator._calculate_entity_storage(
+                storage_saved = coordinator._calculate_entity_storage(
                     entity_id=entity_id,
                     origin=origin,
                     in_states_meta=in_states_meta,
