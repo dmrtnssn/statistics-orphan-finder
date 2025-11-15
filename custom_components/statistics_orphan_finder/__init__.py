@@ -27,10 +27,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Statistics Orphan Finder from a config entry."""
     coordinator = StatisticsOrphanCoordinator(hass, entry)
 
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    # Create and register the API view (view dynamically looks up coordinator)
+    view = StatisticsOrphanView(hass, entry.entry_id)
+    hass.http.register_view(view)
 
-    # Register the API view
-    hass.http.register_view(StatisticsOrphanView(coordinator))
+    # Store coordinator and view for later cleanup
+    hass.data[DOMAIN][entry.entry_id] = {
+        "coordinator": coordinator,
+        "view": view,
+    }
 
     # Copy frontend files to www synchronously
     def copy_frontend_file():
@@ -101,9 +106,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+    _LOGGER.info("Unloading Statistics Orphan Finder integration")
+
+    # Retrieve stored data
+    entry_data = hass.data[DOMAIN].pop(entry.entry_id)
+    coordinator = entry_data["coordinator"]
+    view = entry_data["view"]
+
+    # Shutdown coordinator (closes DB, clears sessions, sets shutdown flag)
     await coordinator.async_shutdown()
 
+    # Unregister the frontend panel
+    try:
+        frontend.async_remove_panel(hass, "statistics-orphans")
+        _LOGGER.info("Unregistered frontend panel: statistics-orphans")
+    except Exception as err:
+        # Log but don't fail the unload if panel cleanup fails
+        _LOGGER.warning("Failed to unregister frontend panel: %s", err)
+
+    # Unregister the HTTP view
+    # Home Assistant doesn't provide a direct unregister method, but we can
+    # remove the view from the app's router by name
+    try:
+        # Find and remove all routes matching this view's name
+        routes_to_remove = []
+        for route in hass.http.app.router.routes():
+            if hasattr(route.resource, '_path') and route.resource._path == view.url:
+                routes_to_remove.append(route)
+
+        for route in routes_to_remove:
+            hass.http.app.router._resources.remove(route.resource)
+            _LOGGER.debug("Removed HTTP route: %s", view.url)
+
+        if routes_to_remove:
+            _LOGGER.info("Unregistered API view: %s", view.name)
+    except Exception as err:
+        # Log but don't fail the unload if view cleanup fails
+        _LOGGER.warning("Failed to unregister HTTP view %s: %s", view.name, err)
+
+    # Note: Frontend files in www/community/statistics_orphan_finder/ are cleaned up
+    # during setup phase (async_setup_entry removes old chunks and copies new ones).
+    # This approach avoids race conditions where files might be deleted while
+    # a user has the panel open in their browser.
+
+    _LOGGER.info("Statistics Orphan Finder unloaded successfully")
     return True
 
 
@@ -114,16 +160,41 @@ class StatisticsOrphanView(HomeAssistantView):
     name = "api:statistics_orphan_finder"
     requires_auth = True
 
-    def __init__(self, coordinator: StatisticsOrphanCoordinator):
+    def __init__(self, hass: HomeAssistant, entry_id: str):
         """Initialize the view."""
-        self.coordinator = coordinator
+        self.hass = hass
+        self.entry_id = entry_id
+
+    def _get_coordinator(self) -> StatisticsOrphanCoordinator | None:
+        """Get the current coordinator instance from hass.data."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self.entry_id)
+        if entry_data:
+            return entry_data.get("coordinator")
+        return None
 
     async def get(self, request):
         """Handle GET request."""
+        # Get current coordinator (handles reload gracefully)
+        coordinator = self._get_coordinator()
+        if not coordinator:
+            _LOGGER.error("Coordinator not found for entry %s", self.entry_id)
+            return web.json_response(
+                {"error": "Integration not initialized"},
+                status=503
+            )
+
+        # Check if coordinator is shutting down
+        if coordinator._is_shutting_down:
+            _LOGGER.warning("Request received during shutdown, rejecting")
+            return web.json_response(
+                {"error": "Integration is reloading, please try again in a moment"},
+                status=503
+            )
+
         action = request.query.get("action")
 
         if action == "database_size":
-            db_size = await self.coordinator.async_get_database_size()
+            db_size = await coordinator.async_get_database_size()
             return web.json_response(db_size)
 
         elif action == "entity_storage_overview_step":
@@ -150,7 +221,7 @@ class StatisticsOrphanView(HomeAssistantView):
                         status=400
                     )
 
-                result = await self.coordinator.async_execute_overview_step(step, session_id)
+                result = await coordinator.async_execute_overview_step(step, session_id)
                 return web.json_response(result)
             except ValueError as err:
                 # Sanitize error message for client (log full error server-side)
@@ -179,7 +250,7 @@ class StatisticsOrphanView(HomeAssistantView):
                         status=400
                     )
 
-                histogram = await self.coordinator.async_get_message_histogram(entity_id, hours_int)
+                histogram = await coordinator.async_get_message_histogram(entity_id, hours_int)
                 return web.json_response(histogram)
             except ValueError as err:
                 # Sanitize error message for client
@@ -213,13 +284,13 @@ class StatisticsOrphanView(HomeAssistantView):
                 in_states_meta = request.query.get("in_states_meta", "false").lower() == "true"
                 in_statistics_meta = request.query.get("in_statistics_meta", "false").lower() == "true"
 
-                sql = self.coordinator.generate_delete_sql(
+                sql = coordinator.generate_delete_sql(
                     entity_id=entity_id,
                     origin=origin,
                     in_states_meta=in_states_meta,
                     in_statistics_meta=in_statistics_meta
                 )
-                storage_saved = self.coordinator._calculate_entity_storage(
+                storage_saved = coordinator._calculate_entity_storage(
                     entity_id=entity_id,
                     origin=origin,
                     in_states_meta=in_states_meta,

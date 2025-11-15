@@ -48,9 +48,26 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         # Key: session_id (UUID), Value: {data: dict, timestamp: float, current_step: int}
         self._step_sessions: dict[str, dict[str, Any]] = {}
 
+        # Shutdown flag to prevent processing requests during unload
+        self._is_shutting_down = False
+
+        # Cache version from manifest.json (read once at init to avoid blocking I/O)
+        self._version = self._read_version()
+
     def _get_engine(self):
         """Get or create database engine."""
         return self.db_service.get_engine()
+
+    def _read_version(self) -> str:
+        """Read version from manifest.json (synchronous, called only during __init__)."""
+        try:
+            manifest_path = Path(__file__).parent / "manifest.json"
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+                return manifest.get("version", "unknown")
+        except Exception as err:
+            _LOGGER.warning("Could not read version from manifest.json: %s", err)
+            return "unknown"
 
     def _cleanup_stale_sessions(self) -> None:
         """Clean up sessions older than SESSION_TIMEOUT."""
@@ -85,15 +102,8 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         """Get database size information."""
         result = await self.db_service.async_get_database_size()
 
-        # Add version from manifest.json
-        try:
-            manifest_path = Path(__file__).parent / "manifest.json"
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-                result["version"] = manifest.get("version", "unknown")
-        except Exception as err:
-            _LOGGER.warning("Could not read version from manifest.json: %s", err)
-            result["version"] = "unknown"
+        # Add cached version (read once during __init__)
+        result["version"] = self._version
 
         return result
 
@@ -587,6 +597,10 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         Returns:
             Step result dictionary with status and data
         """
+        # Check if coordinator is shutting down
+        if self._is_shutting_down:
+            raise RuntimeError("Coordinator is shutting down, cannot process step requests")
+
         if step == 0:
             return self._init_step_data(session_id)
         elif step == 1:
@@ -647,10 +661,21 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Shutdown coordinator and clean up resources."""
-        if self.db_service:
-            await self.hass.async_add_executor_job(self.db_service.close)
+        _LOGGER.info("Starting coordinator shutdown")
+
+        # Set shutdown flag to prevent new requests
+        self._is_shutting_down = True
+
         # Clean up any in-progress step sessions
         session_count = len(self._step_sessions)
         if session_count > 0:
             _LOGGER.info("Cleaning up %d in-progress session(s) on shutdown", session_count)
         self._step_sessions.clear()
+
+        # Close database connection
+        if self.db_service:
+            _LOGGER.debug("Closing database connection")
+            await self.hass.async_add_executor_job(self.db_service.close)
+            _LOGGER.debug("Database connection closed")
+
+        _LOGGER.info("Coordinator shutdown complete")
