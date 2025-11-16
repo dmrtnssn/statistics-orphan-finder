@@ -25,7 +25,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Statistics Orphan Finder from a config entry."""
-    coordinator = StatisticsOrphanCoordinator(hass, entry)
+    # Get integration object (HA already loaded manifest)
+    from homeassistant.loader import async_get_integration
+    integration = await async_get_integration(hass, entry.domain)
+    version = integration.version
+
+    coordinator = StatisticsOrphanCoordinator(hass, entry, version)
 
     # Create and register the API view (view dynamically looks up coordinator)
     view = StatisticsOrphanView(hass, entry.entry_id)

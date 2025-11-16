@@ -1,10 +1,8 @@
 """DataUpdateCoordinator for Statistics Orphan Finder."""
-import json
 import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -29,7 +27,7 @@ SESSION_TIMEOUT = 300
 class StatisticsOrphanCoordinator(DataUpdateCoordinator):
     """Coordinator to fetch orphaned statistics entities."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, version: str) -> None:
         """Initialize coordinator."""
         super().__init__(
             hass,
@@ -51,23 +49,12 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         # Shutdown flag to prevent processing requests during unload
         self._is_shutting_down = False
 
-        # Cache version from manifest.json (read once at init to avoid blocking I/O)
-        self._version = self._read_version()
+        # Cache version from integration manifest (passed from setup)
+        self._version = version
 
     def _get_engine(self):
         """Get or create database engine."""
         return self.db_service.get_engine()
-
-    def _read_version(self) -> str:
-        """Read version from manifest.json (synchronous, called only during __init__)."""
-        try:
-            manifest_path = Path(__file__).parent / "manifest.json"
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-                return manifest.get("version", "unknown")
-        except Exception as err:
-            _LOGGER.warning("Could not read version from manifest.json: %s", err)
-            return "unknown"
 
     def _cleanup_stale_sessions(self) -> None:
         """Clean up sessions older than SESSION_TIMEOUT."""
