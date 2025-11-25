@@ -217,7 +217,7 @@ Queries join on:
 Entity availability and statistics eligibility logic lives in `EntityAnalyzer`:
 - `determine_availability_reason()`: Explains why entity is unavailable (disabled, device disabled, config entry issues, etc.)
 - `determine_statistics_eligibility()`: Explains why entity can't have statistics (domain incompatibility, non-numeric state, etc.)
-- `calculate_update_frequency()`: Calculates message interval and 24-hour update counts from states table
+- `calculate_update_frequency()`: Utility method for calculating update frequency (tested but not used in production; update frequency is calculated inline during Step 2)
 
 ## Configuration
 

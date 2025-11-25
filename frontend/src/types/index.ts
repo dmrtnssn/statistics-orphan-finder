@@ -173,17 +173,19 @@ export interface EntityStorageOverviewResponse {
 }
 
 // Step response for progressive loading
+// Note: Multiple variants have status: 'complete' with different data fields.
+// TypeScript can discriminate via property names (entities_found vs total_entities vs deleted_storage_bytes).
+// Step 0: status 'initialized' with session info
+// Steps 1,2,4,5: status 'complete' with entities_found
+// Step 3,6: status 'complete' with total_entities
+// Step 7: status 'complete' with deleted_storage_bytes
+// Step 8: Full EntityStorageOverviewResponse
 export type StepResponse =
   | { status: 'initialized'; total_steps: number; session_id: string }
   | { status: 'complete'; entities_found: number }
   | { status: 'complete'; total_entities: number }
   | { status: 'complete'; deleted_storage_bytes: number }
   | EntityStorageOverviewResponse;
-
-// API Result types with discriminated unions
-export type ApiResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
 
 // ============================================================================
 // Table Component Types
@@ -235,29 +237,6 @@ export interface SortChangedEvent extends CustomEvent {
   };
 }
 
-export interface FilterChangedEvent extends CustomEvent {
-  detail: Partial<FilterState>;
-}
-
-export interface EntityClickedEvent extends CustomEvent {
-  detail: {
-    entityId: string;
-  };
-}
-
-export interface EntityDetailsEvent extends CustomEvent {
-  detail: {
-    entity: StorageEntity;
-  };
-}
-
-export interface SelectionChangedEvent extends CustomEvent {
-  detail: {
-    entityId: string;
-    selected: boolean;
-  };
-}
-
 // ============================================================================
 // Modal Types
 // ============================================================================
@@ -270,31 +249,14 @@ export interface DeleteModalData {
   count: number;
 }
 
-export interface EntityDetailsModalData {
-  entity: StorageEntity;
-}
-
 // ============================================================================
 // API Action Types
 // ============================================================================
 
-export type ApiAction = 'database_size' | 'generate_delete_sql';
-
-export interface ApiParams {
-  action: ApiAction;
-  metadata_id?: number;
-  origin?: OrphanOrigin;
-}
-
-// ============================================================================
-// Utility Types
-// ============================================================================
-
-export interface LoadingState {
-  isLoading: boolean;
-  progress: number;
-  message: string;
-  error: string | null;
-}
+export type ApiAction =
+  | 'database_size'
+  | 'entity_storage_overview_step'
+  | 'entity_message_histogram'
+  | 'generate_delete_sql';
 
 // Note: Custom element types are declared in their respective component files

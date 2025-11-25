@@ -1,5 +1,5 @@
 import { a as i, i as i$1, x, n } from "./lit-core-eQjJmNqs.js";
-import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-B8VJwNEL.js";
+import { s as sharedStyles, f as formatNumber, a as formatDuration } from "./statistics-orphan-panel-BvxM0vIG.js";
 var __defProp = Object.defineProperty;
 var __decorateClass = (decorators, target, key, kind) => {
   var result = void 0;
@@ -295,4 +295,4 @@ if (!customElements.get("entity-details-modal")) {
 export {
   EntityDetailsModal
 };
-//# sourceMappingURL=entity-details-modal-BbQzR4pN.js.map
+//# sourceMappingURL=entity-details-modal-BQPArlZR.js.map

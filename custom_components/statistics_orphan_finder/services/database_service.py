@@ -15,6 +15,22 @@ from ..const import CONF_DB_URL, CONF_USERNAME, CONF_PASSWORD
 _LOGGER = logging.getLogger(__name__)
 
 
+def get_database_type(entry: ConfigEntry) -> tuple[bool, bool, bool]:
+    """Determine database type from connection URL.
+
+    Args:
+        entry: Config entry containing database URL.
+
+    Returns:
+        Tuple of (is_sqlite, is_mysql, is_postgres) boolean flags.
+    """
+    db_url = entry.data[CONF_DB_URL]
+    is_sqlite = db_url.startswith("sqlite")
+    is_mysql = "mysql" in db_url or "mariadb" in db_url
+    is_postgres = "postgresql" in db_url or "postgres" in db_url
+    return (is_sqlite, is_mysql, is_postgres)
+
+
 class DatabaseService:
     """Service for database operations."""
 
@@ -44,6 +60,14 @@ class DatabaseService:
 
         return self._engine
 
+    def get_db_type(self) -> tuple[bool, bool, bool]:
+        """Determine database type from connection URL.
+
+        Returns:
+            Tuple of (is_sqlite, is_mysql, is_postgres) boolean flags.
+        """
+        return get_database_type(self.entry)
+
     def close(self) -> None:
         """Close database engine."""
         if self._engine:
@@ -56,10 +80,7 @@ class DatabaseService:
 
         with engine.connect() as conn:
             # Determine database type
-            db_url = self.entry.data[CONF_DB_URL]
-            is_sqlite = db_url.startswith("sqlite")
-            is_mysql = "mysql" in db_url or "mariadb" in db_url
-            is_postgres = "postgresql" in db_url or "postgres" in db_url
+            is_sqlite, is_mysql, is_postgres = self.get_db_type()
 
             # Get database size for different tables
             # Query for states table size

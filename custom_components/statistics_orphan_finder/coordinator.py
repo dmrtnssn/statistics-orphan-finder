@@ -2,11 +2,12 @@
 import logging
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -43,7 +44,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         self.sql_generator = SqlGenerator(entry)
 
         # Store intermediate data for step-by-step fetching with session isolation
-        # Key: session_id (UUID), Value: {data: dict, timestamp: float, current_step: int}
+        # Key: session_id (UUID), Value: {data: dict, timestamp: float}
         self._step_sessions: dict[str, dict[str, Any]] = {}
 
         # Shutdown flag to prevent processing requests during unload
@@ -147,8 +148,6 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         Returns:
             Dictionary with status, total_steps, and session_id
         """
-        from collections import defaultdict
-
         # Clean up stale sessions before creating new one
         self._cleanup_stale_sessions()
 
@@ -171,11 +170,9 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                     'last_state_update': None,
                     'last_stats_update': None,
                     'metadata_id': None,
-                }),
-                'current_step': 0
+                })
             },
-            'timestamp': time.time(),
-            'current_step': 0
+            'timestamp': time.time()
         }
 
         _LOGGER.debug("Created new session %s", session_id[:8])
@@ -284,8 +281,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                         if not step_data['entity_map'][entity_id]['last_stats_update'] or \
                            last_update > step_data['entity_map'][entity_id]['last_stats_update']:
                             step_data['entity_map'][entity_id]['last_stats_update'] = last_update
-            except Exception as err:
-                _LOGGER.warning("Could not query statistics_short_term: %s", err)
+            except OperationalError as err:
+                # Table might not exist in older HA versions or different database configurations
+                _LOGGER.info("statistics_short_term table not available: %s", err)
+            except SQLAlchemyError as err:
+                # Unexpected database error - log as error and re-raise
+                _LOGGER.error("Database error querying statistics_short_term: %s", err)
+                raise
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_short_term'])
         self._step_sessions[session_id]['timestamp'] = time.time()

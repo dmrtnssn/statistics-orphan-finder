@@ -810,23 +810,24 @@ export class StorageOverviewView extends LitElement {
   }
 
   /**
-   * Generate SQL for a single entity after user confirms
+   * Determine origin and count for an entity based on which tables it's in
    */
-  private async generateSingleEntitySqlAfterConfirmation(entity: StorageEntity) {
-    // Determine origin based on which tables the entity is in
-    let origin: string;
-    let count: number;
-
+  private determineEntityOriginAndCount(entity: StorageEntity): { origin: string; count: number } | null {
     const inStates = entity.in_states_meta;
     const inStatistics = entity.in_statistics_meta;
 
     if (inStates && inStatistics) {
-      origin = 'States+Statistics';
-      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+      return {
+        origin: 'States+Statistics',
+        count: entity.states_count + entity.stats_short_count + entity.stats_long_count
+      };
     } else if (inStates) {
-      origin = 'States';
-      count = entity.states_count;
+      return {
+        origin: 'States',
+        count: entity.states_count
+      };
     } else if (inStatistics) {
+      let origin: string;
       if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
         origin = 'Both';
       } else if (entity.in_statistics_long_term) {
@@ -834,11 +835,27 @@ export class StorageOverviewView extends LitElement {
       } else {
         origin = 'Short-term';
       }
-      count = entity.stats_short_count + entity.stats_long_count;
-    } else {
-      // Not in any table - shouldn't happen
-      return;
+      return {
+        origin,
+        count: entity.stats_short_count + entity.stats_long_count
+      };
     }
+
+    // Not in any table - shouldn't happen
+    return null;
+  }
+
+  /**
+   * Generate SQL for a single entity after user confirms
+   */
+  private async generateSingleEntitySqlAfterConfirmation(entity: StorageEntity) {
+    // Determine origin based on which tables the entity is in
+    const result = this.determineEntityOriginAndCount(entity);
+    if (!result) return;
+
+    const { origin, count } = result;
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
 
     // Update modal data
     const modalData: DeleteModalData = {
@@ -904,31 +921,12 @@ export class StorageOverviewView extends LitElement {
 
         try {
           // Determine parameters for SQL generation
+          const result = this.determineEntityOriginAndCount(entity);
+          if (!result) continue; // Skip entities not in any table
+
+          const { origin, count } = result;
           const inStates = entity.in_states_meta;
           const inStatistics = entity.in_statistics_meta;
-
-          let origin: string;
-          let count: number;
-
-          if (inStates && inStatistics) {
-            origin = 'States+Statistics';
-            count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-          } else if (inStates) {
-            origin = 'States';
-            count = entity.states_count;
-          } else if (inStatistics) {
-            if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-              origin = 'Both';
-            } else if (entity.in_statistics_long_term) {
-              origin = 'Long-term';
-            } else {
-              origin = 'Short-term';
-            }
-            count = entity.stats_short_count + entity.stats_long_count;
-          } else {
-            // Skip entities not in any table
-            continue;
-          }
 
           // Call API to generate SQL
           const response = await apiService.generateDeleteSql(

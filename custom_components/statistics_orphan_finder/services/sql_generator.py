@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 
 from homeassistant.config_entries import ConfigEntry
 
-from ..const import CONF_DB_URL
+from .database_service import get_database_type
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,9 +59,7 @@ class SqlGenerator:
             SQL DELETE statement wrapped in a transaction for manual execution
         """
         # Determine database type
-        db_url = self.entry.data[CONF_DB_URL]
-        is_sqlite = db_url.startswith("sqlite")
-        is_mysql = "mysql" in db_url or "mariadb" in db_url
+        is_sqlite, is_mysql, _is_postgres = get_database_type(self.entry)
 
         # Choose transaction syntax based on database type
         if is_mysql:

@@ -52,20 +52,6 @@ export function formatInterval(seconds: number | null): string {
 }
 
 /**
- * Format ISO date string to readable format
- */
-export function formatDate(isoString: string | null): string {
-  if (!isoString) return '';
-
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString();
-  } catch {
-    return isoString;
-  }
-}
-
-/**
  * Format duration in seconds to human-readable string
  */
 export function formatDuration(seconds: number): string {

@@ -502,17 +502,6 @@ class ApiService {
       throw new Error(`Failed to fetch message histogram: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   }
-  /**
-   * Show Home Assistant's more-info dialog for an entity
-   */
-  showMoreInfo(entityId) {
-    const event = new Event("hass-more-info", {
-      bubbles: true,
-      composed: true
-    });
-    event.detail = { entityId };
-    document.querySelector("home-assistant")?.dispatchEvent(event);
-  }
 }
 const CACHE_KEY = "statistics_orphan_finder_cache";
 const CACHE_VERSION = 1;
@@ -2635,7 +2624,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BbQzR4pN.js");
+      await import("./entity-details-modal-BQPArlZR.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2644,7 +2633,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CokLZGJs.js");
+      await import("./delete-sql-modal-CczMZhaV.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -3210,20 +3199,23 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     }
   }
   /**
-   * Generate SQL for a single entity after user confirms
+   * Determine origin and count for an entity based on which tables it's in
    */
-  async generateSingleEntitySqlAfterConfirmation(entity) {
-    let origin;
-    let count;
+  determineEntityOriginAndCount(entity) {
     const inStates = entity.in_states_meta;
     const inStatistics = entity.in_statistics_meta;
     if (inStates && inStatistics) {
-      origin = "States+Statistics";
-      count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
+      return {
+        origin: "States+Statistics",
+        count: entity.states_count + entity.stats_short_count + entity.stats_long_count
+      };
     } else if (inStates) {
-      origin = "States";
-      count = entity.states_count;
+      return {
+        origin: "States",
+        count: entity.states_count
+      };
     } else if (inStatistics) {
+      let origin;
       if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
         origin = "Both";
       } else if (entity.in_statistics_long_term) {
@@ -3231,10 +3223,22 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       } else {
         origin = "Short-term";
       }
-      count = entity.stats_short_count + entity.stats_long_count;
-    } else {
-      return;
+      return {
+        origin,
+        count: entity.stats_short_count + entity.stats_long_count
+      };
     }
+    return null;
+  }
+  /**
+   * Generate SQL for a single entity after user confirms
+   */
+  async generateSingleEntitySqlAfterConfirmation(entity) {
+    const result = this.determineEntityOriginAndCount(entity);
+    if (!result) return;
+    const { origin, count } = result;
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
     const modalData = {
       entityId: entity.entity_id,
       metadataId: entity.metadata_id || 0,
@@ -3280,28 +3284,11 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       for (const entity of this.deleteModalEntities) {
         this.bulkSqlProgress++;
         try {
+          const result = this.determineEntityOriginAndCount(entity);
+          if (!result) continue;
+          const { origin, count } = result;
           const inStates = entity.in_states_meta;
           const inStatistics = entity.in_statistics_meta;
-          let origin;
-          let count;
-          if (inStates && inStatistics) {
-            origin = "States+Statistics";
-            count = entity.states_count + entity.stats_short_count + entity.stats_long_count;
-          } else if (inStates) {
-            origin = "States";
-            count = entity.states_count;
-          } else if (inStatistics) {
-            if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-              origin = "Both";
-            } else if (entity.in_statistics_long_term) {
-              origin = "Long-term";
-            } else {
-              origin = "Short-term";
-            }
-            count = entity.stats_short_count + entity.stats_long_count;
-          } else {
-            continue;
-          }
           const response = await apiService.generateDeleteSql(
             entity.entity_id,
             origin,
@@ -4328,4 +4315,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-B8VJwNEL.js.map
+//# sourceMappingURL=statistics-orphan-panel-BvxM0vIG.js.map

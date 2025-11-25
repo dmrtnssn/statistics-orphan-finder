@@ -117,16 +117,4 @@ export class ApiService {
       throw new Error(`Failed to fetch message histogram: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   }
-
-  /**
-   * Show Home Assistant's more-info dialog for an entity
-   */
-  showMoreInfo(entityId: string): void {
-    const event = new Event('hass-more-info', {
-      bubbles: true,
-      composed: true,
-    });
-    (event as any).detail = { entityId };
-    document.querySelector('home-assistant')?.dispatchEvent(event);
-  }
 }
