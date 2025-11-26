@@ -11,6 +11,7 @@ VENV_DIR="$SCRIPT_DIR/venv"
 
 # Parse arguments
 COVERAGE=false
+SILENT=false
 HELP=false
 PYTEST_ARGS=()
 
@@ -18,6 +19,10 @@ for arg in "$@"; do
     case $arg in
         --coverage|-c)
             COVERAGE=true
+            shift
+            ;;
+        --silent|-s)
+            SILENT=true
             shift
             ;;
         --help|-h)
@@ -36,11 +41,13 @@ if [ "$HELP" = true ]; then
     echo ""
     echo "Options:"
     echo "  -c, --coverage    Run tests with coverage report (HTML + terminal)"
+    echo "  -s, --silent      Run in silent mode (minimal output, only show success rate and failures)"
     echo "  -h, --help        Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./run-tests.sh                          # Run all tests"
     echo "  ./run-tests.sh --coverage               # Run with coverage report"
+    echo "  ./run-tests.sh --silent                 # Run with minimal output"
     echo "  ./run-tests.sh -v                       # Run with verbose output"
     echo "  ./run-tests.sh tests/test_config_flow.py  # Run specific test file"
     echo "  ./run-tests.sh --coverage -v            # Coverage + verbose"
@@ -51,7 +58,7 @@ fi
 
 # Check if we're already in a virtual environment
 if [ -z "$VIRTUAL_ENV" ]; then
-    echo "Virtual environment not activated. Activating..."
+    [ "$SILENT" = false ] && echo "Virtual environment not activated. Activating..."
 
     # Check if venv exists
     if [ ! -d "$VENV_DIR" ]; then
@@ -62,9 +69,9 @@ if [ -z "$VIRTUAL_ENV" ]; then
 
     # Activate virtual environment
     source "$VENV_DIR/bin/activate"
-    echo "✓ Virtual environment activated"
+    [ "$SILENT" = false ] && echo "✓ Virtual environment activated"
 else
-    echo "✓ Virtual environment already activated: $VIRTUAL_ENV"
+    [ "$SILENT" = false ] && echo "✓ Virtual environment already activated: $VIRTUAL_ENV"
 fi
 
 # Check if pytest is installed
@@ -81,19 +88,32 @@ if [ "$COVERAGE" = true ]; then
     PYTEST_CMD="$PYTEST_CMD --cov=custom_components/statistics_orphan_finder --cov-report=html --cov-report=term"
 fi
 
+# Silent mode: only show failures and summary
+if [ "$SILENT" = true ]; then
+    # Use -qq for very quiet output, --tb=line for minimal traceback
+    # Disable coverage unless explicitly requested with -c
+    if [ "$COVERAGE" = false ]; then
+        PYTEST_CMD="$PYTEST_CMD --no-cov -qq --tb=line"
+    else
+        PYTEST_CMD="$PYTEST_CMD -qq --tb=line"
+    fi
+fi
+
 # Add any additional arguments
 if [ ${#PYTEST_ARGS[@]} -gt 0 ]; then
     PYTEST_CMD="$PYTEST_CMD ${PYTEST_ARGS[*]}"
 fi
 
 # Run pytest
-echo ""
-if [ "$COVERAGE" = true ]; then
-    echo "Running all Python tests with coverage..."
-else
-    echo "Running all Python tests..."
+if [ "$SILENT" = false ]; then
+    echo ""
+    if [ "$COVERAGE" = true ]; then
+        echo "Running all Python tests with coverage..."
+    else
+        echo "Running all Python tests..."
+    fi
+    echo "─────────────────────────────────────────────────"
 fi
-echo "─────────────────────────────────────────────────"
 
 eval $PYTEST_CMD
 
@@ -101,17 +121,19 @@ eval $PYTEST_CMD
 TEST_EXIT_CODE=$?
 
 # Show results
-echo ""
-if [ $TEST_EXIT_CODE -eq 0 ]; then
-    echo "✓ All tests passed!"
-    if [ "$COVERAGE" = true ]; then
-        echo ""
-        echo "Coverage report generated:"
-        echo "  - HTML: htmlcov/index.html"
-        echo "  - JSON: coverage.json"
+if [ "$SILENT" = false ]; then
+    echo ""
+    if [ $TEST_EXIT_CODE -eq 0 ]; then
+        echo "✓ All tests passed!"
+        if [ "$COVERAGE" = true ]; then
+            echo ""
+            echo "Coverage report generated:"
+            echo "  - HTML: htmlcov/index.html"
+            echo "  - JSON: coverage.json"
+        fi
+    else
+        echo "✗ Some tests failed (exit code: $TEST_EXIT_CODE)"
     fi
-else
-    echo "✗ Some tests failed (exit code: $TEST_EXIT_CODE)"
 fi
 
 exit $TEST_EXIT_CODE
