@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Statistics Orphan Finder is a Home Assistant custom integration that helps identify and manage orphaned statistics entities in the database. It provides a web-based panel for analyzing entity storage usage, detecting deleted entities, and generating SQL statements to clean up orphaned data.
 
 **Domain**: `statistics_orphan_finder`
-**Version**: 2.0.0-beta.1
+**Version**: 2.7.0
 **Type**: Custom panel with database analysis backend
+**Test Coverage**: 91% (193 tests, all passing)
 
 ## Architecture
 
@@ -54,7 +55,9 @@ The integration registers a single API endpoint at `/api/statistics_orphan_finde
 
 1. **`?action=database_size`**: Returns total database size information
 2. **`?action=entity_storage_overview_step&step=N`**: Progressive data loading (steps 0-8)
-3. **`?action=generate_delete_sql`**: Generates SQL deletion statements
+3. **`?action=entity_message_histogram`**: Returns hourly message counts for an entity
+   - Query params: `entity_id`, `hours` (24, 48, or 168)
+4. **`?action=generate_delete_sql`**: Generates SQL deletion statements
    - Query params: `origin`, `entity_id`, `in_states_meta`, `in_statistics_meta`
 
 All endpoints handled by `StatisticsOrphanView` in `__init__.py`, which delegates to coordinator methods.
@@ -79,6 +82,37 @@ All endpoints handled by `StatisticsOrphanView` in `__init__.py`, which delegate
 
 ## Development Commands
 
+### Testing
+
+**Run all tests:**
+```bash
+./run-tests.sh                    # Run all tests with full output
+./run-tests.sh --silent           # Run with minimal output (just success rate and failures)
+./run-tests.sh -s                 # Short form of --silent
+./run-tests.sh --coverage         # Run with coverage report (HTML + terminal)
+./run-tests.sh -c                 # Short form of --coverage
+```
+
+**Run specific tests:**
+```bash
+./run-tests.sh tests/test_coordinator.py                    # Single file
+./run-tests.sh tests/test_coordinator.py::TestClass         # Single test class
+./run-tests.sh tests/test_coordinator.py::TestClass::test_method  # Single test
+./run-tests.sh -v                                           # Verbose output
+```
+
+**Test structure:**
+- `tests/` - Test files (193 tests, 91% coverage)
+- `tests/conftest.py` - Shared fixtures (sqlite_engine, populated_sqlite_engine, mock_hass, etc.)
+- `tests/services/` - Service module tests
+- `.coveragerc` - Coverage configuration (important: defines omit patterns, exclude_lines)
+- `pytest.ini` - Pytest configuration (coverage enabled by default)
+
+**Coverage details:**
+- Overall: 91% (910 statements, 850 covered)
+- Perfect coverage: storage_calculator.py (100%), const.py (100%), services/__init__.py (100%)
+- Excellent: coordinator.py (91%), entity_analyzer.py (92%), sql_generator.py (95%), __init__.py (91%)
+
 ### Frontend Build
 
 ```bash
@@ -89,6 +123,20 @@ npm run build           # Production build (output to ../custom_components/stati
 npm run build:prod      # Same as build but with production mode flag
 ```
 
+### Build and Deploy
+
+**Automated deployment script:**
+```bash
+./build-and-deploy.sh    # Runs tests, builds frontend, uploads to Home Assistant
+```
+
+The script executes in this order:
+1. **Step 1**: Run tests with `./run-tests.sh -s` (deployment aborts if tests fail)
+2. **Step 2**: Build frontend with `npm run build`
+3. **Step 3**: Upload to Home Assistant via SCP
+
+**Note**: User builds manually - Claude should NOT run builds automatically.
+
 ### Testing in Home Assistant
 
 After building frontend:
@@ -96,14 +144,6 @@ After building frontend:
 2. Restart Home Assistant
 3. Add integration via Settings → Devices & Services → Statistics Orphan Finder
 4. Access panel via sidebar ("Statistics Orphans")
-
-### Deployment Script
-
-The `build-and-deploy.sh` script:
-1. Builds the frontend (`npm run build`)
-2. Uploads to Home Assistant via SCP (configured for user's local setup)
-
-**Note**: User builds manually - Claude should NOT run builds automatically.
 
 ## Key Patterns
 
@@ -145,21 +185,32 @@ All DELETE statements use proper WHERE clauses with entity_id or metadata_id.
 ## File Locations
 
 ### Python Backend
-- `custom_components/statistics_orphan_finder/*.py` - Core integration files
+- `custom_components/statistics_orphan_finder/*.py` - Core integration files (2,023 lines)
 - `custom_components/statistics_orphan_finder/services/*.py` - Service modules
 - `custom_components/statistics_orphan_finder/www/` - Built frontend (auto-generated, DO NOT edit)
 
 ### Frontend Development
-- `frontend/src/` - TypeScript source files (edit these)
+- `frontend/src/` - TypeScript source files (5,862 lines - edit these)
 - `frontend/package.json` - Node dependencies
 - `frontend/vite.config.ts` - Build configuration
 - `frontend/tsconfig.json` - TypeScript configuration
 
+### Testing
+- `tests/` - Test files (4,023 lines, 193 tests)
+- `tests/conftest.py` - Shared fixtures and test configuration
+- `tests/services/` - Service module tests
+- `run-tests.sh` - Test runner script with coverage support
+- `.coveragerc` - Coverage configuration (keep in repo - has important exclusion patterns)
+- `pytest.ini` - Pytest configuration
+
+### Scripts
+- `build-and-deploy.sh` - Automated build, test, and deploy script
+- `run-tests.sh` - Test runner with silent mode and coverage options
+
 ### Documentation
-- `README.md` - User-facing documentation
-- `docs/BUILD_INSTRUCTIONS.md` - Simplified build instructions
 - `CLAUDE.md` - This file (developer guidance)
 - `CLAUDE.local.md` - Local development notes (not in git)
+- `docs/BUILD_INSTRUCTIONS.md` - Simplified build instructions
 
 ## Important Constraints
 
@@ -186,17 +237,30 @@ Queries join on:
 
 ## Common Tasks
 
+### Adding tests for new features
+1. Create test file in `tests/` (use `test_*.py` naming)
+2. Use existing fixtures from `conftest.py`:
+   - `sqlite_engine` - In-memory SQLite with HA schema
+   - `populated_sqlite_engine` - Pre-populated with test data
+   - `mock_hass` - Mocked Home Assistant instance
+   - `mock_entity_registry`, `mock_device_registry` - Registry mocks
+3. Run tests: `./run-tests.sh tests/test_yourfile.py -v`
+4. Check coverage: `./run-tests.sh --coverage`
+5. Target: 80%+ coverage for new code
+
 ### Adding a new analysis step
 1. Add step method in `coordinator.py` (e.g., `_fetch_step_N_...`)
 2. Update `_execute_overview_step()` to route to new step
 3. Update total step count in `_init_step_data()`
 4. Update frontend to handle new step
+5. **Add tests** for the new step in `tests/test_coordinator.py`
 
 ### Adding a new service module
 1. Create file in `custom_components/statistics_orphan_finder/services/`
 2. Add class and import to `services/__init__.py`
 3. Instantiate in `StatisticsOrphanCoordinator.__init__()` (e.g., `self.new_service = NewService(hass, entry)`)
 4. Use via coordinator methods or delegate to service methods
+5. **Create test file** in `tests/services/test_yourservice.py`
 
 ### Modifying frontend
 1. Edit TypeScript files in `frontend/src/`
@@ -209,15 +273,17 @@ Queries join on:
 ### Changing database queries
 1. Locate query in appropriate service module or `coordinator.py`
 2. Update SQL via `text()` constructor with proper parameter binding
-3. Test against all database types if possible (SQLite, MySQL, PostgreSQL)
-4. Consider performance impact for large databases (Home Assistant DBs can be 10+ GB)
-5. For multi-step queries, ensure `metadata_id` is fetched early to avoid N+1 queries
+3. **Add/update tests** to cover the query changes
+4. Test against all database types if possible (SQLite, MySQL, PostgreSQL)
+5. Consider performance impact for large databases (Home Assistant DBs can be 10+ GB)
+6. For multi-step queries, ensure `metadata_id` is fetched early to avoid N+1 queries
 
-### Adding entity diagnostics
-Entity availability and statistics eligibility logic lives in `EntityAnalyzer`:
-- `determine_availability_reason()`: Explains why entity is unavailable (disabled, device disabled, config entry issues, etc.)
-- `determine_statistics_eligibility()`: Explains why entity can't have statistics (domain incompatibility, non-numeric state, etc.)
-- `calculate_update_frequency()`: Utility method for calculating update frequency (tested but not used in production; update frequency is calculated inline during Step 2)
+### Before committing changes
+1. Run tests: `./run-tests.sh --silent` (must pass)
+2. Check coverage hasn't dropped significantly
+3. Build frontend if modified: `cd frontend && npm run build`
+4. Test in actual Home Assistant instance
+5. The `build-and-deploy.sh` script runs tests automatically before deployment
 
 ## Configuration
 
