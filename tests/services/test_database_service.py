@@ -174,6 +174,104 @@ class TestDatabaseService:
         assert result["statistics_size"] > 0
         assert result["statistics_short_term_size"] > 0
 
+    def test_close_without_engine_noop(self, mock_hass: MagicMock, mock_config_entry: MagicMock):
+        """close should handle None engine safely."""
+        service = DatabaseService(mock_hass, mock_config_entry)
+        service._engine = None
+        service.close()  # Should not raise
+
+    def test_fetch_database_size_mysql_tables(
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        mock_mysql_connection: MagicMock,
+    ):
+        """_fetch_database_size should process MySQL table sizes."""
+        mock_config_entry.data["db_url"] = "mysql://localhost/homeassistant"
+        service = DatabaseService(mock_hass, mock_config_entry)
+
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_mysql_connection
+
+        with patch.object(service, "get_engine", return_value=mock_engine), patch.object(
+            service, "get_db_type", return_value=(False, True, False)
+        ):
+            result = service._fetch_database_size()
+
+        assert result["states_size"] >= 0
+        assert result["statistics_size"] >= 0
+        assert result["statistics_short_term_size"] >= 0
+
+    def test_fetch_database_size_postgres_tables(
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        mock_postgres_connection: MagicMock,
+    ):
+        """_fetch_database_size should process PostgreSQL table sizes."""
+        mock_config_entry.data["db_url"] = "postgresql://localhost/homeassistant"
+        service = DatabaseService(mock_hass, mock_config_entry)
+
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_postgres_connection
+
+        with patch.object(service, "get_engine", return_value=mock_engine), patch.object(
+            service, "get_db_type", return_value=(False, False, True)
+        ):
+            result = service._fetch_database_size()
+
+        assert result["states_size"] >= 0
+        assert result["statistics_size"] >= 0
+        assert result["statistics_short_term_size"] >= 0
+
+
+class TestDatabaseSizeMultiDB:
+    """Test database size calculation for MySQL/PostgreSQL branches."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_database_size_mysql(
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        mock_mysql_connection: MagicMock,
+    ):
+        mock_config_entry.data["db_url"] = "mysql://localhost/homeassistant"
+        service = DatabaseService(mock_hass, mock_config_entry)
+
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_mysql_connection
+
+        with patch.object(service, "get_engine", return_value=mock_engine), patch.object(
+            service, "get_db_type", return_value=(False, True, False)
+        ):
+            result = await service.async_get_database_size()
+
+        assert result["states"] >= 0
+        assert result["states_size"] >= 0
+        assert result["statistics_size"] >= 0
+
+    @pytest.mark.asyncio
+    async def test_async_get_database_size_postgres(
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        mock_postgres_connection: MagicMock,
+    ):
+        mock_config_entry.data["db_url"] = "postgresql://localhost/homeassistant"
+        service = DatabaseService(mock_hass, mock_config_entry)
+
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_postgres_connection
+
+        with patch.object(service, "get_engine", return_value=mock_engine), patch.object(
+            service, "get_db_type", return_value=(False, False, True)
+        ):
+            result = await service.async_get_database_size()
+
+        assert result["states"] >= 0
+        assert result["states_size"] >= 0
+        assert result["statistics_size"] >= 0
+
 
 class TestDatabaseServiceIntegration:
     """Integration tests with real database."""

@@ -436,3 +436,117 @@ class TestEntityAnalyzerUpdateFrequency:
     def test_format_interval_zero(self):
         """Test formatting zero interval."""
         assert EntityAnalyzer.format_interval(0) is None
+
+
+class TestHourlyMessageCounts:
+    """Tests for hourly message histogram bucketing."""
+
+    def _prepare_entity(self, engine: Engine, entity_id: str) -> tuple[float, float]:
+        """Reset tables and return cutoff/end timestamps for convenience."""
+        now = datetime.now(timezone.utc)
+        current_hour_start = now.replace(minute=0, second=0, microsecond=0)
+        with engine.connect() as conn:
+            conn.execute(text("DELETE FROM states"))
+            conn.execute(text("DELETE FROM states_meta"))
+            conn.execute(
+                text("INSERT INTO states_meta (metadata_id, entity_id) VALUES (1, :entity)"),
+                {"entity": entity_id},
+            )
+            conn.commit()
+        return (current_hour_start - timedelta(hours=6)).timestamp(), current_hour_start.timestamp()
+
+    def test_get_hourly_message_counts_aligned_buckets(self, sqlite_engine: Engine):
+        """Bucket ordering uses oldest hour at index 0 and newest at index N-1."""
+        cutoff_ts, end_cutoff = self._prepare_entity(sqlite_engine, "sensor.histogram")
+        cutoff_dt = datetime.fromtimestamp(cutoff_ts, tz=timezone.utc)
+
+        with sqlite_engine.connect() as conn:
+            # Oldest bucket (index 0)
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": (cutoff_dt + timedelta(minutes=1)).timestamp()},
+            )
+            # Middle bucket (index 3)
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": (cutoff_dt + timedelta(hours=3, minutes=10)).timestamp()},
+            )
+            # Newest bucket (index 5)
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": end_cutoff - 600},  # 10 minutes before end cutoff
+            )
+            conn.commit()
+
+        result = EntityAnalyzer.get_hourly_message_counts(sqlite_engine, "sensor.histogram", 6)
+
+        assert result["hourly_counts"] == [1, 0, 0, 1, 0, 1]
+        assert result["total_messages"] == 3
+        assert result["time_range_hours"] == 6
+
+    def test_get_hourly_message_counts_boundary_conditions(self, sqlite_engine: Engine):
+        """Messages on cutoff boundary are included; end boundary is excluded."""
+        cutoff_ts, end_cutoff = self._prepare_entity(sqlite_engine, "sensor.boundary")
+
+        with sqlite_engine.connect() as conn:
+            # Exactly at cutoff -> should be in bucket 0
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": cutoff_ts},
+            )
+            # Exactly at end cutoff -> should be excluded by '< end_cutoff'
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": end_cutoff},
+            )
+            conn.commit()
+
+        result = EntityAnalyzer.get_hourly_message_counts(sqlite_engine, "sensor.boundary", 6)
+
+        assert result["hourly_counts"][0] == 1
+        assert sum(result["hourly_counts"]) == 1
+        assert result["time_range_hours"] == 6
+
+    def test_get_hourly_message_counts_out_of_range(self, sqlite_engine: Engine):
+        """Events outside the time window are ignored."""
+        cutoff_ts, end_cutoff = self._prepare_entity(sqlite_engine, "sensor.outofrange")
+
+        with sqlite_engine.connect() as conn:
+            # Before cutoff
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": cutoff_ts - 10},
+            )
+            # After end cutoff
+            conn.execute(
+                text(
+                    "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                    "VALUES (1, '1', :ts)"
+                ),
+                {"ts": end_cutoff + 10},
+            )
+            conn.commit()
+
+        result = EntityAnalyzer.get_hourly_message_counts(sqlite_engine, "sensor.outofrange", 6)
+
+        assert all(count == 0 for count in result["hourly_counts"])
+        assert result["total_messages"] == 0
+        assert result["time_range_hours"] == 6

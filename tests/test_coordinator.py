@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from custom_components.statistics_orphan_finder.coordinator import (
@@ -20,7 +22,7 @@ class TestStatisticsOrphanCoordinator:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test coordinator initializes correctly."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         assert coordinator.hass is mock_hass
         assert coordinator.entry is mock_config_entry
@@ -33,7 +35,7 @@ class TestStatisticsOrphanCoordinator:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test _get_engine delegates to db_service."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         with patch.object(coordinator.db_service, "get_engine") as mock_get:
             mock_engine = MagicMock()
@@ -49,7 +51,7 @@ class TestStatisticsOrphanCoordinator:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test async_get_database_size delegates to db_service."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         expected_result = {
             "states": 1000,
@@ -74,7 +76,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test _init_step_data initializes data structures with session_id."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         result = coordinator._init_step_data()
 
@@ -90,14 +92,13 @@ class TestCoordinatorStepProcessing:
         session = coordinator._step_sessions[session_id]
         assert "data" in session
         assert "timestamp" in session
-        assert "current_step" in session
         assert "entity_map" in session["data"]
 
     def test_fetch_step_1_states_meta(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test step 1 fetches states_meta entities."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         # Initialize step data and get session_id
@@ -115,7 +116,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test step 2 fetches states with counts."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         init_result = coordinator._init_step_data()
@@ -132,7 +133,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test step 3 fetches statistics_meta with metadata_id."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         init_result = coordinator._init_step_data()
@@ -149,7 +150,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test step 4 fetches short-term statistics."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         init_result = coordinator._init_step_data()
@@ -164,7 +165,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test step 5 fetches long-term statistics."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         init_result = coordinator._init_step_data()
@@ -184,7 +185,7 @@ class TestCoordinatorStepProcessing:
         populated_sqlite_engine: Engine,
     ):
         """Test step 6 enriches with registry data."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         # Mock registries
@@ -224,7 +225,7 @@ class TestCoordinatorStepProcessing:
         populated_sqlite_engine: Engine,
     ):
         """Test step 8 finalizes and generates summary."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         with patch("custom_components.statistics_orphan_finder.coordinator.er.async_get") as mock_er:
@@ -264,7 +265,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test async_execute_overview_step wrapper with session_id."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Mock _execute_overview_step
         with patch.object(coordinator, "_execute_overview_step") as mock_execute:
@@ -282,7 +283,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test _execute_overview_step with invalid step number."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         with pytest.raises(ValueError, match="Invalid step"):
             coordinator._execute_overview_step(99, "dummy-session")
@@ -292,7 +293,7 @@ class TestCoordinatorStepProcessing:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test error handling in async_execute_overview_step."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Make async_add_executor_job raise an exception
         mock_hass.async_add_executor_job = AsyncMock(
@@ -310,7 +311,7 @@ class TestCoordinatorServiceDelegation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test _calculate_entity_storage delegates to storage_calculator."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         with patch.object(coordinator.storage_calculator, "calculate_entity_storage") as mock_calc:
             mock_calc.return_value = 5000
@@ -329,7 +330,7 @@ class TestCoordinatorServiceDelegation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test generate_delete_sql delegates to sql_generator."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         with patch.object(coordinator.sql_generator, "generate_delete_sql") as mock_gen:
             mock_gen.return_value = "DELETE FROM states WHERE..."
@@ -349,7 +350,7 @@ class TestCoordinatorServiceDelegation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test async_shutdown cleans up resources and sessions."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Create some sessions
         coordinator._init_step_data()
@@ -378,7 +379,7 @@ class TestCoordinatorIntegration:
         populated_sqlite_engine: Engine,
     ):
         """Test executing all steps in sequence with session tracking."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         with patch("custom_components.statistics_orphan_finder.coordinator.er.async_get") as mock_er:
@@ -412,7 +413,7 @@ class TestSessionIsolation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test multiple sessions can exist simultaneously without interfering."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Create two sessions
         result1 = coordinator._init_step_data()
@@ -440,7 +441,7 @@ class TestSessionIsolation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test that using an invalid session_id raises ValueError."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Try to use a non-existent session_id
         with pytest.raises(ValueError, match="Invalid or missing session_id"):
@@ -450,7 +451,7 @@ class TestSessionIsolation:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test that steps 1-8 require a valid session_id."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Step 0 should work without session_id
         result = coordinator._execute_overview_step(0, None)
@@ -469,7 +470,7 @@ class TestSessionTimeout:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test that stale sessions are cleaned up."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Create a session
         with patch("time.time", return_value=1000.0):
@@ -493,7 +494,7 @@ class TestSessionTimeout:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
     ):
         """Test that session timestamp is updated on each step."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
         # Create session
@@ -516,7 +517,7 @@ class TestSessionTimeout:
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
     ):
         """Test that cleanup only removes stale sessions, not recent ones."""
-        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry)
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
 
         # Create first session (will be stale)
         with patch("time.time", return_value=1000.0):
@@ -539,3 +540,339 @@ class TestSessionTimeout:
         assert session_id2 in coordinator._step_sessions
         # Third session should exist (just created)
         assert session_id3 in coordinator._step_sessions
+
+
+class TestMessageHistogram:
+    """Tests for message histogram generation."""
+
+    def _insert_states(
+        self,
+        engine: Engine,
+        entity_id: str,
+        hours: int,
+        hour_indexes: list[int] | None = None,
+        count_per_bucket: int = 1,
+    ) -> None:
+        """Insert states into specific hourly buckets relative to now."""
+        now = datetime.now(timezone.utc)
+        current_hour_start = now.replace(minute=0, second=0, microsecond=0)
+        cutoff = current_hour_start - timedelta(hours=hours)
+
+        with engine.connect() as conn:
+            conn.execute(text("DELETE FROM states"))
+            conn.execute(text("DELETE FROM states_meta"))
+            conn.execute(
+                text("INSERT INTO states_meta (metadata_id, entity_id) VALUES (1, :entity)"),
+                {"entity": entity_id},
+            )
+
+            target_hours = hour_indexes if hour_indexes is not None else list(range(hours))
+            for hour in target_hours:
+                for _ in range(count_per_bucket):
+                    ts = cutoff + timedelta(hours=hour, minutes=1)
+                    conn.execute(
+                        text(
+                            "INSERT INTO states (metadata_id, state, last_updated_ts) "
+                            "VALUES (1, '1', :ts)"
+                        ),
+                        {"ts": ts.timestamp()},
+                    )
+            conn.commit()
+
+    @pytest.mark.asyncio
+    async def test_async_get_message_histogram_24h(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test 24-hour histogram fills all buckets with data."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        coordinator.db_service._engine = sqlite_engine
+
+        self._insert_states(sqlite_engine, "sensor.hist", hours=24, hour_indexes=list(range(24)))
+
+        result = await coordinator.async_get_message_histogram("sensor.hist", 24)
+
+        assert len(result["hourly_counts"]) == 24
+        # Each hour has exactly one message
+        assert result["hourly_counts"][0] == 1  # Oldest bucket
+        assert result["hourly_counts"][-1] == 1  # Most recent bucket
+        assert result["total_messages"] == 24
+        assert result["time_range_hours"] == 24
+
+    @pytest.mark.asyncio
+    async def test_async_get_message_histogram_48h_partial_data(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test 48-hour histogram zero-fills hours without data."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        coordinator.db_service._engine = sqlite_engine
+
+        # Populate only specific buckets: oldest, middle, newest
+        self._insert_states(
+            sqlite_engine,
+            "sensor.hist48",
+            hours=48,
+            hour_indexes=[0, 23, 47],
+        )
+
+        result = await coordinator.async_get_message_histogram("sensor.hist48", 48)
+
+        assert len(result["hourly_counts"]) == 48
+        assert result["hourly_counts"][0] == 1  # Oldest hour
+        assert result["hourly_counts"][23] == 1
+        assert result["hourly_counts"][47] == 1  # Most recent hour
+        # Other buckets should be zero
+        zero_buckets = [i for i, count in enumerate(result["hourly_counts"]) if count == 0]
+        assert len(zero_buckets) == 45
+        assert result["total_messages"] == 3
+        assert result["time_range_hours"] == 48
+
+    @pytest.mark.asyncio
+    async def test_async_get_message_histogram_168h_sparse_data(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test 7-day histogram with sparse data spreads across buckets."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        coordinator.db_service._engine = sqlite_engine
+
+        sparse_hours = [0, 24, 72, 120, 167]
+        self._insert_states(
+            sqlite_engine,
+            "sensor.hist168",
+            hours=168,
+            hour_indexes=sparse_hours,
+        )
+
+        result = await coordinator.async_get_message_histogram("sensor.hist168", 168)
+
+        assert len(result["hourly_counts"]) == 168
+        for hour in sparse_hours:
+            assert result["hourly_counts"][hour] == 1
+        assert result["total_messages"] == len(sparse_hours)
+        assert result["time_range_hours"] == 168
+
+    @pytest.mark.asyncio
+    async def test_async_get_message_histogram_missing_entity(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test histogram for entity with no states returns zeros."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        coordinator.db_service._engine = sqlite_engine
+
+        result = await coordinator.async_get_message_histogram("sensor.unknown", 24)
+
+        assert len(result["hourly_counts"]) == 24
+        assert all(count == 0 for count in result["hourly_counts"])
+        assert result["total_messages"] == 0
+        assert result["time_range_hours"] == 24
+
+    @pytest.mark.asyncio
+    async def test_async_get_message_histogram_partial_hours(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test histogram fills zeros for missing leading hours."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        coordinator.db_service._engine = sqlite_engine
+
+        # Only populate the last 5 hours of a 24h window
+        self._insert_states(
+            sqlite_engine,
+            "sensor.partial",
+            hours=24,
+            hour_indexes=[19, 20, 21, 22, 23],
+        )
+
+        result = await coordinator.async_get_message_histogram("sensor.partial", 24)
+
+        assert len(result["hourly_counts"]) == 24
+        assert all(result["hourly_counts"][i] == 0 for i in range(19))
+        assert result["hourly_counts"][23] == 1
+        assert result["total_messages"] == 5
+
+
+class TestCoordinatorErrorHandling:
+    """Tests for coordinator defensive error handling."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_step_4_operational_error_handling(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        """OperationalError in step 4 should be handled gracefully."""
+        from sqlalchemy.exc import OperationalError
+
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        session_id = coordinator._init_step_data()["session_id"]
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = OperationalError("stmt", {}, None)
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        with patch.object(coordinator, "_get_engine", return_value=mock_engine):
+            result = await coordinator.async_execute_overview_step(4, session_id)
+
+        assert result["status"] == "complete"
+        assert result["entities_found"] == 0
+
+    @pytest.mark.asyncio
+    async def test_fetch_step_4_sqlalchemy_error_handling(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        """Unexpected SQLAlchemy errors from step 4 should propagate."""
+        from sqlalchemy.exc import SQLAlchemyError
+
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        session_id = coordinator._init_step_data()["session_id"]
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = SQLAlchemyError("boom")
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        with patch.object(coordinator, "_get_engine", return_value=mock_engine):
+            with pytest.raises(SQLAlchemyError):
+                await coordinator.async_execute_overview_step(4, session_id)
+
+    @pytest.mark.asyncio
+    async def test_fetch_step_7_storage_calculation_exception(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        """Step 7 continues processing when storage calculation fails for one entity."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        session_id = coordinator._init_step_data()["session_id"]
+
+        step_data = coordinator._step_sessions[session_id]["data"]
+        step_data["entity_map"] = {
+            "sensor.fail": {"metadata_id": 1},
+            "sensor.ok": {"metadata_id": 2},
+        }
+        step_data["entities_list"] = [
+            {
+                "entity_id": "sensor.fail",
+                "in_entity_registry": False,
+                "in_state_machine": False,
+                "in_states_meta": True,
+                "in_statistics_meta": False,
+                "in_statistics_short_term": False,
+                "in_statistics_long_term": False,
+            },
+            {
+                "entity_id": "sensor.ok",
+                "in_entity_registry": False,
+                "in_state_machine": False,
+                "in_states_meta": True,
+                "in_statistics_meta": False,
+                "in_statistics_short_term": False,
+                "in_statistics_long_term": False,
+            },
+        ]
+
+        mock_conn = MagicMock()
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        with patch.object(coordinator, "_get_engine", return_value=mock_engine), patch.object(
+            coordinator, "_calculate_entity_storage", side_effect=[Exception("fail"), 500]
+        ) as mock_calc:
+            result = await coordinator.async_execute_overview_step(7, session_id)
+
+        assert mock_calc.call_count == 2
+        assert result["deleted_storage_bytes"] == 500
+
+
+class TestOriginDetermination:
+    """Tests for _determine_entity_origin helper."""
+
+    def test_determine_entity_origin_states_only(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        entity = {
+            "in_states_meta": True,
+            "in_statistics_meta": False,
+            "in_statistics_short_term": False,
+            "in_statistics_long_term": False,
+        }
+        assert coordinator._determine_entity_origin(entity) == "States"
+
+    def test_determine_entity_origin_short_term_statistics(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        entity = {
+            "in_states_meta": False,
+            "in_statistics_meta": True,
+            "in_statistics_short_term": True,
+            "in_statistics_long_term": False,
+        }
+        assert coordinator._determine_entity_origin(entity) == "Short-term"
+
+    def test_determine_entity_origin_long_term_statistics(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        entity = {
+            "in_states_meta": False,
+            "in_statistics_meta": True,
+            "in_statistics_short_term": False,
+            "in_statistics_long_term": True,
+        }
+        assert coordinator._determine_entity_origin(entity) == "Long-term"
+
+    def test_determine_entity_origin_both_statistics(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        entity = {
+            "in_states_meta": False,
+            "in_statistics_meta": True,
+            "in_statistics_short_term": True,
+            "in_statistics_long_term": True,
+        }
+        assert coordinator._determine_entity_origin(entity) == "Both"
+
+    def test_determine_entity_origin_states_plus_statistics(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        entity = {
+            "in_states_meta": True,
+            "in_statistics_meta": True,
+            "in_statistics_short_term": True,
+            "in_statistics_long_term": True,
+        }
+        assert coordinator._determine_entity_origin(entity) == "States+Statistics"
+
+    @pytest.mark.asyncio
+    async def test_origin_determination_used_in_step_7(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ):
+        """Step 7 should compute origin before calculating storage."""
+        coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
+        session_id = coordinator._init_step_data()["session_id"]
+
+        step_data = coordinator._step_sessions[session_id]["data"]
+        step_data["entity_map"] = {"sensor.both": {"metadata_id": 10}}
+        step_data["entities_list"] = [
+            {
+                "entity_id": "sensor.both",
+                "in_entity_registry": False,
+                "in_state_machine": False,
+                "in_states_meta": True,
+                "in_statistics_meta": True,
+                "in_statistics_short_term": True,
+                "in_statistics_long_term": True,
+            }
+        ]
+
+        mock_conn = MagicMock()
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        with patch.object(coordinator, "_get_engine", return_value=mock_engine), patch.object(
+            coordinator, "_calculate_entity_storage", return_value=111
+        ) as mock_calc:
+            result = await coordinator.async_execute_overview_step(7, session_id)
+
+        mock_calc.assert_called_once()
+        assert mock_calc.call_args.kwargs["origin"] == "States+Statistics"
+        assert result["deleted_storage_bytes"] == 111

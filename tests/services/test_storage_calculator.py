@@ -1,7 +1,7 @@
 """Tests for StorageCalculator."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.engine import Engine
@@ -328,3 +328,264 @@ class TestStorageCalculatorDatabaseTypes:
 
             # All should calculate some size
             assert size >= 0
+
+
+class TestOriginBasedCalculation:
+    """Ensure calculate_entity_storage calls the right helpers for each origin."""
+
+    def _mock_engine(self):
+        mock_conn = MagicMock()
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+        return mock_engine
+
+    def test_calculate_entity_storage_origin_states(
+        self, mock_config_entry: MagicMock
+    ):
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", return_value=5000) as mock_states, patch.object(
+            calculator, "_calculate_statistics_size", return_value=3000
+        ) as mock_stats:
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="States",
+                in_states_meta=True,
+                in_statistics_meta=False,
+            )
+
+        mock_states.assert_called_once()
+        mock_stats.assert_not_called()
+        assert size == 5000
+
+    def test_calculate_entity_storage_origin_short_term(self, mock_config_entry: MagicMock):
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", return_value=1000) as mock_states, patch.object(
+            calculator, "_calculate_statistics_size", return_value=2000
+        ) as mock_stats:
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="Short-term",
+                in_states_meta=False,
+                in_statistics_meta=True,
+            )
+
+        mock_states.assert_not_called()
+        mock_stats.assert_called_once()
+        assert size == 2000
+
+    def test_calculate_entity_storage_origin_long_term(self, mock_config_entry: MagicMock):
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", return_value=1000) as mock_states, patch.object(
+            calculator, "_calculate_statistics_size", return_value=4000
+        ) as mock_stats:
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="Long-term",
+                in_states_meta=False,
+                in_statistics_meta=True,
+            )
+
+        mock_states.assert_not_called()
+        mock_stats.assert_called_once()
+        assert size == 4000
+
+    def test_calculate_entity_storage_origin_both(self, mock_config_entry: MagicMock):
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", return_value=1000) as mock_states, patch.object(
+            calculator, "_calculate_statistics_size", return_value=6000
+        ) as mock_stats:
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="Both",
+                in_states_meta=False,
+                in_statistics_meta=True,
+            )
+
+        mock_states.assert_not_called()
+        mock_stats.assert_called_once()
+        assert size == 6000
+
+    def test_calculate_entity_storage_origin_states_plus_statistics(self, mock_config_entry: MagicMock):
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", return_value=1500) as mock_states, patch.object(
+            calculator, "_calculate_statistics_size", return_value=2500
+        ) as mock_stats:
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="States+Statistics",
+                in_states_meta=True,
+                in_statistics_meta=True,
+            )
+
+        mock_states.assert_called_once()
+        mock_stats.assert_called_once()
+        assert size == 4000
+
+
+class TestStorageCalculationEdgeCases:
+    """Edge cases for storage calculations."""
+
+    def _mock_engine(self):
+        mock_conn = MagicMock()
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+        return mock_engine
+
+    def test_calculate_entity_storage_exception_handling(self, mock_config_entry: MagicMock):
+        """Exceptions inside calculation should result in zero size."""
+        calculator = StorageCalculator(mock_config_entry)
+        engine = self._mock_engine()
+
+        with patch(
+            "custom_components.statistics_orphan_finder.services.storage_calculator.get_database_type",
+            return_value=(True, False, False),
+        ), patch.object(calculator, "_calculate_states_size", side_effect=RuntimeError("fail")):
+            size = calculator.calculate_entity_storage(
+                engine=engine,
+                entity_id="sensor.test",
+                origin="States",
+                in_states_meta=True,
+                in_statistics_meta=False,
+            )
+
+        assert size == 0
+
+    def test_calculate_statistics_size_without_metadata_id(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Should look up metadata_id when not provided."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            size = calculator._calculate_statistics_size(
+                conn=conn,
+                entity_id="sensor.temperature",
+                origin="Long-term",
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False,
+                metadata_id_statistics=None,
+            )
+
+        assert size > 0
+
+    def test_calculate_statistics_size_metadata_id_not_found(
+        self, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Missing metadata_id should return zero."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with sqlite_engine.connect() as conn:
+            size = calculator._calculate_statistics_size(
+                conn=conn,
+                entity_id="sensor.missing",
+                origin="Long-term",
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False,
+                metadata_id_statistics=None,
+            )
+
+        assert size == 0
+
+
+class TestDatabaseSpecificCalculations:
+    """Database-dialect specific storage calculations."""
+
+    def test_calculate_states_size_mysql(
+        self, mock_config_entry: MagicMock, mock_mysql_connection: MagicMock
+    ):
+        mock_config_entry.data["db_url"] = "mysql://localhost/homeassistant"
+        calculator = StorageCalculator(mock_config_entry)
+
+        size = calculator._calculate_states_size(
+            conn=mock_mysql_connection,
+            entity_id="sensor.sample",
+            is_sqlite=False,
+            is_mysql=True,
+            is_postgres=False,
+        )
+
+        assert size > 0
+
+    def test_calculate_states_size_postgres(
+        self, mock_config_entry: MagicMock, mock_postgres_connection: MagicMock
+    ):
+        mock_config_entry.data["db_url"] = "postgresql://localhost/homeassistant"
+        calculator = StorageCalculator(mock_config_entry)
+
+        size = calculator._calculate_states_size(
+            conn=mock_postgres_connection,
+            entity_id="sensor.sample",
+            is_sqlite=False,
+            is_mysql=False,
+            is_postgres=True,
+        )
+
+        assert size > 0
+
+    def test_calculate_table_size_mysql(
+        self, mock_config_entry: MagicMock, mock_mysql_connection: MagicMock
+    ):
+        mock_config_entry.data["db_url"] = "mysql://localhost/homeassistant"
+        calculator = StorageCalculator(mock_config_entry)
+
+        size = calculator._calculate_table_size(
+            conn=mock_mysql_connection,
+            table_name="statistics",
+            metadata_id=1,
+            is_sqlite=False,
+            is_mysql=True,
+            is_postgres=False,
+        )
+
+        assert size > 0
+
+    def test_calculate_table_size_postgres(
+        self, mock_config_entry: MagicMock, mock_postgres_connection: MagicMock
+    ):
+        mock_config_entry.data["db_url"] = "postgresql://localhost/homeassistant"
+        calculator = StorageCalculator(mock_config_entry)
+
+        size = calculator._calculate_table_size(
+            conn=mock_postgres_connection,
+            table_name="statistics_short_term",
+            metadata_id=1,
+            is_sqlite=False,
+            is_mysql=False,
+            is_postgres=True,
+        )
+
+        assert size > 0

@@ -255,3 +255,93 @@ def db_engine(request, sqlite_engine: Engine) -> Engine:
         return sqlite_engine
     # Add MySQL/PostgreSQL here when using testcontainers
     raise ValueError(f"Unsupported database type: {request.param}")
+
+
+class MockResult:
+    """Simple iterator-compatible result wrapper."""
+
+    def __init__(self, rows: list[tuple[Any, ...]]):
+        self._rows = list(rows)
+        self._index = 0
+
+    def fetchone(self):
+        if self._index < len(self._rows):
+            row = self._rows[self._index]
+            self._index += 1
+            return row
+        return None
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+@pytest.fixture
+def mock_mysql_connection(sqlite_engine: Engine) -> MagicMock:
+    """Mock MySQL connection that intercepts information_schema queries."""
+    with sqlite_engine.connect() as conn:
+        conn.execute(text("DELETE FROM states"))
+        conn.execute(text("DELETE FROM states_meta"))
+        conn.execute(text("DELETE FROM statistics_meta"))
+        conn.execute(text("DELETE FROM statistics"))
+        conn.execute(text("DELETE FROM statistics_short_term"))
+        conn.execute(text("INSERT INTO states_meta (metadata_id, entity_id) VALUES (1, 'sensor.sample')"))
+        conn.execute(text("INSERT INTO states (metadata_id, state, last_updated_ts) VALUES (1, '1', 1.0)"))
+        conn.execute(text("INSERT INTO statistics_meta (id, statistic_id, source, unit_of_measurement, has_mean, has_sum) VALUES (1, 'sensor.sample', 'recorder', 'u', 1, 0)"))
+        conn.execute(text("INSERT INTO statistics (metadata_id, start_ts, mean) VALUES (1, 1.0, 1.0)"))
+        conn.execute(text("INSERT INTO statistics_short_term (metadata_id, start_ts, mean) VALUES (1, 1.0, 1.0)"))
+        conn.commit()
+
+    def mock_execute(query, params=None):
+        query_str = str(query)
+        if "information_schema.tables" in query_str:
+            if "states" in query_str:
+                return MockResult([(150,)])
+            if "statistics_short_term" in query_str:
+                return MockResult([(120,)])
+            return MockResult([(100,)])
+
+        # Fallback to SQLite execution for other queries
+        with sqlite_engine.connect() as conn:
+            result = conn.execute(query, params or {})
+            rows = result.fetchall()
+            return MockResult(rows)
+
+    mock_conn = MagicMock()
+    mock_conn.execute = MagicMock(side_effect=mock_execute)
+    return mock_conn
+
+
+@pytest.fixture
+def mock_postgres_connection(sqlite_engine: Engine) -> MagicMock:
+    """Mock PostgreSQL connection that intercepts pg_total_relation_size queries."""
+    with sqlite_engine.connect() as conn:
+        conn.execute(text("DELETE FROM states"))
+        conn.execute(text("DELETE FROM states_meta"))
+        conn.execute(text("DELETE FROM statistics_meta"))
+        conn.execute(text("DELETE FROM statistics"))
+        conn.execute(text("DELETE FROM statistics_short_term"))
+        conn.execute(text("INSERT INTO states_meta (metadata_id, entity_id) VALUES (1, 'sensor.sample')"))
+        conn.execute(text("INSERT INTO states (metadata_id, state, last_updated_ts) VALUES (1, '1', 1.0)"))
+        conn.execute(text("INSERT INTO statistics_meta (id, statistic_id, source, unit_of_measurement, has_mean, has_sum) VALUES (1, 'sensor.sample', 'recorder', 'u', 1, 0)"))
+        conn.execute(text("INSERT INTO statistics (metadata_id, start_ts, mean) VALUES (1, 1.0, 1.0)"))
+        conn.execute(text("INSERT INTO statistics_short_term (metadata_id, start_ts, mean) VALUES (1, 1.0, 1.0)"))
+        conn.commit()
+
+    def mock_execute(query, params=None):
+        query_str = str(query)
+        if "pg_total_relation_size" in query_str:
+            if "statistics_short_term" in query_str:
+                return MockResult([(3000000,)])  # 3MB
+            if "statistics" in query_str:
+                return MockResult([(4000000,)])  # 4MB
+            return MockResult([(5000000,)])  # default
+
+        # Fallback to SQLite execution for other queries
+        with sqlite_engine.connect() as conn:
+            result = conn.execute(query, params or {})
+            rows = result.fetchall()
+            return MockResult(rows)
+
+    mock_conn = MagicMock()
+    mock_conn.execute = MagicMock(side_effect=mock_execute)
+    return mock_conn

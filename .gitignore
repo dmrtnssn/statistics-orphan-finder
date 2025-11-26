@@ -48,4 +48,4 @@ htmlcov/
 venv/
 *.coverage
 
-check_hacs_compliance.sh
+check_hacs_compliance.shcoverage.json
