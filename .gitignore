@@ -47,5 +47,7 @@ htmlcov/
 .pytest_cache/
 venv/
 *.coverage
+coverage.json
 
-check_hacs_compliance.shcoverage.json
+# Scripts
+check_hacs_compliance.sh
