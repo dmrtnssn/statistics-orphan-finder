@@ -14,14 +14,27 @@ echo "Statistics Orphan Finder - Build & Deploy"
 echo "========================================"
 echo ""
 
+# Step 1: Run tests
+echo "Step 1: Running tests..."
+cd "$SCRIPT_DIR"
+
+if ./run-tests.sh -s; then
+    echo "✓ All tests passed."
+else
+    echo "✗ Tests failed. Deployment aborted."
+    exit 1
+fi
+
+echo ""
+
 # Check if frontend directory exists
 if [ ! -d "$FRONTEND_DIR" ]; then
     echo "Error: Frontend directory not found at $FRONTEND_DIR"
     exit 1
 fi
 
-# Step 1: Build frontend
-echo "Step 1: Building frontend..."
+# Step 2: Build frontend
+echo "Step 2: Building frontend..."
 cd "$FRONTEND_DIR"
 
 if npm run build; then
@@ -33,8 +46,8 @@ fi
 
 echo ""
 
-# Step 2: Upload to Home Assistant
-echo "Step 2: Uploading to Home Assistant..."
+# Step 3: Upload to Home Assistant
+echo "Step 3: Uploading to Home Assistant..."
 cd "$SCRIPT_DIR"
 
 if scp -P 23 -r "$COMPONENT_DIR/" root@hassio.internal:~/homeassistant/custom_components/; then
