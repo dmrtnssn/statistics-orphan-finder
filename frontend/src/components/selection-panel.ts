@@ -30,16 +30,21 @@ export class SelectionPanel extends LitElement {
         /* Account for Home Assistant sidebar (256px) + app padding (16px) */
         left: max(272px, calc(256px + 16px));
         right: 16px;
-        background: var(--card-background-color);
-        border-top: 2px solid var(--primary-color);
-        padding: 16px 24px;
+        background: linear-gradient(180deg,
+          var(--card-background-color) 0%,
+          color-mix(in srgb, var(--card-background-color) 97%, var(--primary-color) 3%) 100%
+        );
+        border-top: 2px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+        padding: var(--spacing-xl, 24px) var(--spacing-2xl, 32px);
         z-index: 100;
-        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
-        animation: slideUp 0.3s ease-out;
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        animation: slideUpPanel var(--duration-normal, 250ms) var(--ease-out-smooth);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
+        gap: var(--spacing-xl, 24px);
       }
 
       /* Adjust for narrow sidebar */
@@ -49,59 +54,65 @@ export class SelectionPanel extends LitElement {
         }
       }
 
-      @keyframes slideUp {
+      @keyframes slideUpPanel {
         from {
           transform: translateY(100%);
-          opacity: 0;
         }
         to {
           transform: translateY(0);
-          opacity: 1;
         }
       }
 
       .left-section {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: var(--spacing-xl, 24px);
       }
 
       .count {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--font-size-heading, 18px);
+        font-weight: var(--font-weight-heading, 600);
         color: var(--primary-text-color);
       }
 
       .progress-text {
-        font-size: 14px;
+        font-size: var(--font-size-body, 15px);
         color: var(--secondary-text-color);
       }
 
       .breakdown {
         display: flex;
-        gap: 16px;
-        font-size: 13px;
+        gap: var(--spacing-xl, 24px);
+        font-size: var(--font-size-small, 13px);
         color: var(--secondary-text-color);
-        margin-top: 4px;
+        margin-top: var(--spacing-xs, 4px);
       }
 
       .breakdown-item {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--spacing-sm, 8px);
+        padding: var(--spacing-xs, 4px) var(--spacing-md, 12px);
+        border-radius: var(--radius-xl, 20px);
+        background: color-mix(in srgb, var(--secondary-background-color) 50%, transparent);
+        font-weight: var(--font-weight-small, 500);
       }
 
       .breakdown-item.deleted {
         color: var(--primary-color);
+        background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
       }
 
       .breakdown-item.disabled {
-        color: #FF9800;
+        color: var(--warning-color, #FF9800);
+        background: color-mix(in srgb, var(--warning-color) 15%, transparent);
+        border: 1px solid rgba(255, 152, 0, 0.3);
       }
 
       .breakdown-dot {
-        width: 6px;
-        height: 6px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         flex-shrink: 0;
       }
@@ -111,39 +122,44 @@ export class SelectionPanel extends LitElement {
       }
 
       .breakdown-dot.disabled {
-        background: #FF9800;
+        background: var(--warning-color, #FF9800);
       }
 
       .actions {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: var(--spacing-md, 12px);
       }
 
       .select-all-btn {
-        padding: 8px 16px;
+        padding: var(--spacing-sm, 8px) var(--spacing-lg, 16px);
         background: var(--secondary-background-color);
-        border: 1px solid var(--divider-color);
-        border-radius: 4px;
+        border: 1.5px solid var(--divider-color);
+        border-radius: var(--radius-sm, 6px);
         color: var(--primary-text-color);
         cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
+        font-size: var(--font-size-body, 15px);
+        font-weight: var(--font-weight-small, 500);
+        transition: all var(--duration-fast, 150ms) var(--ease-out-smooth);
+        box-shadow: var(--shadow-sm);
       }
 
       .select-all-btn:hover:not(:disabled) {
-        background: var(--divider-color);
+        background: var(--gradient-hover);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
       }
 
       .deselect-btn {
-        padding: 8px 16px;
+        padding: var(--spacing-sm, 8px) var(--spacing-lg, 16px);
         background: transparent;
-        border: 1px solid var(--divider-color);
-        border-radius: 4px;
+        border: 1.5px solid var(--divider-color);
+        border-radius: var(--radius-sm, 6px);
         color: var(--secondary-text-color);
         cursor: pointer;
-        font-size: 14px;
-        transition: all 0.2s;
+        font-size: var(--font-size-body, 15px);
+        font-weight: var(--font-weight-small, 500);
+        transition: all var(--duration-fast, 150ms) var(--ease-out-smooth);
       }
 
       .deselect-btn:hover:not(:disabled) {
