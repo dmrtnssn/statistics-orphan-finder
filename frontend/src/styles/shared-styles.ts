@@ -339,17 +339,44 @@ export const sharedStyles = css`
     to { transform: rotate(360deg); }
   }
 
-  /* Empty state */
+  /* Empty state - Enhanced with better hierarchy */
   .empty-state {
     text-align: center;
-    padding: 48px 16px;
+    padding: var(--spacing-3xl, 48px) var(--spacing-xl, 24px);
     color: var(--secondary-text-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-lg, 16px);
   }
 
   .empty-state-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 64px;
+    margin-bottom: var(--spacing-md, 12px);
+    opacity: 0.4;
+    filter: grayscale(0.3);
+  }
+
+  .empty-state-icon svg {
+    width: 64px;
+    height: 64px;
+    stroke: var(--secondary-text-color);
     opacity: 0.5;
+  }
+
+  .empty-state-title {
+    font-size: var(--font-size-heading, 18px);
+    font-weight: var(--font-weight-heading, 600);
+    color: var(--primary-text-color);
+    margin: 0;
+  }
+
+  .empty-state-description {
+    font-size: var(--font-size-body, 15px);
+    line-height: var(--line-height-body, 1.6);
+    max-width: 400px;
+    margin: 0;
+    color: var(--secondary-text-color);
   }
 
   /* Summary grid */
