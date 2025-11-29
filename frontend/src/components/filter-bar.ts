@@ -30,9 +30,28 @@ export class FilterBar extends LitElement {
 
       .filter-container {
         display: flex;
-        gap: 8px;
+        gap: var(--spacing-sm, 8px);
         flex-wrap: wrap;
         align-items: center;
+      }
+
+      .search-box {
+        position: relative;
+      }
+
+      .search-icon {
+        position: absolute;
+        left: var(--spacing-md, 12px);
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--secondary-text-color);
+        pointer-events: none;
+        font-size: 16px;
+        opacity: 0.6;
+      }
+
+      .search-box input[type="search"] {
+        padding-left: 38px;
       }
 
       .clear-button {
@@ -85,6 +104,7 @@ export class FilterBar extends LitElement {
 
         ${this.showSearch ? html`
           <div class="search-box">
+            <span class="search-icon">🔍</span>
             <input
               type="search"
               placeholder=${this.searchPlaceholder}

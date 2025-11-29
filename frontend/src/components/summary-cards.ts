@@ -36,8 +36,8 @@ export class SummaryCards extends LitElement {
 
       .cards-container {
         display: grid;
-        gap: 16px;
-        margin-bottom: 16px;
+        gap: var(--spacing-lg, 16px);
+        margin-bottom: var(--spacing-lg, 16px);
       }
 
       .cards-container.cols-2 {
