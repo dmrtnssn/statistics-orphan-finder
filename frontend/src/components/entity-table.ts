@@ -68,7 +68,7 @@ export class EntityTable<T extends StorageEntity = StorageEntity> extends LitEle
       .checkbox-column {
         width: 50px;
         text-align: center;
-        padding: 8px;
+        padding: var(--spacing-sm, 8px);
       }
 
       .checkbox-cell {
@@ -78,14 +78,20 @@ export class EntityTable<T extends StorageEntity = StorageEntity> extends LitEle
       }
 
       input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
         cursor: pointer;
         accent-color: var(--primary-color);
+        border-radius: var(--radius-sm, 6px);
+        transition: all var(--duration-fast, 150ms) var(--ease-out-smooth);
+      }
+
+      input[type="checkbox"]:hover:not(:disabled) {
+        transform: scale(1.1);
       }
 
       input[type="checkbox"].disabled-entity {
-        accent-color: #FF9800;
+        accent-color: var(--warning-color, #FF9800);
       }
 
       input[type="checkbox"]:disabled {
@@ -94,11 +100,20 @@ export class EntityTable<T extends StorageEntity = StorageEntity> extends LitEle
       }
 
       .disabled-entity-row {
-        background: rgba(255, 152, 0, 0.02);
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.02), rgba(255, 152, 0, 0.03));
       }
 
       .disabled-entity-row:hover {
-        background: rgba(255, 152, 0, 0.05);
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.05), rgba(255, 152, 0, 0.07));
+      }
+
+      /* Optional zebra striping for better readability */
+      tbody tr:nth-child(even) {
+        background: color-mix(in srgb, var(--secondary-background-color) 3%, transparent);
+      }
+
+      tbody tr:nth-child(even):hover {
+        background: var(--gradient-hover);
       }
 
     `

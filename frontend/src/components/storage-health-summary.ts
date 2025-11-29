@@ -30,8 +30,8 @@ export class StorageHealthSummary extends LitElement {
       .summary-container {
         display: grid;
         grid-template-columns: 520px 1fr 325px;
-        gap: 20px;
-        margin-bottom: 24px;
+        gap: var(--spacing-xl, 24px);
+        margin-bottom: var(--spacing-xl, 24px);
       }
 
       @media (max-width: 1200px) {
@@ -41,10 +41,16 @@ export class StorageHealthSummary extends LitElement {
       }
 
       .column {
-        background: var(--card-background-color);
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        padding: 20px;
+        background: var(--gradient-card);
+        border-radius: var(--radius-lg, 14px);
+        box-shadow: var(--shadow-sm);
+        padding: var(--spacing-2xl, 32px);
+        border: 1px solid color-mix(in srgb, var(--divider-color) 30%, transparent);
+        transition: all var(--duration-normal, 250ms) var(--ease-out-smooth);
+      }
+
+      .column:hover {
+        box-shadow: var(--shadow-md);
       }
 
       /* Column 1: Pie Chart */
@@ -56,9 +62,9 @@ export class StorageHealthSummary extends LitElement {
       }
 
       .chart-title {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 16px;
+        font-size: var(--font-size-heading, 18px);
+        font-weight: var(--font-weight-heading, 600);
+        margin-bottom: var(--spacing-lg, 16px);
         color: var(--primary-text-color);
       }
 
@@ -132,48 +138,55 @@ export class StorageHealthSummary extends LitElement {
       }
 
       .summary-title {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 16px;
+        font-size: var(--font-size-heading, 18px);
+        font-weight: var(--font-weight-heading, 600);
+        margin-bottom: var(--spacing-lg, 16px);
         color: var(--primary-text-color);
       }
 
       .action-list {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: var(--spacing-md, 12px);
       }
 
       .action-item {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px;
-        background: rgba(0, 0, 0, 0.02);
-        border-radius: 6px;
+        gap: var(--spacing-md, 12px);
+        padding: var(--spacing-md, 12px) var(--spacing-lg, 16px);
+        background: color-mix(in srgb, var(--secondary-background-color) 30%, transparent);
+        border-radius: var(--radius-md, 10px);
         border-left: 4px solid transparent;
+        transition: all var(--duration-normal, 250ms) var(--ease-out-smooth);
       }
 
       .action-item.critical {
-        border-left-color: #F44336;
+        border-left-color: var(--error-color, #F44336);
+        background: linear-gradient(135deg, rgba(244, 67, 54, 0.08), rgba(244, 67, 54, 0.12));
       }
 
       .action-item.warning {
-        border-left-color: #FF9800;
+        border-left-color: var(--warning-color, #FF9800);
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.08), rgba(255, 152, 0, 0.12));
       }
 
       .action-item.success {
-        border-left-color: #4CAF50;
+        border-left-color: var(--success-color, #4CAF50);
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.08), rgba(76, 175, 80, 0.12));
       }
 
       .action-item.clickable {
         cursor: pointer;
-        transition: background 0.2s ease, transform 0.1s ease;
       }
 
       .action-item.clickable:hover {
-        background: rgba(0, 0, 0, 0.05);
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .action-item.clickable:active {
+        transform: translateY(0);
       }
 
       .action-item.clickable:focus-visible {
