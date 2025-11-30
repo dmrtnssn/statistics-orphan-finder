@@ -236,7 +236,7 @@ export const sharedStyles = css`
   }
 
   tr:hover td {
-    background: var(--gradient-hover);
+    background: color-mix(in srgb, var(--card-background-color) 95%, var(--primary-color) 5%);
   }
 
   /* Sticky first column */

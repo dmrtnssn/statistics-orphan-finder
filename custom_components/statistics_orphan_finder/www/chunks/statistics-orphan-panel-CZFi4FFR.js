@@ -230,7 +230,7 @@ const sharedStyles = i`
   }
 
   tr:hover td {
-    background: var(--gradient-hover);
+    background: color-mix(in srgb, var(--card-background-color) 95%, var(--primary-color) 5%);
   }
 
   /* Sticky first column */
@@ -2133,7 +2133,7 @@ _EntityTable.styles = [
       }
 
       tbody tr:nth-child(even):hover {
-        background: var(--gradient-hover);
+        background: color-mix(in srgb, var(--card-background-color) 95%, var(--primary-color) 5%);
       }
 
     `
@@ -2854,7 +2854,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DfL9_3Fg.js");
+      await import("./entity-details-modal-CPz13oIp.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2863,7 +2863,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CfEwXvx1.js");
+      await import("./delete-sql-modal-CQO0K_6n.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4545,4 +4545,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-D03uMGc6.js.map
+//# sourceMappingURL=statistics-orphan-panel-CZFi4FFR.js.map

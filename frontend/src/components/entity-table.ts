@@ -113,7 +113,7 @@ export class EntityTable<T extends StorageEntity = StorageEntity> extends LitEle
       }
 
       tbody tr:nth-child(even):hover {
-        background: var(--gradient-hover);
+        background: color-mix(in srgb, var(--card-background-color) 95%, var(--primary-color) 5%);
       }
 
     `
