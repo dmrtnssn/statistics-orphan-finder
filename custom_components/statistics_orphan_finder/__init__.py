@@ -179,6 +179,10 @@ class StatisticsOrphanView(HomeAssistantView):
 
     async def get(self, request):
         """Handle GET request."""
+        # Verify admin access (critical security check)
+        if not request["hass_user"].is_admin:
+            return web.json_response({"error": "Admin access required"}, status=403)
+
         # Get current coordinator (handles reload gracefully)
         coordinator = self._get_coordinator()
         if not coordinator:
