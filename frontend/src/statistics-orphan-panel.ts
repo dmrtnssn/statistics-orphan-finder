@@ -26,6 +26,10 @@ export class StatisticsOrphanPanel extends LitElement {
   @state() private currentStepIndex = 0;
   @state() private error: string | null = null;
 
+  // Step resumption state (for handling failures mid-process)
+  @state() private lastFailedStep: number | null = null;
+  @state() private lastSessionId: string | null = null;
+
   // Storage Overview data
   @state() private databaseSize: DatabaseSize | null = null;
   @state() private storageEntities: StorageEntity[] = [];
@@ -332,7 +336,16 @@ export class StatisticsOrphanPanel extends LitElement {
   }
 
   private async loadStorageOverviewData() {
-    console.log('[Panel] Starting data load (9-step process)');
+    // Check if we're resuming from a failed step
+    const resumeFromStep = this.lastFailedStep;
+    const resumeSessionId = this.lastSessionId;
+
+    if (resumeFromStep !== null && resumeSessionId) {
+      console.log(`[Panel] Resuming from step ${resumeFromStep + 1}/9 (session: ${resumeSessionId.substring(0, 8)}...)`);
+    } else {
+      console.log('[Panel] Starting data load (9-step process)');
+    }
+
     this.loading = true;
     this.error = null;
 
@@ -354,40 +367,60 @@ export class StatisticsOrphanPanel extends LitElement {
         throw new Error('Home Assistant connection not available. Please reload the page.');
       }
 
-      // Execute steps 0-8 sequentially with session tracking
-      let sessionId: string | undefined;
+      // Determine starting step and session ID
+      let startStep = resumeFromStep !== null ? resumeFromStep : 0;
+      let sessionId: string | undefined = resumeSessionId || undefined;
 
-      for (let step = 0; step <= 8; step++) {
-        console.debug(`[Panel] Executing step ${step + 1}/9`);
-        const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
-
-        // Step 0 returns session_id that we need for subsequent steps
-        if (step === 0 && 'session_id' in result) {
-          sessionId = result.session_id;
-          console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
-        }
-
-        if (step === 8) {
-          // Final step returns the complete overview
-          // Type narrowing: check if result has entities and summary
-          if ('entities' in result && 'summary' in result) {
-            this.storageEntities = result.entities;
-            this.storageSummary = result.summary;
-            console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
-          } else {
-            throw new Error('Final step did not return expected data structure');
-          }
-        }
-
-        // Don't increment on the last step to avoid showing "Step 10 of 9"
-        if (step < 8) {
+      // If resuming, mark previous steps as complete
+      if (resumeFromStep !== null && resumeFromStep > 0) {
+        for (let i = 0; i < resumeFromStep; i++) {
           this.completeCurrentStep();
+        }
+      }
+
+      // Execute steps sequentially with session tracking
+      for (let step = startStep; step <= 8; step++) {
+        console.debug(`[Panel] Executing step ${step + 1}/9`);
+
+        try {
+          const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
+
+          // Step 0 returns session_id that we need for subsequent steps
+          if (step === 0 && 'session_id' in result) {
+            sessionId = result.session_id;
+            console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
+          }
+
+          if (step === 8) {
+            // Final step returns the complete overview
+            // Type narrowing: check if result has entities and summary
+            if ('entities' in result && 'summary' in result) {
+              this.storageEntities = result.entities;
+              this.storageSummary = result.summary;
+              console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+            } else {
+              throw new Error('Final step did not return expected data structure');
+            }
+          }
+
+          // Don't increment on the last step to avoid showing "Step 10 of 9"
+          if (step < 8) {
+            this.completeCurrentStep();
+          }
+        } catch (stepErr) {
+          // Save the failed step and session ID for resumption
+          this.lastFailedStep = step;
+          this.lastSessionId = sessionId || null;
+          console.error(`[Panel] Step ${step + 1}/9 failed, saved for resumption`);
+          throw stepErr; // Re-throw to be caught by outer catch
         }
       }
 
       this.databaseSize = await this.apiService.fetchDatabaseSize();
 
-      // Clear any previous errors on successful load
+      // Clear resumption state on successful completion
+      this.lastFailedStep = null;
+      this.lastSessionId = null;
       this.error = null;
 
       // Save to cache after successful load
@@ -401,6 +434,9 @@ export class StatisticsOrphanPanel extends LitElement {
         // Handle session-related errors with helpful guidance
         if (errorMessage.includes('session_id') || errorMessage.includes('Invalid or missing session_id')) {
           errorMessage = 'Session expired. Please refresh the page to reload data.';
+          // Clear resumption state on session expiration
+          this.lastFailedStep = null;
+          this.lastSessionId = null;
         }
       }
       this.error = errorMessage;
@@ -412,11 +448,14 @@ export class StatisticsOrphanPanel extends LitElement {
   }
 
   private handleRefresh() {
+    // Clear resumption state to start from step 0
+    this.lastFailedStep = null;
+    this.lastSessionId = null;
     this.loadStorageOverviewData();
   }
 
   private handleRetry() {
-    // Clear error and retry the last operation
+    // Clear error and retry (will resume from failed step if available)
     this.error = null;
     this.loadStorageOverviewData();
   }
