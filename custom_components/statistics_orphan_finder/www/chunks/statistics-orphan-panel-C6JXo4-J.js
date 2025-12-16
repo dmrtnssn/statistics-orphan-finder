@@ -1376,153 +1376,29 @@ ${e2.sql}`;
     return total;
   }
 }
-var __defProp$6 = Object.defineProperty;
-var __decorateClass$6 = (decorators, target, key, kind) => {
+var __defProp$9 = Object.defineProperty;
+var __decorateClass$9 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
     if (decorator = decorators[i2])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$6(target, key, result);
+  if (result) __defProp$9(target, key, result);
   return result;
 };
-const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
+const _DatabasePieChart = class _DatabasePieChart extends i$1 {
   constructor() {
     super(...arguments);
-    this.summary = null;
-    this.entities = [];
     this.databaseSize = null;
-    this.activeFilter = null;
-    this.activeRegistry = null;
-    this.activeState = null;
-    this.activeStates = null;
-    this.activeStatistics = null;
-  }
-  getUnavailableLongTerm() {
-    const sevenDaysInSeconds = 7 * 24 * 3600;
-    return this.entities.filter(
-      (e2) => e2.state_status === "Unavailable" && e2.unavailable_duration_seconds !== null && e2.unavailable_duration_seconds > sevenDaysInSeconds
-    ).length;
-  }
-  estimateStorageMB(entityCount) {
-    const statesSize = entityCount * 200;
-    const statsSize = entityCount * 150;
-    const mb = (statesSize + statsSize) / (1024 * 1024);
-    if (mb < 10) {
-      return mb.toFixed(1);
-    }
-    return Math.round(mb).toString();
-  }
-  getActualStorageMB(storageBytes, entityCount) {
-    if (storageBytes !== void 0 && storageBytes > 0) {
-      const mb = storageBytes / (1024 * 1024);
-      if (mb < 10) {
-        return mb.toFixed(1);
-      }
-      return Math.round(mb).toString();
-    }
-    return this.estimateStorageMB(entityCount);
-  }
-  getFilterCount(group, value) {
-    const source = this.entities;
-    if (!source || source.length === 0) {
-      return 0;
-    }
-    switch (group) {
-      case "registry":
-        switch (value) {
-          case "Enabled":
-            return source.filter((e2) => e2.registry_status === "Enabled").length;
-          case "Disabled":
-            return source.filter((e2) => e2.registry_status === "Disabled").length;
-          case "Not in Registry":
-            return source.filter((e2) => e2.registry_status === "Not in Registry").length;
-        }
-        break;
-      case "state":
-        switch (value) {
-          case "Available":
-            return source.filter((e2) => e2.state_status === "Available").length;
-          case "Unavailable":
-            return source.filter((e2) => e2.state_status === "Unavailable").length;
-          case "Not Present":
-            return source.filter((e2) => e2.state_status === "Not Present").length;
-        }
-        break;
-      case "states":
-        switch (value) {
-          case "in_states":
-            return source.filter((e2) => e2.in_states).length;
-          case "not_in_states":
-            return source.filter((e2) => !e2.in_states).length;
-        }
-        break;
-      case "statistics":
-        switch (value) {
-          case "in_statistics":
-            return source.filter((e2) => e2.in_statistics_long_term || e2.in_statistics_short_term).length;
-          case "not_in_statistics":
-            return source.filter((e2) => !e2.in_statistics_long_term && !e2.in_statistics_short_term).length;
-        }
-        break;
-    }
-    return 0;
-  }
-  isFilterDisabled(group, value) {
-    let isActive = false;
-    switch (group) {
-      case "registry":
-        isActive = this.activeRegistry === value;
-        break;
-      case "state":
-        isActive = this.activeState === value;
-        break;
-      case "states":
-        isActive = this.activeStates === value;
-        break;
-      case "statistics":
-        isActive = this.activeStatistics === value;
-        break;
-    }
-    if (isActive) {
-      return false;
-    }
-    return this.getFilterCount(group, value) === 0;
-  }
-  handleAction(action) {
-    this.dispatchEvent(new CustomEvent("action-clicked", {
-      detail: { action },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  handleActionKey(event, action) {
-    if (action && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      this.handleAction(action);
-    }
-  }
-  handleFilterClick(group, value) {
-    this.dispatchEvent(new CustomEvent("filter-changed", {
-      detail: { group, value },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  handleFilterReset() {
-    this.dispatchEvent(new CustomEvent("filter-reset", {
-      bubbles: true,
-      composed: true
-    }));
   }
   drawChart() {
     const canvas = this.shadowRoot?.getElementById("pie-chart");
     if (!canvas || !this.databaseSize) {
-      console.warn("[StorageHealthSummary] Canvas or database size not available");
+      console.warn("[DatabasePieChart] Canvas or database size not available");
       return;
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      console.error("[StorageHealthSummary] Could not get canvas 2D context");
+      console.error("[DatabasePieChart] Could not get canvas 2D context");
       return;
     }
     const centerX = canvas.width / 2;
@@ -1533,7 +1409,7 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
     const statsShort = this.databaseSize.statistics_short_term_size || 0;
     const other = this.databaseSize.other_size || 0;
     const total = states + statsLong + statsShort + other;
-    console.log("[StorageHealthSummary] Drawing chart with sizes:", {
+    console.log("[DatabasePieChart] Drawing chart with sizes:", {
       states,
       statsShort,
       statsLong,
@@ -1565,17 +1441,17 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
       currentAngle += segment.percent * 2 * Math.PI;
     });
   }
-  renderPieChart() {
+  render() {
     if (!this.databaseSize) {
-      console.warn("[StorageHealthSummary] Database size data not available");
-      return x`<div class="no-issues">Database size information unavailable<br><small>Click Refresh to load data</small></div>`;
+      console.warn("[DatabasePieChart] Database size data not available");
+      return x`<div class="no-data">Database size information unavailable<br><small>Click Refresh to load data</small></div>`;
     }
     const states = this.databaseSize.states_size || 0;
     const statsLong = this.databaseSize.statistics_size || 0;
     const statsShort = this.databaseSize.statistics_short_term_size || 0;
     const other = this.databaseSize.other_size || 0;
     const total = states + statsLong + statsShort + other;
-    console.log("[StorageHealthSummary] Database sizes:", {
+    console.log("[DatabasePieChart] Database sizes:", {
       states,
       statsLong,
       statsShort,
@@ -1583,11 +1459,11 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
       total
     });
     if (isNaN(total) || !isFinite(total)) {
-      console.error("[StorageHealthSummary] Invalid database size data (NaN/Infinity)");
-      return x`<div class="no-issues">Invalid database size data<br><small>Check browser console for details</small></div>`;
+      console.error("[DatabasePieChart] Invalid database size data (NaN/Infinity)");
+      return x`<div class="no-data">Invalid database size data<br><small>Check browser console for details</small></div>`;
     }
     if (total === 0) {
-      return x`<div class="no-issues">No database data<br><small>Database appears empty</small></div>`;
+      return x`<div class="no-data">No database data<br><small>Database appears empty</small></div>`;
     }
     const segments = [
       { percent: states / total * 100, color: "#2196F3", label: "States", size: states },
@@ -1633,200 +1509,6 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
       </div>
     `;
   }
-  renderActionSummary() {
-    if (!this.summary) {
-      return x`<div class="no-issues">Summary data unavailable</div>`;
-    }
-    const actions = [];
-    const deleted = this.summary.deleted_from_registry;
-    const unavailableLong = this.getUnavailableLongTerm();
-    const disabled = this.summary.registry_disabled;
-    const active = this.summary.state_available;
-    const total = this.summary.total_entities;
-    if (deleted > 0) {
-      const storageMB = this.getActualStorageMB(this.summary.deleted_storage_bytes, deleted);
-      actions.push({
-        priority: "critical",
-        icon: "🔴",
-        text: `${formatNumber(deleted)} deleted entities wasting ${storageMB}MB`,
-        action: "cleanup_deleted",
-        button: "Clean up"
-      });
-    }
-    if (unavailableLong > 0) {
-      actions.push({
-        priority: "warning",
-        icon: "⚠️",
-        text: `${formatNumber(unavailableLong)} entities unavailable for 7+ days`,
-        action: "investigate_unavailable",
-        button: "Investigate"
-      });
-    }
-    if (disabled > 0) {
-      const potentialMB = this.getActualStorageMB(this.summary.disabled_storage_bytes, disabled);
-      actions.push({
-        priority: "warning",
-        icon: "⚠️",
-        text: `${formatNumber(disabled)} disabled entities using ${potentialMB}MB`,
-        action: "review_disabled",
-        button: "Review"
-      });
-    }
-    const sensorsMissingStats = this.entities.filter(
-      (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && // Exclude non-numeric sensors
-      e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
-    ).length;
-    if (sensorsMissingStats > 0) {
-      actions.push({
-        priority: "warning",
-        icon: "⚠️",
-        text: `${formatNumber(sensorsMissingStats)} numeric sensors missing statistics`,
-        action: "review_numeric_sensors",
-        button: "Review"
-      });
-    }
-    const activePercent = total > 0 ? Math.round(active / total * 100) : 0;
-    actions.push({
-      priority: "success",
-      icon: "✅",
-      text: `${formatNumber(active)} entities active and healthy (${activePercent}%)`,
-      action: null,
-      button: null
-    });
-    if (actions.length === 1 && actions[0].priority === "success") {
-      return x`
-        <div class="no-issues">
-          ✓ All systems healthy<br>
-          ${formatNumber(active)} active entities
-        </div>
-      `;
-    }
-    return x`
-      <div class="action-list">
-        ${actions.map((item) => {
-      const isClickable = !!item.action;
-      return x`
-            <div
-              class="action-item ${item.priority} ${isClickable ? "clickable" : ""}"
-              role=${isClickable ? "button" : "presentation"}
-              tabindex=${isClickable ? "0" : "-1"}
-              @click=${isClickable ? () => this.handleAction(item.action) : null}
-              @keydown=${isClickable ? (e2) => this.handleActionKey(e2, item.action) : null}
-            >
-              <span class="action-icon">${item.icon}</span>
-              <span class="action-text">${item.text}</span>
-              ${item.button ? x`
-                <span class="action-btn">${item.button}</span>
-              ` : ""}
-            </div>
-          `;
-    })}
-      </div>
-    `;
-  }
-  render() {
-    if (!this.summary) {
-      return x`<div class="loading">Loading status summary...</div>`;
-    }
-    return x`
-      <div class="summary-container">
-        <!-- Column 1: Pie Chart -->
-        <div class="column chart-column">
-          ${this.renderPieChart()}
-        </div>
-
-        <!-- Column 2: Action Summary -->
-        <div class="column summary-column">
-          <div class="summary-title">Summary</div>
-          ${this.renderActionSummary()}
-        </div>
-
-        <!-- Column 3: Filter Panel -->
-        <div class="column filter-panel-column">
-          <div class="filter-panel-header">
-            <div class="filter-panel-title">Filters</div>
-            <button class="filter-reset-btn" @click=${this.handleFilterReset}>
-              Reset
-            </button>
-          </div>
-
-          <div class="filter-group">
-            <div class="filter-group-label">Registry:</div>
-            <div class="filter-buttons">
-              <button
-                class="filter-btn ${this.activeRegistry === "Enabled" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("registry", "Enabled")}
-                @click=${() => this.handleFilterClick("registry", "Enabled")}
-              >Enabled (${this.getFilterCount("registry", "Enabled")})</button>
-              <button
-                class="filter-btn ${this.activeRegistry === "Disabled" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("registry", "Disabled")}
-                @click=${() => this.handleFilterClick("registry", "Disabled")}
-              >Disabled (${this.getFilterCount("registry", "Disabled")})</button>
-              <button
-                class="filter-btn ${this.activeRegistry === "Not in Registry" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("registry", "Not in Registry")}
-                @click=${() => this.handleFilterClick("registry", "Not in Registry")}
-              >Not present (${this.getFilterCount("registry", "Not in Registry")})</button>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <div class="filter-group-label">State machine:</div>
-            <div class="filter-buttons">
-              <button
-                class="filter-btn ${this.activeState === "Available" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("state", "Available")}
-                @click=${() => this.handleFilterClick("state", "Available")}
-              >Available (${this.getFilterCount("state", "Available")})</button>
-              <button
-                class="filter-btn ${this.activeState === "Unavailable" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("state", "Unavailable")}
-                @click=${() => this.handleFilterClick("state", "Unavailable")}
-              >Unavailable (${this.getFilterCount("state", "Unavailable")})</button>
-              <button
-                class="filter-btn ${this.activeState === "Not Present" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("state", "Not Present")}
-                @click=${() => this.handleFilterClick("state", "Not Present")}
-              >Not present (${this.getFilterCount("state", "Not Present")})</button>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <div class="filter-group-label">States:</div>
-            <div class="filter-buttons">
-              <button
-                class="filter-btn ${this.activeStates === "in_states" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("states", "in_states")}
-                @click=${() => this.handleFilterClick("states", "in_states")}
-              >In states (${this.getFilterCount("states", "in_states")})</button>
-              <button
-                class="filter-btn ${this.activeStates === "not_in_states" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("states", "not_in_states")}
-                @click=${() => this.handleFilterClick("states", "not_in_states")}
-              >Not in states (${this.getFilterCount("states", "not_in_states")})</button>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <div class="filter-group-label">Statistics:</div>
-            <div class="filter-buttons">
-              <button
-                class="filter-btn ${this.activeStatistics === "in_statistics" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("statistics", "in_statistics")}
-                @click=${() => this.handleFilterClick("statistics", "in_statistics")}
-              >In statistics (${this.getFilterCount("statistics", "in_statistics")})</button>
-              <button
-                class="filter-btn ${this.activeStatistics === "not_in_statistics" ? "active" : ""}"
-                ?disabled=${this.isFilterDisabled("statistics", "not_in_statistics")}
-                @click=${() => this.handleFilterClick("statistics", "not_in_statistics")}
-              >Not in statistics (${this.getFilterCount("statistics", "not_in_statistics")})</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
   updated(changedProperties) {
     super.updated(changedProperties);
     if (changedProperties.has("databaseSize") && this.databaseSize) {
@@ -1834,46 +1516,11 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
     }
   }
 };
-_StorageHealthSummary.styles = [
+_DatabasePieChart.styles = [
   sharedStyles,
   i`
       :host {
         display: block;
-        margin-bottom: 24px;
-      }
-
-      .summary-container {
-        display: grid;
-        grid-template-columns: 520px 1fr 325px;
-        gap: var(--spacing-xl, 24px);
-        margin-bottom: var(--spacing-xl, 24px);
-      }
-
-      @media (max-width: 1200px) {
-        .summary-container {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .column {
-        background: var(--gradient-card);
-        border-radius: var(--radius-lg, 14px);
-        box-shadow: var(--shadow-sm);
-        padding: var(--spacing-2xl, 32px);
-        border: 1px solid color-mix(in srgb, var(--divider-color) 30%, transparent);
-        transition: all var(--duration-normal, 250ms) var(--ease-out-smooth);
-      }
-
-      .column:hover {
-        box-shadow: var(--shadow-md);
-      }
-
-      /* Column 1: Pie Chart */
-      .chart-column {
-        display: flex;
-        flex-direction: column;
-        /* Debug: Uncomment to verify container size */
-        /* background: rgba(255, 255, 0, 0.1); */
       }
 
       .chart-title {
@@ -1946,10 +1593,173 @@ _StorageHealthSummary.styles = [
         opacity: 0.8;
       }
 
-      /* Column 2: Action Summary */
-      .summary-column {
-        display: flex;
-        flex-direction: column;
+      .no-data {
+        text-align: center;
+        padding: 20px;
+        color: var(--secondary-text-color);
+        font-size: 14px;
+      }
+    `
+];
+let DatabasePieChart = _DatabasePieChart;
+__decorateClass$9([
+  n({ type: Object })
+], DatabasePieChart.prototype, "databaseSize");
+if (!customElements.get("database-pie-chart")) {
+  customElements.define("database-pie-chart", DatabasePieChart);
+}
+var __defProp$8 = Object.defineProperty;
+var __decorateClass$8 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$8(target, key, result);
+  return result;
+};
+const _HealthActionList = class _HealthActionList extends i$1 {
+  constructor() {
+    super(...arguments);
+    this.summary = null;
+    this.entities = [];
+  }
+  getUnavailableLongTerm() {
+    const sevenDaysInSeconds = 7 * 24 * 3600;
+    return this.entities.filter(
+      (e2) => e2.state_status === "Unavailable" && e2.unavailable_duration_seconds !== null && e2.unavailable_duration_seconds > sevenDaysInSeconds
+    ).length;
+  }
+  estimateStorageMB(entityCount) {
+    const statesSize = entityCount * 200;
+    const statsSize = entityCount * 150;
+    const mb = (statesSize + statsSize) / (1024 * 1024);
+    if (mb < 10) {
+      return mb.toFixed(1);
+    }
+    return Math.round(mb).toString();
+  }
+  getActualStorageMB(storageBytes, entityCount) {
+    if (storageBytes !== void 0 && storageBytes > 0) {
+      const mb = storageBytes / (1024 * 1024);
+      if (mb < 10) {
+        return mb.toFixed(1);
+      }
+      return Math.round(mb).toString();
+    }
+    return this.estimateStorageMB(entityCount);
+  }
+  handleAction(action) {
+    this.dispatchEvent(new CustomEvent("action-clicked", {
+      detail: { action },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleActionKey(event, action) {
+    if (action && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      this.handleAction(action);
+    }
+  }
+  render() {
+    if (!this.summary) {
+      return x`<div class="no-issues">Summary data unavailable</div>`;
+    }
+    const actions = [];
+    const deleted = this.summary.deleted_from_registry;
+    const unavailableLong = this.getUnavailableLongTerm();
+    const disabled = this.summary.registry_disabled;
+    const active = this.summary.state_available;
+    const total = this.summary.total_entities;
+    if (deleted > 0) {
+      const storageMB = this.getActualStorageMB(this.summary.deleted_storage_bytes, deleted);
+      actions.push({
+        priority: "critical",
+        icon: "🔴",
+        text: `${formatNumber(deleted)} deleted entities wasting ${storageMB}MB`,
+        action: "cleanup_deleted",
+        button: "Clean up"
+      });
+    }
+    if (unavailableLong > 0) {
+      actions.push({
+        priority: "warning",
+        icon: "⚠️",
+        text: `${formatNumber(unavailableLong)} entities unavailable for 7+ days`,
+        action: "investigate_unavailable",
+        button: "Investigate"
+      });
+    }
+    if (disabled > 0) {
+      const potentialMB = this.getActualStorageMB(this.summary.disabled_storage_bytes, disabled);
+      actions.push({
+        priority: "warning",
+        icon: "⚠️",
+        text: `${formatNumber(disabled)} disabled entities using ${potentialMB}MB`,
+        action: "review_disabled",
+        button: "Review"
+      });
+    }
+    const sensorsMissingStats = this.entities.filter(
+      (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && // Exclude non-numeric sensors
+      e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
+    ).length;
+    if (sensorsMissingStats > 0) {
+      actions.push({
+        priority: "warning",
+        icon: "⚠️",
+        text: `${formatNumber(sensorsMissingStats)} numeric sensors missing statistics`,
+        action: "review_numeric_sensors",
+        button: "Review"
+      });
+    }
+    const activePercent = total > 0 ? Math.round(active / total * 100) : 0;
+    actions.push({
+      priority: "success",
+      icon: "✅",
+      text: `${formatNumber(active)} entities active and healthy (${activePercent}%)`,
+      action: null,
+      button: null
+    });
+    if (actions.length === 1 && actions[0].priority === "success") {
+      return x`
+        <div class="summary-title">Summary</div>
+        <div class="no-issues">
+          ✓ All systems healthy<br>
+          ${formatNumber(active)} active entities
+        </div>
+      `;
+    }
+    return x`
+      <div class="summary-title">Summary</div>
+      <div class="action-list">
+        ${actions.map((item) => {
+      const isClickable = !!item.action;
+      return x`
+            <div
+              class="action-item ${item.priority} ${isClickable ? "clickable" : ""}"
+              role=${isClickable ? "button" : "presentation"}
+              tabindex=${isClickable ? "0" : "-1"}
+              @click=${isClickable ? () => this.handleAction(item.action) : null}
+              @keydown=${isClickable ? (e2) => this.handleActionKey(e2, item.action) : null}
+            >
+              <span class="action-icon">${item.icon}</span>
+              <span class="action-text">${item.text}</span>
+              ${item.button ? x`
+                <span class="action-btn">${item.button}</span>
+              ` : ""}
+            </div>
+          `;
+    })}
+      </div>
+    `;
+  }
+};
+_HealthActionList.styles = [
+  sharedStyles,
+  i`
+      :host {
+        display: block;
       }
 
       .summary-title {
@@ -2038,12 +1848,205 @@ _StorageHealthSummary.styles = [
         color: var(--secondary-text-color);
         font-size: 14px;
       }
+    `
+];
+let HealthActionList = _HealthActionList;
+__decorateClass$8([
+  n({ type: Object })
+], HealthActionList.prototype, "summary");
+__decorateClass$8([
+  n({ type: Array })
+], HealthActionList.prototype, "entities");
+if (!customElements.get("health-action-list")) {
+  customElements.define("health-action-list", HealthActionList);
+}
+var __defProp$7 = Object.defineProperty;
+var __decorateClass$7 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$7(target, key, result);
+  return result;
+};
+const _EntityFilterPanel = class _EntityFilterPanel extends i$1 {
+  constructor() {
+    super(...arguments);
+    this.entities = [];
+    this.activeRegistry = null;
+    this.activeState = null;
+    this.activeStates = null;
+    this.activeStatistics = null;
+  }
+  getFilterCount(group, value) {
+    const source = this.entities;
+    if (!source || source.length === 0) {
+      return 0;
+    }
+    switch (group) {
+      case "registry":
+        switch (value) {
+          case "Enabled":
+            return source.filter((e2) => e2.registry_status === "Enabled").length;
+          case "Disabled":
+            return source.filter((e2) => e2.registry_status === "Disabled").length;
+          case "Not in Registry":
+            return source.filter((e2) => e2.registry_status === "Not in Registry").length;
+        }
+        break;
+      case "state":
+        switch (value) {
+          case "Available":
+            return source.filter((e2) => e2.state_status === "Available").length;
+          case "Unavailable":
+            return source.filter((e2) => e2.state_status === "Unavailable").length;
+          case "Not Present":
+            return source.filter((e2) => e2.state_status === "Not Present").length;
+        }
+        break;
+      case "states":
+        switch (value) {
+          case "in_states":
+            return source.filter((e2) => e2.in_states).length;
+          case "not_in_states":
+            return source.filter((e2) => !e2.in_states).length;
+        }
+        break;
+      case "statistics":
+        switch (value) {
+          case "in_statistics":
+            return source.filter((e2) => e2.in_statistics_long_term || e2.in_statistics_short_term).length;
+          case "not_in_statistics":
+            return source.filter((e2) => !e2.in_statistics_long_term && !e2.in_statistics_short_term).length;
+        }
+        break;
+    }
+    return 0;
+  }
+  isFilterDisabled(group, value) {
+    let isActive = false;
+    switch (group) {
+      case "registry":
+        isActive = this.activeRegistry === value;
+        break;
+      case "state":
+        isActive = this.activeState === value;
+        break;
+      case "states":
+        isActive = this.activeStates === value;
+        break;
+      case "statistics":
+        isActive = this.activeStatistics === value;
+        break;
+    }
+    if (isActive) {
+      return false;
+    }
+    return this.getFilterCount(group, value) === 0;
+  }
+  handleFilterClick(group, value) {
+    this.dispatchEvent(new CustomEvent("filter-changed", {
+      detail: { group, value },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  handleFilterReset() {
+    this.dispatchEvent(new CustomEvent("filter-reset", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+  render() {
+    return x`
+      <div class="filter-panel-header">
+        <div class="filter-panel-title">Filters</div>
+        <button class="filter-reset-btn" @click=${this.handleFilterReset}>
+          Reset
+        </button>
+      </div>
 
-      /* Column 3: Filter Panel */
-      .filter-panel-column {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+      <div class="filter-group">
+        <div class="filter-group-label">Registry:</div>
+        <div class="filter-buttons">
+          <button
+            class="filter-btn ${this.activeRegistry === "Enabled" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("registry", "Enabled")}
+            @click=${() => this.handleFilterClick("registry", "Enabled")}
+          >Enabled (${this.getFilterCount("registry", "Enabled")})</button>
+          <button
+            class="filter-btn ${this.activeRegistry === "Disabled" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("registry", "Disabled")}
+            @click=${() => this.handleFilterClick("registry", "Disabled")}
+          >Disabled (${this.getFilterCount("registry", "Disabled")})</button>
+          <button
+            class="filter-btn ${this.activeRegistry === "Not in Registry" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("registry", "Not in Registry")}
+            @click=${() => this.handleFilterClick("registry", "Not in Registry")}
+          >Not present (${this.getFilterCount("registry", "Not in Registry")})</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <div class="filter-group-label">State machine:</div>
+        <div class="filter-buttons">
+          <button
+            class="filter-btn ${this.activeState === "Available" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("state", "Available")}
+            @click=${() => this.handleFilterClick("state", "Available")}
+          >Available (${this.getFilterCount("state", "Available")})</button>
+          <button
+            class="filter-btn ${this.activeState === "Unavailable" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("state", "Unavailable")}
+            @click=${() => this.handleFilterClick("state", "Unavailable")}
+          >Unavailable (${this.getFilterCount("state", "Unavailable")})</button>
+          <button
+            class="filter-btn ${this.activeState === "Not Present" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("state", "Not Present")}
+            @click=${() => this.handleFilterClick("state", "Not Present")}
+          >Not present (${this.getFilterCount("state", "Not Present")})</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <div class="filter-group-label">States:</div>
+        <div class="filter-buttons">
+          <button
+            class="filter-btn ${this.activeStates === "in_states" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("states", "in_states")}
+            @click=${() => this.handleFilterClick("states", "in_states")}
+          >In states (${this.getFilterCount("states", "in_states")})</button>
+          <button
+            class="filter-btn ${this.activeStates === "not_in_states" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("states", "not_in_states")}
+            @click=${() => this.handleFilterClick("states", "not_in_states")}
+          >Not in states (${this.getFilterCount("states", "not_in_states")})</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <div class="filter-group-label">Statistics:</div>
+        <div class="filter-buttons">
+          <button
+            class="filter-btn ${this.activeStatistics === "in_statistics" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("statistics", "in_statistics")}
+            @click=${() => this.handleFilterClick("statistics", "in_statistics")}
+          >In statistics (${this.getFilterCount("statistics", "in_statistics")})</button>
+          <button
+            class="filter-btn ${this.activeStatistics === "not_in_statistics" ? "active" : ""}"
+            ?disabled=${this.isFilterDisabled("statistics", "not_in_statistics")}
+            @click=${() => this.handleFilterClick("statistics", "not_in_statistics")}
+          >Not in statistics (${this.getFilterCount("statistics", "not_in_statistics")})</button>
+        </div>
+      </div>
+    `;
+  }
+};
+_EntityFilterPanel.styles = [
+  sharedStyles,
+  i`
+      :host {
+        display: block;
       }
 
       .filter-panel-header {
@@ -2127,9 +2130,168 @@ _StorageHealthSummary.styles = [
       }
 
       @media (max-width: 1200px) {
+        :host {
+          display: none;
+        }
+      }
+    `
+];
+let EntityFilterPanel = _EntityFilterPanel;
+__decorateClass$7([
+  n({ type: Array })
+], EntityFilterPanel.prototype, "entities");
+__decorateClass$7([
+  n({ type: String })
+], EntityFilterPanel.prototype, "activeRegistry");
+__decorateClass$7([
+  n({ type: String })
+], EntityFilterPanel.prototype, "activeState");
+__decorateClass$7([
+  n({ type: String })
+], EntityFilterPanel.prototype, "activeStates");
+__decorateClass$7([
+  n({ type: String })
+], EntityFilterPanel.prototype, "activeStatistics");
+if (!customElements.get("entity-filter-panel")) {
+  customElements.define("entity-filter-panel", EntityFilterPanel);
+}
+var __defProp$6 = Object.defineProperty;
+var __decorateClass$6 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i2 = decorators.length - 1, decorator; i2 >= 0; i2--)
+    if (decorator = decorators[i2])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$6(target, key, result);
+  return result;
+};
+const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
+  constructor() {
+    super(...arguments);
+    this.summary = null;
+    this.entities = [];
+    this.databaseSize = null;
+    this.activeFilter = null;
+    this.activeRegistry = null;
+    this.activeState = null;
+    this.activeStates = null;
+    this.activeStatistics = null;
+  }
+  render() {
+    if (!this.summary) {
+      return x`<div class="loading">Loading status summary...</div>`;
+    }
+    return x`
+      <div class="summary-container">
+        <!-- Column 1: Pie Chart -->
+        <div class="column chart-column">
+          <database-pie-chart
+            .databaseSize=${this.databaseSize}
+          ></database-pie-chart>
+        </div>
+
+        <!-- Column 2: Action Summary -->
+        <div class="column summary-column">
+          <health-action-list
+            .summary=${this.summary}
+            .entities=${this.entities}
+            @action-clicked=${(e2) => {
+      this.dispatchEvent(new CustomEvent("action-clicked", {
+        detail: e2.detail,
+        bubbles: true,
+        composed: true
+      }));
+    }}
+          ></health-action-list>
+        </div>
+
+        <!-- Column 3: Filter Panel -->
+        <div class="column filter-panel-column">
+          <entity-filter-panel
+            .entities=${this.entities}
+            .activeRegistry=${this.activeRegistry}
+            .activeState=${this.activeState}
+            .activeStates=${this.activeStates}
+            .activeStatistics=${this.activeStatistics}
+            @filter-changed=${(e2) => {
+      this.dispatchEvent(new CustomEvent("filter-changed", {
+        detail: e2.detail,
+        bubbles: true,
+        composed: true
+      }));
+    }}
+            @filter-reset=${() => {
+      this.dispatchEvent(new CustomEvent("filter-reset", {
+        bubbles: true,
+        composed: true
+      }));
+    }}
+          ></entity-filter-panel>
+        </div>
+      </div>
+    `;
+  }
+};
+_StorageHealthSummary.styles = [
+  sharedStyles,
+  i`
+      :host {
+        display: block;
+        margin-bottom: 24px;
+      }
+
+      .summary-container {
+        display: grid;
+        grid-template-columns: 520px 1fr 325px;
+        gap: var(--spacing-xl, 24px);
+        margin-bottom: var(--spacing-xl, 24px);
+      }
+
+      @media (max-width: 1200px) {
+        .summary-container {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .column {
+        background: var(--gradient-card);
+        border-radius: var(--radius-lg, 14px);
+        box-shadow: var(--shadow-sm);
+        padding: var(--spacing-2xl, 32px);
+        border: 1px solid color-mix(in srgb, var(--divider-color) 30%, transparent);
+        transition: all var(--duration-normal, 250ms) var(--ease-out-smooth);
+      }
+
+      .column:hover {
+        box-shadow: var(--shadow-md);
+      }
+
+      /* Column styling */
+      .chart-column {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .summary-column {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .filter-panel-column {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      @media (max-width: 1200px) {
         .filter-panel-column {
           display: none;
         }
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: var(--secondary-text-color);
       }
     `
 ];
@@ -3326,7 +3488,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-CzojofSh.js");
+      await import("./entity-details-modal-Ctq7lDFC.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3335,7 +3497,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CI-lQN7b.js");
+      await import("./delete-sql-modal-nb5dujLs.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4801,4 +4963,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DzqvEzER.js.map
+//# sourceMappingURL=statistics-orphan-panel-C6JXo4-J.js.map
