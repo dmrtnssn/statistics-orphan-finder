@@ -7,11 +7,9 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
-from .services import DatabaseService, StorageCalculator, SqlGenerator, SessionManager, EntityRepository
+from .services import DatabaseService, StorageCalculator, SqlGenerator, SessionManager, EntityRepository, RegistryAdapter
 from .services.entity_analyzer import EntityAnalyzer
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +34,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         self.sql_generator = SqlGenerator(entry)
         self.session_manager = SessionManager()
         self.entity_repository = EntityRepository()
+        self.registry_adapter = RegistryAdapter(hass)
 
         # Shutdown flag to prevent processing requests during unload
         self._is_shutting_down = False
@@ -237,132 +236,10 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
 
     def _fetch_step_6_enrich_with_registry(self, session_id: str) -> dict[str, Any]:
         """Step 6: Enrich with entity registry and state machine info."""
-        entity_registry = er.async_get(self.hass)
-        device_registry = dr.async_get(self.hass)
         step_data = self.session_manager.get_session_data(session_id)
 
-        # PERFORMANCE OPTIMIZATION: Pre-fetch all config entries into dict to avoid N+1 lookups
-        config_entries_map = {
-            entry.entry_id: entry
-            for entry in self.hass.config_entries.async_entries()
-        }
-
-        entities_list = []
-        for entity_id, info in sorted(step_data['entity_map'].items()):
-            # Check if in entity registry and get status
-            registry_entry = entity_registry.async_get(entity_id)
-            in_registry = registry_entry is not None
-
-            # Determine registry status
-            if registry_entry is not None:
-                registry_status = "Disabled" if registry_entry.disabled else "Enabled"
-            else:
-                registry_status = "Not in Registry"
-
-            # Check if in current state machine and get status
-            state = self.hass.states.get(entity_id)
-            in_state_machine = state is not None
-
-            # Determine state machine status
-            if state is not None:
-                if state.state in ["unavailable", "unknown"]:
-                    state_status = "Unavailable"
-                else:
-                    state_status = "Available"
-            else:
-                state_status = "Not Present"
-
-            # Collect additional metadata
-            platform = registry_entry.platform if registry_entry else None
-            disabled_by = registry_entry.disabled_by if registry_entry else None
-
-            # Get device information
-            device_name = None
-            device_disabled = False
-            if registry_entry and registry_entry.device_id:
-                device_entry = device_registry.async_get(registry_entry.device_id)
-                if device_entry:
-                    device_name = device_entry.name
-                    device_disabled = device_entry.disabled or False
-
-            # Get config entry information - OPTIMIZED: O(1) lookup instead of N+1 query
-            config_entry_state = None
-            config_entry_title = None
-            if registry_entry and registry_entry.config_entry_id:
-                config_entry = config_entries_map.get(registry_entry.config_entry_id)
-                if config_entry:
-                    config_entry_state = config_entry.state.name
-                    config_entry_title = config_entry.title
-
-            # Determine availability reason - call static method directly
-            availability_reason = EntityAnalyzer.determine_availability_reason(
-                self.hass, entity_id, registry_entry, state, device_registry
-            )
-
-            # Calculate unavailable duration
-            unavailable_duration_seconds = None
-            if state and state.state in ["unavailable", "unknown"]:
-                now = datetime.now(timezone.utc)
-                unavailable_duration_seconds = int((now - state.last_changed).total_seconds())
-
-            # PERFORMANCE OPTIMIZATION: Use update frequency already calculated in step 2
-            # This eliminates N+1 queries that would happen here
-            update_frequency_data = info.get('update_frequency')
-
-            # Determine statistics eligibility - call static method directly
-            statistics_eligibility_reason = None
-            if not info['in_statistics_meta']:
-                try:
-                    statistics_eligibility_reason = EntityAnalyzer.determine_statistics_eligibility(
-                        entity_id, registry_entry, state
-                    )
-                except Exception as err:
-                    _LOGGER.debug("Could not determine statistics eligibility for %s: %s", entity_id, err)
-                    statistics_eligibility_reason = "Unable to determine eligibility"
-
-            # Get metadata_id and origin for Generate SQL functionality
-            # metadata_id was already fetched in step 3
-            metadata_id = info.get('metadata_id')
-            origin = None
-            if info['in_statistics_meta']:
-                if info['in_statistics_long_term'] and info['in_statistics_short_term']:
-                    origin = "Both"
-                elif info['in_statistics_long_term']:
-                    origin = "Long-term"
-                elif info['in_statistics_short_term']:
-                    origin = "Short-term"
-
-            entities_list.append({
-                'entity_id': entity_id,
-                'in_entity_registry': in_registry,
-                'registry_status': registry_status,
-                'in_state_machine': in_state_machine,
-                'state_status': state_status,
-                'in_states_meta': info['in_states_meta'],
-                'in_states': info['in_states'],
-                'in_statistics_meta': info['in_statistics_meta'],
-                'in_statistics_short_term': info['in_statistics_short_term'],
-                'in_statistics_long_term': info['in_statistics_long_term'],
-                'states_count': info['states_count'],
-                'stats_short_count': info['stats_short_count'],
-                'stats_long_count': info['stats_long_count'],
-                'last_state_update': info['last_state_update'],
-                'last_stats_update': info['last_stats_update'],
-                'platform': platform,
-                'disabled_by': disabled_by,
-                'device_name': device_name,
-                'device_disabled': device_disabled,
-                'config_entry_state': config_entry_state,
-                'config_entry_title': config_entry_title,
-                'availability_reason': availability_reason,
-                'unavailable_duration_seconds': unavailable_duration_seconds,
-                'update_interval': update_frequency_data['interval_text'] if update_frequency_data else None,
-                'update_interval_seconds': update_frequency_data['interval_seconds'] if update_frequency_data else None,
-                'update_count_24h': update_frequency_data['update_count_24h'] if update_frequency_data else None,
-                'statistics_eligibility_reason': statistics_eligibility_reason,
-                'metadata_id': metadata_id,
-                'origin': origin,
-            })
+        # Delegate enrichment to RegistryAdapter
+        entities_list = self.registry_adapter.enrich_entities(step_data['entity_map'])
 
         step_data['entities_list'] = entities_list
         self.session_manager.update_timestamp(session_id)

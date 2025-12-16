@@ -5,6 +5,7 @@ from .entity_analyzer import EntityAnalyzer
 from .sql_generator import SqlGenerator
 from .session_manager import SessionManager
 from .entity_repository import EntityRepository
+from .registry_adapter import RegistryAdapter
 
 __all__ = [
     "DatabaseService",
@@ -13,4 +14,5 @@ __all__ = [
     "SqlGenerator",
     "SessionManager",
     "EntityRepository",
+    "RegistryAdapter",
 ]

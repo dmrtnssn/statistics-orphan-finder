@@ -191,8 +191,8 @@ class TestCoordinatorStepProcessing:
         coordinator.db_service._engine = populated_sqlite_engine
 
         # Mock registries
-        with patch("custom_components.statistics_orphan_finder.coordinator.er.async_get") as mock_er:
-            with patch("custom_components.statistics_orphan_finder.coordinator.dr.async_get") as mock_dr:
+        with patch("custom_components.statistics_orphan_finder.services.registry_adapter.er.async_get") as mock_er:
+            with patch("custom_components.statistics_orphan_finder.services.registry_adapter.dr.async_get") as mock_dr:
                 mock_er.return_value = mock_entity_registry
                 mock_dr.return_value = mock_device_registry
 
@@ -230,8 +230,8 @@ class TestCoordinatorStepProcessing:
         coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
-        with patch("custom_components.statistics_orphan_finder.coordinator.er.async_get") as mock_er:
-            with patch("custom_components.statistics_orphan_finder.coordinator.dr.async_get") as mock_dr:
+        with patch("custom_components.statistics_orphan_finder.services.registry_adapter.er.async_get") as mock_er:
+            with patch("custom_components.statistics_orphan_finder.services.registry_adapter.dr.async_get") as mock_dr:
                 mock_er.return_value = mock_entity_registry
                 mock_dr.return_value = mock_device_registry
 
@@ -384,8 +384,8 @@ class TestCoordinatorIntegration:
         coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         coordinator.db_service._engine = populated_sqlite_engine
 
-        with patch("custom_components.statistics_orphan_finder.coordinator.er.async_get") as mock_er:
-            with patch("custom_components.statistics_orphan_finder.coordinator.dr.async_get") as mock_dr:
+        with patch("custom_components.statistics_orphan_finder.services.registry_adapter.er.async_get") as mock_er:
+            with patch("custom_components.statistics_orphan_finder.services.registry_adapter.dr.async_get") as mock_dr:
                 mock_er.return_value = mock_entity_registry
                 mock_dr.return_value = mock_device_registry
 
