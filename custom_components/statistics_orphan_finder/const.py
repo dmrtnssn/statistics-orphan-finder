@@ -6,6 +6,9 @@ CONF_DB_URL = "db_url"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 
+# API versioning
+API_VERSION = "1.0"  # Semantic versioning for API compatibility
+
 # Error categories for actionable error messages
 ERROR_CATEGORY_DB_CONNECTION = "DB_CONNECTION"
 ERROR_CATEGORY_DB_PERMISSION = "DB_PERMISSION"
