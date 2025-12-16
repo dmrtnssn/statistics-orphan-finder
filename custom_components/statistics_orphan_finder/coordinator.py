@@ -1,8 +1,5 @@
 """DataUpdateCoordinator for Statistics Orphan Finder."""
 import logging
-import time
-import uuid
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,13 +13,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
-from .services import DatabaseService, StorageCalculator, SqlGenerator
+from .services import DatabaseService, StorageCalculator, SqlGenerator, SessionManager
 from .services.entity_analyzer import EntityAnalyzer
 
 _LOGGER = logging.getLogger(__name__)
-
-# Session timeout in seconds (5 minutes)
-SESSION_TIMEOUT = 300
 
 
 class StatisticsOrphanCoordinator(DataUpdateCoordinator):
@@ -42,10 +36,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         self.db_service = DatabaseService(hass, entry)
         self.storage_calculator = StorageCalculator(entry)
         self.sql_generator = SqlGenerator(entry)
-
-        # Store intermediate data for step-by-step fetching with session isolation
-        # Key: session_id (UUID), Value: {data: dict, timestamp: float}
-        self._step_sessions: dict[str, dict[str, Any]] = {}
+        self.session_manager = SessionManager()
 
         # Shutdown flag to prevent processing requests during unload
         self._is_shutting_down = False
@@ -56,19 +47,6 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
     def _get_engine(self):
         """Get or create database engine."""
         return self.db_service.get_engine()
-
-    def _cleanup_stale_sessions(self) -> None:
-        """Clean up sessions older than SESSION_TIMEOUT."""
-        current_time = time.time()
-        stale_sessions = [
-            session_id
-            for session_id, session in self._step_sessions.items()
-            if current_time - session['timestamp'] > SESSION_TIMEOUT
-        ]
-        for session_id in stale_sessions:
-            _LOGGER.info("Cleaning up stale session %s (age: %ds)",
-                        session_id[:8], int(current_time - self._step_sessions[session_id]['timestamp']))
-            del self._step_sessions[session_id]
 
     async def async_get_message_histogram(self, entity_id: str, hours: int) -> dict[str, Any]:
         """Get hourly message counts for an entity.
@@ -148,40 +126,20 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         Returns:
             Dictionary with status, total_steps, and session_id
         """
-        # Clean up stale sessions before creating new one
-        self._cleanup_stale_sessions()
-
-        # Create new session ID if not provided
+        # Create new session (auto-cleans stale sessions)
         if session_id is None:
-            session_id = str(uuid.uuid4())
+            session_id = self.session_manager.create_session()
+        else:
+            # If session_id provided but doesn't exist, create new one
+            if not self.session_manager.validate_session(session_id):
+                session_id = self.session_manager.create_session()
 
-        # Initialize session data
-        self._step_sessions[session_id] = {
-            'data': {
-                'entity_map': defaultdict(lambda: {
-                    'in_states_meta': False,
-                    'in_states': False,
-                    'in_statistics_meta': False,
-                    'in_statistics_short_term': False,
-                    'in_statistics_long_term': False,
-                    'states_count': 0,
-                    'stats_short_count': 0,
-                    'stats_long_count': 0,
-                    'last_state_update': None,
-                    'last_stats_update': None,
-                    'metadata_id': None,
-                })
-            },
-            'timestamp': time.time()
-        }
-
-        _LOGGER.debug("Created new session %s", session_id[:8])
         return {'status': 'initialized', 'total_steps': 8, 'session_id': session_id}
 
     def _fetch_step_1_states_meta(self, session_id: str) -> dict[str, Any]:
         """Step 1: Fetch states_meta entities."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         with engine.connect() as conn:
             query = text("SELECT DISTINCT entity_id FROM states_meta")
@@ -190,13 +148,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 step_data['entity_map'][row[0]]['in_states_meta'] = True
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_states_meta'])
-        self._step_sessions[session_id]['timestamp'] = time.time()  # Update timestamp
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_2_states(self, session_id: str) -> dict[str, Any]:
         """Step 2: Fetch states with counts and update frequencies (batched for performance)."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         with engine.connect() as conn:
             # Fetch state counts and last updates
@@ -237,13 +195,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 }
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_states'])
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_3_statistics_meta(self, session_id: str) -> dict[str, Any]:
         """Step 3: Fetch statistics_meta entities with metadata_id."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         with engine.connect() as conn:
             # Fetch both id and statistic_id to avoid N+1 queries later
@@ -255,13 +213,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 step_data['entity_map'][entity_id]['metadata_id'] = row[0]
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_meta'])
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_4_statistics_short_term(self, session_id: str) -> dict[str, Any]:
         """Step 4: Fetch statistics_short_term with counts."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         with engine.connect() as conn:
             try:
@@ -290,13 +248,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                 raise
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_short_term'])
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_5_statistics_long_term(self, session_id: str) -> dict[str, Any]:
         """Step 5: Fetch statistics (long-term) with counts."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         with engine.connect() as conn:
             query = text("""
@@ -317,14 +275,14 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                         step_data['entity_map'][entity_id]['last_stats_update'] = last_update
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_long_term'])
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'entities_found': entity_count}
 
     def _fetch_step_6_enrich_with_registry(self, session_id: str) -> dict[str, Any]:
         """Step 6: Enrich with entity registry and state machine info."""
         entity_registry = er.async_get(self.hass)
         device_registry = dr.async_get(self.hass)
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
 
         # PERFORMANCE OPTIMIZATION: Pre-fetch all config entries into dict to avoid N+1 lookups
         config_entries_map = {
@@ -450,7 +408,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             })
 
         step_data['entities_list'] = entities_list
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'total_entities': len(entities_list)}
 
     def _determine_entity_origin(self, entity: dict[str, Any]) -> str:
@@ -479,7 +437,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
     def _fetch_step_7_calculate_deleted_storage(self, session_id: str) -> dict[str, Any]:
         """Step 7: Calculate storage for deleted entities."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
         deleted_storage_bytes = 0
 
         with engine.connect() as conn:
@@ -509,13 +467,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug("Could not calculate storage for %s: %s", entity['entity_id'], err)
 
         step_data['deleted_storage_bytes'] = deleted_storage_bytes
-        self._step_sessions[session_id]['timestamp'] = time.time()
+        self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'deleted_storage_bytes': deleted_storage_bytes}
 
     def _fetch_step_8_finalize(self, session_id: str) -> dict[str, Any]:
         """Step 8: Calculate disabled storage and generate summary."""
         engine = self._get_engine()
-        step_data = self._step_sessions[session_id]['data']
+        step_data = self.session_manager.get_session_data(session_id)
         disabled_storage_bytes = 0
 
         with engine.connect() as conn:
@@ -571,8 +529,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         }
 
         # Clean up session data now that we're done
-        del self._step_sessions[session_id]
-        _LOGGER.debug("Cleaned up completed session %s", session_id[:8])
+        self.session_manager.delete_session(session_id)
 
         return result
 
@@ -593,35 +550,35 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         if step == 0:
             return self._init_step_data(session_id)
         elif step == 1:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 1")
             return self._fetch_step_1_states_meta(session_id)
         elif step == 2:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 2")
             return self._fetch_step_2_states(session_id)
         elif step == 3:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 3")
             return self._fetch_step_3_statistics_meta(session_id)
         elif step == 4:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 4")
             return self._fetch_step_4_statistics_short_term(session_id)
         elif step == 5:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 5")
             return self._fetch_step_5_statistics_long_term(session_id)
         elif step == 6:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 6")
             return self._fetch_step_6_enrich_with_registry(session_id)
         elif step == 7:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 7")
             return self._fetch_step_7_calculate_deleted_storage(session_id)
         elif step == 8:
-            if not session_id or session_id not in self._step_sessions:
+            if not session_id or not self.session_manager.validate_session(session_id):
                 raise ValueError("Invalid or missing session_id for step 8")
             return self._fetch_step_8_finalize(session_id)
         else:
@@ -656,10 +613,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         self._is_shutting_down = True
 
         # Clean up any in-progress step sessions
-        session_count = len(self._step_sessions)
-        if session_count > 0:
-            _LOGGER.info("Cleaning up %d in-progress session(s) on shutdown", session_count)
-        self._step_sessions.clear()
+        self.session_manager.clear_all_sessions()
 
         # Close database connection
         if self.db_service:

@@ -11,6 +11,8 @@ from sqlalchemy.engine import Engine
 
 from custom_components.statistics_orphan_finder.coordinator import (
     StatisticsOrphanCoordinator,
+)
+from custom_components.statistics_orphan_finder.services.session_manager import (
     SESSION_TIMEOUT,
 )
 
@@ -29,7 +31,7 @@ class TestStatisticsOrphanCoordinator:
         assert coordinator.db_service is not None
         assert coordinator.storage_calculator is not None
         assert coordinator.sql_generator is not None
-        assert coordinator._step_sessions == {}  # Session dict starts empty
+        assert coordinator.session_manager._sessions == {}  # Session dict starts empty
 
     def test_get_engine(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
@@ -86,10 +88,10 @@ class TestCoordinatorStepProcessing:
 
         # Check session was created
         session_id = result["session_id"]
-        assert session_id in coordinator._step_sessions
+        assert session_id in coordinator.session_manager._sessions
 
         # Check session structure
-        session = coordinator._step_sessions[session_id]
+        session = coordinator.session_manager._sessions[session_id]
         assert "data" in session
         assert "timestamp" in session
         assert "entity_map" in session["data"]
@@ -110,7 +112,7 @@ class TestCoordinatorStepProcessing:
 
         assert result["status"] == "complete"
         assert result["entities_found"] == 4  # 4 entities in states_meta
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_states_meta"] is True
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_states_meta"] is True
 
     def test_fetch_step_2_states(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
@@ -126,8 +128,8 @@ class TestCoordinatorStepProcessing:
         assert result["status"] == "complete"
         assert result["entities_found"] > 0
         # sensor.temperature has 2 states
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_states"] is True
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["states_count"] == 2
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_states"] is True
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["states_count"] == 2
 
     def test_fetch_step_3_statistics_meta(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
@@ -143,8 +145,8 @@ class TestCoordinatorStepProcessing:
         assert result["status"] == "complete"
         assert result["entities_found"] == 3  # 3 entities in statistics_meta
         # Check metadata_id was stored
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_meta"] is True
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["metadata_id"] == 1
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_meta"] is True
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["metadata_id"] == 1
 
     def test_fetch_step_4_statistics_short_term(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
@@ -158,8 +160,8 @@ class TestCoordinatorStepProcessing:
         result = coordinator._fetch_step_4_statistics_short_term(session_id)
 
         assert result["status"] == "complete"
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_short_term"] is True
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["stats_short_count"] > 0
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_short_term"] is True
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["stats_short_count"] > 0
 
     def test_fetch_step_5_statistics_long_term(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
@@ -173,8 +175,8 @@ class TestCoordinatorStepProcessing:
         result = coordinator._fetch_step_5_statistics_long_term(session_id)
 
         assert result["status"] == "complete"
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_long_term"] is True
-        assert coordinator._step_sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["stats_long_count"] > 0
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["in_statistics_long_term"] is True
+        assert coordinator.session_manager._sessions[session_id]["data"]["entity_map"]["sensor.temperature"]["stats_long_count"] > 0
 
     def test_fetch_step_6_enrich_with_registry(
         self,
@@ -206,10 +208,10 @@ class TestCoordinatorStepProcessing:
 
                 assert result["status"] == "complete"
                 assert result["total_entities"] > 0
-                assert "entities_list" in coordinator._step_sessions[session_id]["data"]
+                assert "entities_list" in coordinator.session_manager._sessions[session_id]["data"]
 
                 # Check entity structure
-                entities = coordinator._step_sessions[session_id]["data"]["entities_list"]
+                entities = coordinator.session_manager._sessions[session_id]["data"]["entities_list"]
                 assert len(entities) > 0
                 first_entity = entities[0]
                 assert "entity_id" in first_entity
@@ -258,7 +260,7 @@ class TestCoordinatorStepProcessing:
                 assert "disabled_storage_bytes" in summary
 
                 # Check cleanup - session should be deleted after step 8
-                assert session_id not in coordinator._step_sessions
+                assert session_id not in coordinator.session_manager._sessions
 
     @pytest.mark.asyncio
     async def test_async_execute_overview_step(
@@ -355,7 +357,7 @@ class TestCoordinatorServiceDelegation:
         # Create some sessions
         coordinator._init_step_data()
         coordinator._init_step_data()
-        assert len(coordinator._step_sessions) == 2
+        assert len(coordinator.session_manager._sessions) == 2
 
         with patch.object(coordinator.db_service, "close") as mock_close:
             await coordinator.async_shutdown()
@@ -363,7 +365,7 @@ class TestCoordinatorServiceDelegation:
             # Should call close via executor
             mock_hass.async_add_executor_job.assert_called()
             # Should clear all sessions
-            assert len(coordinator._step_sessions) == 0
+            assert len(coordinator.session_manager._sessions) == 0
 
 
 class TestCoordinatorIntegration:
@@ -396,12 +398,12 @@ class TestCoordinatorIntegration:
                         assert result["status"] == "initialized"
                         assert "session_id" in result
                         session_id = result["session_id"]
-                        assert session_id in coordinator._step_sessions
+                        assert session_id in coordinator.session_manager._sessions
                     elif step == 8:
                         assert "entities" in result
                         assert "summary" in result
                         # Session should be cleaned up after step 8
-                        assert session_id not in coordinator._step_sessions
+                        assert session_id not in coordinator.session_manager._sessions
                     else:
                         assert result["status"] == "complete"
 
@@ -426,16 +428,16 @@ class TestSessionIsolation:
         assert session_id1 != session_id2
 
         # Both should exist
-        assert session_id1 in coordinator._step_sessions
-        assert session_id2 in coordinator._step_sessions
+        assert session_id1 in coordinator.session_manager._sessions
+        assert session_id2 in coordinator.session_manager._sessions
 
         # Modify one session's data
-        coordinator._step_sessions[session_id1]["data"]["entity_map"]["test.entity"]["custom_field"] = "value1"
-        coordinator._step_sessions[session_id2]["data"]["entity_map"]["test.entity"]["custom_field"] = "value2"
+        coordinator.session_manager._sessions[session_id1]["data"]["entity_map"]["test.entity"]["custom_field"] = "value1"
+        coordinator.session_manager._sessions[session_id2]["data"]["entity_map"]["test.entity"]["custom_field"] = "value2"
 
         # Sessions should have independent data
-        assert coordinator._step_sessions[session_id1]["data"]["entity_map"]["test.entity"]["custom_field"] == "value1"
-        assert coordinator._step_sessions[session_id2]["data"]["entity_map"]["test.entity"]["custom_field"] == "value2"
+        assert coordinator.session_manager._sessions[session_id1]["data"]["entity_map"]["test.entity"]["custom_field"] == "value1"
+        assert coordinator.session_manager._sessions[session_id2]["data"]["entity_map"]["test.entity"]["custom_field"] == "value2"
 
     def test_invalid_session_id_raises_error(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock
@@ -477,7 +479,7 @@ class TestSessionTimeout:
             result = coordinator._init_step_data()
             session_id1 = result["session_id"]
 
-        assert session_id1 in coordinator._step_sessions
+        assert session_id1 in coordinator.session_manager._sessions
 
         # Create another session after SESSION_TIMEOUT has passed
         # This should trigger cleanup of the first session
@@ -486,9 +488,9 @@ class TestSessionTimeout:
             session_id2 = result2["session_id"]
 
         # First session should be cleaned up
-        assert session_id1 not in coordinator._step_sessions
+        assert session_id1 not in coordinator.session_manager._sessions
         # Second session should exist
-        assert session_id2 in coordinator._step_sessions
+        assert session_id2 in coordinator.session_manager._sessions
 
     def test_session_timestamp_updated(
         self, mock_hass: MagicMock, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
@@ -501,14 +503,14 @@ class TestSessionTimeout:
         with patch("time.time", return_value=1000.0):
             result = coordinator._init_step_data()
             session_id = result["session_id"]
-            initial_timestamp = coordinator._step_sessions[session_id]["timestamp"]
+            initial_timestamp = coordinator.session_manager._sessions[session_id]["timestamp"]
 
         assert initial_timestamp == 1000.0
 
         # Execute step 1 at a later time
         with patch("time.time", return_value=1010.0):
             coordinator._fetch_step_1_states_meta(session_id)
-            updated_timestamp = coordinator._step_sessions[session_id]["timestamp"]
+            updated_timestamp = coordinator.session_manager._sessions[session_id]["timestamp"]
 
         # Timestamp should be updated
         assert updated_timestamp == 1010.0
@@ -535,11 +537,11 @@ class TestSessionTimeout:
             session_id3 = result3["session_id"]
 
         # First session should be cleaned (stale)
-        assert session_id1 not in coordinator._step_sessions
+        assert session_id1 not in coordinator.session_manager._sessions
         # Second session should still exist (not stale)
-        assert session_id2 in coordinator._step_sessions
+        assert session_id2 in coordinator.session_manager._sessions
         # Third session should exist (just created)
-        assert session_id3 in coordinator._step_sessions
+        assert session_id3 in coordinator.session_manager._sessions
 
 
 class TestMessageHistogram:
@@ -740,7 +742,7 @@ class TestCoordinatorErrorHandling:
         coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         session_id = coordinator._init_step_data()["session_id"]
 
-        step_data = coordinator._step_sessions[session_id]["data"]
+        step_data = coordinator.session_manager._sessions[session_id]["data"]
         step_data["entity_map"] = {
             "sensor.fail": {"metadata_id": 1},
             "sensor.ok": {"metadata_id": 2},
@@ -850,7 +852,7 @@ class TestOriginDetermination:
         coordinator = StatisticsOrphanCoordinator(mock_hass, mock_config_entry, "2.0.0-test")
         session_id = coordinator._init_step_data()["session_id"]
 
-        step_data = coordinator._step_sessions[session_id]["data"]
+        step_data = coordinator.session_manager._sessions[session_id]["data"]
         step_data["entity_map"] = {"sensor.both": {"metadata_id": 10}}
         step_data["entities_list"] = [
             {
