@@ -52,13 +52,11 @@ export interface DatabaseSize {
   statistics_short_term_size: number;
   other_size: number;
   version?: string;
-  api_version?: string;
 }
 
 export interface GenerateSqlResponse {
   sql: string;
   storage_saved: number;
-  api_version?: string;
 }
 
 // Discriminated union for bulk SQL generation results
@@ -103,7 +101,6 @@ export interface MessageHistogramResponse {
   hourly_counts: number[];
   total_messages: number;
   time_range_hours: number;
-  api_version?: string;
 }
 
 // ============================================================================
@@ -184,11 +181,11 @@ export interface EntityStorageOverviewResponse {
 // Step 7: status 'complete' with deleted_storage_bytes
 // Step 8: Full EntityStorageOverviewResponse
 export type StepResponse =
-  | { status: 'initialized'; total_steps: number; session_id: string; api_version?: string }
-  | { status: 'complete'; entities_found: number; api_version?: string }
-  | { status: 'complete'; total_entities: number; api_version?: string }
-  | { status: 'complete'; deleted_storage_bytes: number; api_version?: string }
-  | (EntityStorageOverviewResponse & { api_version?: string });
+  | { status: 'initialized'; total_steps: number; session_id: string }
+  | { status: 'complete'; entities_found: number }
+  | { status: 'complete'; total_entities: number }
+  | { status: 'complete'; deleted_storage_bytes: number }
+  | EntityStorageOverviewResponse;
 
 // ============================================================================
 // Table Component Types
