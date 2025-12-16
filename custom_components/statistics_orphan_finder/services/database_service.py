@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from ..const import CONF_DB_URL, CONF_USERNAME, CONF_PASSWORD
+from .storage_constants import MYSQL_COMPRESSION_FACTOR
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,9 +139,9 @@ class DatabaseService:
                     # Estimate based on row counts (rough approximation)
                     total_count = states_count + statistics_count + statistics_short_term_count
                     if total_count > 0:
-                        states_size = int((states_count / total_count) * total_size * 0.85)
-                        statistics_size = int((statistics_count / total_count) * total_size * 0.85)
-                        statistics_short_term_size = int((statistics_short_term_count / total_count) * total_size * 0.85)
+                        states_size = int((states_count / total_count) * total_size * MYSQL_COMPRESSION_FACTOR)
+                        statistics_size = int((statistics_count / total_count) * total_size * MYSQL_COMPRESSION_FACTOR)
+                        statistics_short_term_size = int((statistics_short_term_count / total_count) * total_size * MYSQL_COMPRESSION_FACTOR)
                         other_size = total_size - states_size - statistics_size - statistics_short_term_size
                     else:
                         other_size = total_size
