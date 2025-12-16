@@ -910,6 +910,441 @@ function formatFullTimestamp(isoString) {
     return isoString;
   }
 }
+const _EntityFilterService = class _EntityFilterService {
+  /**
+   * Generate cache key from filter parameters and sort stack
+   */
+  static generateFilterKey(filters, sortStack) {
+    return `${filters.searchQuery}|${filters.basicFilter}|${filters.registryFilter}|${filters.stateFilter}|${filters.advancedFilter}|${filters.statesFilter}|${filters.statisticsFilter}|${sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
+  }
+  /**
+   * Main entry point: Filter and sort entities with memoization
+   */
+  static filterAndSort(entities, filters, sortStack) {
+    const cacheKey = this.generateFilterKey(filters, sortStack);
+    if (this._cache.has(cacheKey)) {
+      return this._cache.get(cacheKey);
+    }
+    let filtered = [...entities];
+    filtered = this.applySearchFilter(filtered, filters.searchQuery);
+    filtered = this.applyBasicFilter(filtered, filters.basicFilter);
+    filtered = this.applyRegistryFilter(filtered, filters.registryFilter);
+    filtered = this.applyStateFilter(filtered, filters.stateFilter);
+    filtered = this.applyAdvancedFilter(filtered, filters.advancedFilter);
+    filtered = this.applyStatesFilter(filtered, filters.statesFilter);
+    filtered = this.applyStatisticsFilter(filtered, filters.statisticsFilter);
+    const result = this.sortEntities(filtered, sortStack);
+    this._cache.set(cacheKey, result);
+    return result;
+  }
+  /**
+   * Apply search query filter (entity_id contains query)
+   */
+  static applySearchFilter(entities, query) {
+    if (!query) return entities;
+    const lowerQuery = query.toLowerCase();
+    return entities.filter((e2) => e2.entity_id.toLowerCase().includes(lowerQuery));
+  }
+  /**
+   * Apply basic filter (in_registry, in_state, deleted, numeric_sensors_no_stats)
+   */
+  static applyBasicFilter(entities, filter) {
+    if (!filter) return entities;
+    switch (filter) {
+      case "in_registry":
+        return entities.filter((e2) => e2.in_entity_registry);
+      case "in_state":
+        return entities.filter((e2) => e2.in_state_machine);
+      case "deleted":
+        return entities.filter((e2) => !e2.in_entity_registry && !e2.in_state_machine);
+      case "numeric_sensors_no_stats":
+        return entities.filter(
+          (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
+        );
+      default:
+        return entities;
+    }
+  }
+  /**
+   * Apply registry status filter (Enabled, Disabled)
+   */
+  static applyRegistryFilter(entities, filter) {
+    if (!filter) return entities;
+    return entities.filter((e2) => e2.registry_status === filter);
+  }
+  /**
+   * Apply state status filter (Available, Unavailable)
+   */
+  static applyStateFilter(entities, filter) {
+    if (!filter) return entities;
+    return entities.filter((e2) => e2.state_status === filter);
+  }
+  /**
+   * Apply advanced filter (only_states, only_stats)
+   */
+  static applyAdvancedFilter(entities, filter) {
+    if (!filter) return entities;
+    switch (filter) {
+      case "only_states":
+        return entities.filter((e2) => e2.in_states && !e2.in_statistics_meta);
+      case "only_stats":
+        return entities.filter((e2) => e2.in_statistics_meta && !e2.in_states);
+      default:
+        return entities;
+    }
+  }
+  /**
+   * Apply states table filter (in_states, not_in_states)
+   */
+  static applyStatesFilter(entities, filter) {
+    if (!filter) return entities;
+    switch (filter) {
+      case "in_states":
+        return entities.filter((e2) => e2.in_states);
+      case "not_in_states":
+        return entities.filter((e2) => !e2.in_states);
+      default:
+        return entities;
+    }
+  }
+  /**
+   * Apply statistics table filter (in_statistics, not_in_statistics)
+   */
+  static applyStatisticsFilter(entities, filter) {
+    if (!filter) return entities;
+    switch (filter) {
+      case "in_statistics":
+        return entities.filter((e2) => e2.in_statistics_meta);
+      case "not_in_statistics":
+        return entities.filter((e2) => !e2.in_statistics_meta);
+      default:
+        return entities;
+    }
+  }
+  /**
+   * Sort entities by sort stack (multi-column sorting)
+   */
+  static sortEntities(entities, sortStack) {
+    return [...entities].sort((a, b) => {
+      for (const { column, direction } of sortStack) {
+        let result = 0;
+        switch (column) {
+          case "entity_id":
+            result = a.entity_id.localeCompare(b.entity_id);
+            break;
+          case "registry":
+          case "registry_status":
+            result = a.registry_status.localeCompare(b.registry_status);
+            break;
+          case "state":
+          case "state_status":
+            result = a.state_status.localeCompare(b.state_status);
+            break;
+          case "states_count":
+          case "stats_short_count":
+          case "stats_long_count":
+            result = a[column] - b[column];
+            break;
+          case "update_interval":
+            const aInterval = a.update_interval_seconds ?? 999999;
+            const bInterval = b.update_interval_seconds ?? 999999;
+            result = aInterval - bInterval;
+            break;
+          case "last_state_update":
+          case "last_stats_update":
+            const aTime = a[column] ? new Date(a[column]).getTime() : 0;
+            const bTime = b[column] ? new Date(b[column]).getTime() : 0;
+            result = aTime - bTime;
+            break;
+          default:
+            const aVal = a[column] ? 1 : 0;
+            const bVal = b[column] ? 1 : 0;
+            result = aVal - bVal;
+        }
+        if (direction === "desc") result = -result;
+        if (result !== 0) return result;
+      }
+      return 0;
+    });
+  }
+  /**
+   * Clear memoization cache (useful for testing or memory management)
+   */
+  static clearCache() {
+    this._cache.clear();
+  }
+};
+_EntityFilterService._cache = /* @__PURE__ */ new Map();
+let EntityFilterService = _EntityFilterService;
+class EntitySelectionService {
+  /**
+   * Check if entity has been disabled and has statistics data
+   * Note: Disabled entities with statistics are eligible for cleanup
+   */
+  static isDisabledForAtLeast90Days(entity) {
+    try {
+      if (!entity || entity.registry_status !== "Disabled") return false;
+      return !!(entity.in_states_meta || entity.in_statistics_meta);
+    } catch (err) {
+      console.warn("[EntitySelectionService] Error in isDisabledForAtLeast90Days:", entity?.entity_id, err);
+      return false;
+    }
+  }
+  /**
+   * Get entity selection type for UI differentiation
+   */
+  static getEntitySelectionType(entity) {
+    const hasData = entity.in_states_meta || entity.in_statistics_meta;
+    if (!hasData) return "not-selectable";
+    if (!entity.in_entity_registry && !entity.in_state_machine) {
+      return "deleted";
+    }
+    if (this.isDisabledForAtLeast90Days(entity)) {
+      return "disabled";
+    }
+    return "not-selectable";
+  }
+  /**
+   * Check if entity has data that can be deleted
+   */
+  static hasDataToDelete(entity) {
+    return !!(entity.in_states_meta || entity.in_statistics_meta);
+  }
+  /**
+   * Filter entities that are eligible for deletion
+   * Includes both deleted entities and disabled entities with data
+   */
+  static getSelectableEntities(entities) {
+    return entities.filter((entity) => {
+      const hasData = this.hasDataToDelete(entity);
+      if (!hasData) return false;
+      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
+      const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
+      return isDeleted || isDisabledLongEnough;
+    });
+  }
+  /**
+   * Get Set of selectable entity IDs for efficient lookup
+   */
+  static getSelectableEntityIds(entities) {
+    return new Set(this.getSelectableEntities(entities).map((e2) => e2.entity_id));
+  }
+  /**
+   * Get Set of disabled entity IDs (for visual differentiation)
+   */
+  static getDisabledEntityIds(entities) {
+    if (!entities || !Array.isArray(entities) || entities.length === 0) {
+      return /* @__PURE__ */ new Set();
+    }
+    try {
+      return new Set(
+        entities.filter((e2) => e2 && this.isDisabledForAtLeast90Days(e2)).map((e2) => e2.entity_id)
+      );
+    } catch (err) {
+      console.warn("[EntitySelectionService] Error computing disabledEntityIds:", err);
+      return /* @__PURE__ */ new Set();
+    }
+  }
+  /**
+   * Get breakdown of selected entities by type (deleted vs disabled)
+   */
+  static getSelectionBreakdown(selectedEntityIds, allEntities) {
+    const deleted = [];
+    const disabled = [];
+    selectedEntityIds.forEach((entityId) => {
+      const entity = allEntities.find((e2) => e2.entity_id === entityId);
+      if (!entity) return;
+      const type = this.getEntitySelectionType(entity);
+      if (type === "deleted") deleted.push(entity);
+      if (type === "disabled") disabled.push(entity);
+    });
+    return { deleted, disabled };
+  }
+  /**
+   * Format how long ago statistics were last updated for a disabled entity
+   * This gives users context about data staleness
+   */
+  static formatDisabledDuration(entity) {
+    if (!entity.last_stats_update) return "unknown duration";
+    const lastUpdate = new Date(entity.last_stats_update).getTime();
+    const ageMs = Date.now() - lastUpdate;
+    const days = Math.floor(ageMs / (24 * 60 * 60 * 1e3));
+    if (days < 1) return "stats updated today";
+    if (days === 1) return "stats 1 day old";
+    if (days < 30) return `stats ${days} days old`;
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return months === 1 ? "stats 1 month old" : `stats ${months} months old`;
+    }
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor(days % 365 / 30);
+    if (remainingMonths === 0) {
+      return years === 1 ? "stats 1 year old" : `stats ${years} years old`;
+    }
+    return `stats ${years} year${years === 1 ? "" : "s"}, ${remainingMonths} month${remainingMonths === 1 ? "" : "s"} old`;
+  }
+}
+class ModalOrchestrationService {
+  constructor(hass) {
+    this.apiService = new ApiService(hass);
+  }
+  /**
+   * Determine origin and count for an entity based on which tables it's in
+   */
+  determineEntityOriginAndCount(entity) {
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
+    if (inStates && inStatistics) {
+      return {
+        origin: "States+Statistics",
+        count: entity.states_count + entity.stats_short_count + entity.stats_long_count
+      };
+    } else if (inStates) {
+      return {
+        origin: "States",
+        count: entity.states_count
+      };
+    } else if (inStatistics) {
+      let origin;
+      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
+        origin = "Both";
+      } else if (entity.in_statistics_long_term) {
+        origin = "Long-term";
+      } else {
+        origin = "Short-term";
+      }
+      return {
+        origin,
+        count: entity.stats_short_count + entity.stats_long_count
+      };
+    }
+    return null;
+  }
+  /**
+   * Generate SQL for a single entity
+   * Returns SQL string, storage saved, and modal data
+   */
+  async generateSingleEntitySql(entity) {
+    const result = this.determineEntityOriginAndCount(entity);
+    if (!result) {
+      throw new Error(`Entity ${entity.entity_id} is not in any table`);
+    }
+    const { origin, count } = result;
+    const inStates = entity.in_states_meta;
+    const inStatistics = entity.in_statistics_meta;
+    const response = await this.apiService.generateDeleteSql(
+      entity.entity_id,
+      origin,
+      inStates,
+      inStatistics
+    );
+    const modalData = {
+      entityId: entity.entity_id,
+      metadataId: entity.metadata_id || 0,
+      origin,
+      status: "deleted",
+      // We're deleting statistics for both deleted and disabled entities
+      count
+    };
+    return {
+      sql: response.sql,
+      storage_saved: response.storage_saved,
+      modalData
+    };
+  }
+  /**
+   * Generate bulk SQL for multiple entities with progress tracking
+   * Calls progressCallback with (current, total) after each entity
+   */
+  async generateBulkSql(entities, progressCallback) {
+    const resultsBuilder = {
+      entities: [],
+      total_storage_saved: 0,
+      total_count: 0,
+      success_count: 0,
+      error_count: 0
+    };
+    for (let i2 = 0; i2 < entities.length; i2++) {
+      const entity = entities[i2];
+      if (progressCallback) {
+        progressCallback(i2 + 1, entities.length);
+      }
+      try {
+        const result = this.determineEntityOriginAndCount(entity);
+        if (!result) {
+          resultsBuilder.entities.push({
+            entity_id: entity.entity_id,
+            sql: "",
+            storage_saved: 0,
+            count: 0,
+            error: "Entity not in any table"
+          });
+          resultsBuilder.error_count++;
+          continue;
+        }
+        const { origin, count } = result;
+        const inStates = entity.in_states_meta;
+        const inStatistics = entity.in_statistics_meta;
+        const response = await this.apiService.generateDeleteSql(
+          entity.entity_id,
+          origin,
+          inStates,
+          inStatistics
+        );
+        resultsBuilder.entities.push({
+          entity_id: entity.entity_id,
+          sql: response.sql,
+          storage_saved: response.storage_saved,
+          count
+        });
+        resultsBuilder.total_storage_saved += response.storage_saved;
+        resultsBuilder.total_count += count;
+        resultsBuilder.success_count++;
+      } catch (err) {
+        console.error(`Error generating SQL for ${entity.entity_id}:`, err);
+        resultsBuilder.entities.push({
+          entity_id: entity.entity_id,
+          sql: "",
+          storage_saved: 0,
+          count: 0,
+          error: err instanceof Error ? err.message : "Unknown error"
+        });
+        resultsBuilder.error_count++;
+      }
+    }
+    return {
+      status: resultsBuilder.error_count > 0 ? "partial" : "success",
+      ...resultsBuilder
+    };
+  }
+  /**
+   * Format bulk SQL result for display (adds comments and formatting)
+   */
+  formatSqlForDisplay(result) {
+    return result.entities.map((e2) => {
+      if (e2.error) {
+        return `-- Entity: ${e2.entity_id}
+-- ERROR: ${e2.error}
+`;
+      }
+      const storageMB = (e2.storage_saved / (1024 * 1024)).toFixed(2);
+      return `-- Entity: ${e2.entity_id} (${e2.count.toLocaleString()} records, ${storageMB} MB saved)
+${e2.sql}`;
+    }).join("\n\n");
+  }
+  /**
+   * Calculate total storage that would be saved for a list of entities
+   */
+  calculateTotalStorage(entities) {
+    let total = 0;
+    for (const entity of entities) {
+      total += entity.states_count * 100;
+      total += entity.stats_short_count * 50;
+      total += entity.stats_long_count * 50;
+    }
+    return total;
+  }
+}
 var __defProp$6 = Object.defineProperty;
 var __decorateClass$6 = (decorators, target, key, kind) => {
   var result = void 0;
@@ -2840,10 +3275,9 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     this.isGeneratingBulkSql = false;
     this.bulkSqlProgress = 0;
     this.bulkSqlTotal = 0;
-    this._cachedFilteredEntities = [];
-    this._lastFilterKey = "";
     this._entityDetailsModalLoaded = false;
     this._deleteSqlModalLoaded = false;
+    this._modalOrchestrator = null;
     this.histogramEntityId = null;
     this.histogramLastUpdate = null;
     this.histogramPosition = { x: 0, y: 0 };
@@ -2854,7 +3288,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-BQIQraeu.js");
+      await import("./entity-details-modal-DqbmVdNV.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2863,210 +3297,64 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BECQRLou.js");
+      await import("./delete-sql-modal-B6OiqyGU.js");
       this._deleteSqlModalLoaded = true;
     }
+  }
+  /**
+   * Get or create the modal orchestration service
+   */
+  get modalOrchestrator() {
+    if (!this._modalOrchestrator || !this.hass) {
+      this._modalOrchestrator = new ModalOrchestrationService(this.hass);
+    }
+    return this._modalOrchestrator;
   }
   willUpdate(changedProperties) {
     super.willUpdate(changedProperties);
     if (changedProperties.has("entities")) {
-      this._lastFilterKey = "";
-      this._cachedFilteredEntities = [];
+      EntityFilterService.clearCache();
     }
     if (changedProperties.has("hass") && !this.hass) {
       console.warn("StorageOverviewView: hass connection became unavailable");
     }
   }
   /**
-   * Check if entity has been disabled and has statistics data
-   *
-   * Note: Disabled entities with statistics are eligible for cleanup.
-   * This allows users to delete historical data for entities they've disabled.
-   */
-  isDisabledForAtLeast90Days(entity) {
-    try {
-      if (!entity || entity.registry_status !== "Disabled") return false;
-      return !!(entity.in_states_meta || entity.in_statistics_meta);
-    } catch (err) {
-      console.warn("[StorageOverviewView] Error in isDisabledForAtLeast90Days:", entity?.entity_id, err);
-      return false;
-    }
-  }
-  /**
-   * Get entity selection type for UI differentiation
-   */
-  getEntitySelectionType(entity) {
-    const hasData = entity.in_states_meta || entity.in_statistics_meta;
-    if (!hasData) return "not-selectable";
-    if (!entity.in_entity_registry && !entity.in_state_machine) {
-      return "deleted";
-    }
-    if (this.isDisabledForAtLeast90Days(entity)) {
-      return "disabled";
-    }
-    return "not-selectable";
-  }
-  /**
    * Get entities that are eligible for deletion
    * Includes both deleted entities and disabled entities
    */
   get selectableEntities() {
-    return this.filteredEntities.filter((entity) => {
-      const hasData = entity.in_states_meta || entity.in_statistics_meta;
-      if (!hasData) return false;
-      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
-      const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
-      return isDeleted || isDisabledLongEnough;
-    });
+    return EntitySelectionService.getSelectableEntities(this.filteredEntities);
   }
   /**
    * Get Set of selectable entity IDs for efficient lookups
    */
   get selectableEntityIds() {
-    return new Set(this.selectableEntities.map((e2) => e2.entity_id));
+    return EntitySelectionService.getSelectableEntityIds(this.filteredEntities);
   }
   /**
    * Get set of disabled entity IDs (for visual differentiation)
    */
   get disabledEntityIds() {
-    if (!this.entities || !Array.isArray(this.entities) || this.entities.length === 0) {
-      return /* @__PURE__ */ new Set();
-    }
-    try {
-      return new Set(
-        this.entities.filter((e2) => e2 && this.isDisabledForAtLeast90Days(e2)).map((e2) => e2.entity_id)
-      );
-    } catch (err) {
-      console.warn("[StorageOverviewView] Error computing disabledEntityIds:", err);
-      return /* @__PURE__ */ new Set();
-    }
+    return EntitySelectionService.getDisabledEntityIds(this.entities);
   }
   /**
    * Get breakdown of selected entities by type (deleted vs disabled)
    */
   get selectionBreakdown() {
-    const deleted = [];
-    const disabled = [];
-    this.selectedEntityIds.forEach((entityId) => {
-      const entity = this.entities.find((e2) => e2.entity_id === entityId);
-      if (!entity) return;
-      const type = this.getEntitySelectionType(entity);
-      if (type === "deleted") deleted.push(entity);
-      if (type === "disabled") disabled.push(entity);
-    });
-    return { deleted, disabled };
-  }
-  /**
-   * Format how long ago statistics were last updated for a disabled entity
-   * This gives users context about data staleness
-   */
-  formatDisabledDuration(entity) {
-    if (!entity.last_stats_update) return "unknown duration";
-    const lastUpdate = new Date(entity.last_stats_update).getTime();
-    const ageMs = Date.now() - lastUpdate;
-    const days = Math.floor(ageMs / (24 * 60 * 60 * 1e3));
-    if (days < 1) return "stats updated today";
-    if (days === 1) return "stats 1 day old";
-    if (days < 30) return `stats ${days} days old`;
-    if (days < 365) {
-      const months = Math.floor(days / 30);
-      return months === 1 ? "stats 1 month old" : `stats ${months} months old`;
-    }
-    const years = Math.floor(days / 365);
-    const remainingMonths = Math.floor(days % 365 / 30);
-    if (remainingMonths === 0) {
-      return years === 1 ? "stats 1 year old" : `stats ${years} years old`;
-    }
-    return `stats ${years} year${years === 1 ? "" : "s"}, ${remainingMonths} month${remainingMonths === 1 ? "" : "s"} old`;
+    return EntitySelectionService.getSelectionBreakdown(this.selectedEntityIds, this.entities);
   }
   get filteredEntities() {
-    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.statesFilter}|${this.statisticsFilter}|${this.sortStack.map((s) => `${s.column}:${s.direction}`).join(",")}`;
-    if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
-      return this._cachedFilteredEntities;
-    }
-    let filtered = [...this.entities];
-    if (this.searchQuery) {
-      const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter((e2) => e2.entity_id.toLowerCase().includes(query));
-    }
-    if (this.basicFilter === "in_registry") {
-      filtered = filtered.filter((e2) => e2.in_entity_registry);
-    } else if (this.basicFilter === "in_state") {
-      filtered = filtered.filter((e2) => e2.in_state_machine);
-    } else if (this.basicFilter === "deleted") {
-      filtered = filtered.filter((e2) => !e2.in_entity_registry && !e2.in_state_machine);
-    } else if (this.basicFilter === "numeric_sensors_no_stats") {
-      filtered = filtered.filter(
-        (e2) => e2.entity_id.startsWith("sensor.") && e2.in_states_meta && !e2.in_statistics_meta && e2.statistics_eligibility_reason && !e2.statistics_eligibility_reason.includes("is not numeric")
-      );
-    }
-    if (this.registryFilter) {
-      filtered = filtered.filter((e2) => e2.registry_status === this.registryFilter);
-    }
-    if (this.stateFilter) {
-      filtered = filtered.filter((e2) => e2.state_status === this.stateFilter);
-    }
-    if (this.advancedFilter === "only_states") {
-      filtered = filtered.filter((e2) => e2.in_states && !e2.in_statistics_meta);
-    } else if (this.advancedFilter === "only_stats") {
-      filtered = filtered.filter((e2) => e2.in_statistics_meta && !e2.in_states);
-    }
-    if (this.statesFilter === "in_states") {
-      filtered = filtered.filter((e2) => e2.in_states);
-    } else if (this.statesFilter === "not_in_states") {
-      filtered = filtered.filter((e2) => !e2.in_states);
-    }
-    if (this.statisticsFilter === "in_statistics") {
-      filtered = filtered.filter((e2) => e2.in_statistics_meta);
-    } else if (this.statisticsFilter === "not_in_statistics") {
-      filtered = filtered.filter((e2) => !e2.in_statistics_meta);
-    }
-    this._lastFilterKey = filterKey;
-    this._cachedFilteredEntities = this.sortEntities(filtered);
-    return this._cachedFilteredEntities;
-  }
-  sortEntities(entities) {
-    return [...entities].sort((a, b) => {
-      for (const { column, direction } of this.sortStack) {
-        let result = 0;
-        switch (column) {
-          case "entity_id":
-            result = a.entity_id.localeCompare(b.entity_id);
-            break;
-          case "registry":
-          case "registry_status":
-            result = a.registry_status.localeCompare(b.registry_status);
-            break;
-          case "state":
-          case "state_status":
-            result = a.state_status.localeCompare(b.state_status);
-            break;
-          case "states_count":
-          case "stats_short_count":
-          case "stats_long_count":
-            result = a[column] - b[column];
-            break;
-          case "update_interval":
-            const aInterval = a.update_interval_seconds ?? 999999;
-            const bInterval = b.update_interval_seconds ?? 999999;
-            result = aInterval - bInterval;
-            break;
-          case "last_state_update":
-          case "last_stats_update":
-            const aTime = a[column] ? new Date(a[column]).getTime() : 0;
-            const bTime = b[column] ? new Date(b[column]).getTime() : 0;
-            result = aTime - bTime;
-            break;
-          default:
-            const aVal = a[column] ? 1 : 0;
-            const bVal = b[column] ? 1 : 0;
-            result = aVal - bVal;
-        }
-        if (direction === "desc") result = -result;
-        if (result !== 0) return result;
-      }
-      return 0;
-    });
+    const filters = {
+      searchQuery: this.searchQuery,
+      basicFilter: this.basicFilter,
+      registryFilter: this.registryFilter,
+      stateFilter: this.stateFilter,
+      advancedFilter: this.advancedFilter,
+      statesFilter: this.statesFilter,
+      statisticsFilter: this.statisticsFilter
+    };
+    return EntityFilterService.filterAndSort(this.entities, filters, this.sortStack);
   }
   getActiveFilterType() {
     if (this.basicFilter) return this.basicFilter;
@@ -3429,66 +3717,19 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
     }
   }
   /**
-   * Determine origin and count for an entity based on which tables it's in
-   */
-  determineEntityOriginAndCount(entity) {
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-    if (inStates && inStatistics) {
-      return {
-        origin: "States+Statistics",
-        count: entity.states_count + entity.stats_short_count + entity.stats_long_count
-      };
-    } else if (inStates) {
-      return {
-        origin: "States",
-        count: entity.states_count
-      };
-    } else if (inStatistics) {
-      let origin;
-      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-        origin = "Both";
-      } else if (entity.in_statistics_long_term) {
-        origin = "Long-term";
-      } else {
-        origin = "Short-term";
-      }
-      return {
-        origin,
-        count: entity.stats_short_count + entity.stats_long_count
-      };
-    }
-    return null;
-  }
-  /**
    * Generate SQL for a single entity after user confirms
    */
   async generateSingleEntitySqlAfterConfirmation(entity) {
-    const result = this.determineEntityOriginAndCount(entity);
-    if (!result) return;
-    const { origin, count } = result;
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-    const modalData = {
-      entityId: entity.entity_id,
-      metadataId: entity.metadata_id || 0,
-      origin,
-      status: "deleted",
-      // We're deleting statistics for both deleted and disabled entities
-      count
-    };
-    this.dispatchEvent(new CustomEvent("generate-sql", {
-      detail: {
-        entity_id: entity.entity_id,
-        in_states_meta: inStates,
-        in_statistics_meta: inStatistics,
-        metadata_id: entity.metadata_id,
-        origin,
-        entity: modalData
-      },
-      bubbles: true,
-      composed: true
-    }));
+    try {
+      const result = await this.modalOrchestrator.generateSingleEntitySql(entity);
+      this.deleteModalMode = "display";
+      this.deleteModalData = result.modalData;
+      this.deleteSql = result.sql;
+      this.deleteStorageSaved = result.storage_saved;
+    } catch (err) {
+      console.error("Error generating SQL for single entity:", err);
+      this.handleCloseDeleteModal();
+    }
   }
   /**
    * Generate bulk SQL for multiple entities after user confirms
@@ -3503,80 +3744,24 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
       this.isGeneratingBulkSql = true;
       this.bulkSqlTotal = this.deleteModalEntities.length;
       this.bulkSqlProgress = 0;
-      const apiService = new ApiService(this.hass);
-      const resultsBuilder = {
-        entities: [],
-        total_storage_saved: 0,
-        total_count: 0,
-        success_count: 0,
-        error_count: 0
-      };
-      for (const entity of this.deleteModalEntities) {
-        this.bulkSqlProgress++;
-        try {
-          const result = this.determineEntityOriginAndCount(entity);
-          if (!result) continue;
-          const { origin, count } = result;
-          const inStates = entity.in_states_meta;
-          const inStatistics = entity.in_statistics_meta;
-          const response = await apiService.generateDeleteSql(
-            entity.entity_id,
-            origin,
-            inStates,
-            inStatistics
-          );
-          resultsBuilder.entities.push({
-            entity_id: entity.entity_id,
-            sql: response.sql,
-            storage_saved: response.storage_saved,
-            count
-          });
-          resultsBuilder.total_storage_saved += response.storage_saved;
-          resultsBuilder.total_count += count;
-          resultsBuilder.success_count++;
-        } catch (err) {
-          console.error(`Error generating SQL for ${entity.entity_id}:`, err);
-          resultsBuilder.entities.push({
-            entity_id: entity.entity_id,
-            sql: "",
-            storage_saved: 0,
-            count: 0,
-            error: err instanceof Error ? err.message : "Unknown error"
-          });
-          resultsBuilder.error_count++;
+      const results = await this.modalOrchestrator.generateBulkSql(
+        this.deleteModalEntities,
+        (current, total) => {
+          this.bulkSqlProgress = current;
+          this.bulkSqlTotal = total;
         }
-      }
-      const results = resultsBuilder.error_count > 0 ? {
-        status: "partial",
-        ...resultsBuilder
-      } : {
-        status: "success",
-        entities: resultsBuilder.entities,
-        total_storage_saved: resultsBuilder.total_storage_saved,
-        total_count: resultsBuilder.total_count,
-        success_count: resultsBuilder.success_count,
-        error_count: 0
-      };
-      const combinedSql = resultsBuilder.entities.map((e2) => {
-        if (e2.error) {
-          return `-- Entity: ${e2.entity_id}
--- ERROR: ${e2.error}
-`;
-        }
-        const storageMB = (e2.storage_saved / (1024 * 1024)).toFixed(2);
-        return `-- Entity: ${e2.entity_id} (${e2.count.toLocaleString()} records, ${storageMB} MB saved)
-${e2.sql}`;
-      }).join("\n\n");
+      );
+      const combinedSql = this.modalOrchestrator.formatSqlForDisplay(results);
       this.deleteModalMode = "display";
       this.deleteModalData = {
-        entityId: `${resultsBuilder.success_count} entities`,
+        entityId: `${results.success_count} entities`,
         metadataId: 0,
         origin: "Both",
         status: "deleted",
-        count: resultsBuilder.total_count
+        count: results.total_count
       };
       this.deleteSql = combinedSql;
-      this.deleteStorageSaved = resultsBuilder.total_storage_saved;
+      this.deleteStorageSaved = results.total_storage_saved;
       this.selectedEntityIds = /* @__PURE__ */ new Set();
     } catch (err) {
       console.error("Error in bulk SQL generation:", err);
@@ -4578,4 +4763,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BC-RJHMy.js.map
+//# sourceMappingURL=statistics-orphan-panel-DCHIy313.js.map

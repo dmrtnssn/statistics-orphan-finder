@@ -41,9 +41,17 @@ Built with Lit 3.x web components, TypeScript 5.x, and Vite 5.x:
 The frontend is organized into:
 - `components/`: Reusable UI components (entity-table, filter-bar, summary-cards, modals, etc.)
 - `views/`: Main tab views (storage-overview-view)
-- `services/`: API client (`api-service.ts`), formatters, cache, DOM utilities
+- `services/`: API client, business logic services, formatters, cache, DOM utilities
 - `types/`: TypeScript type definitions (Entity, Summary, etc.)
 - `styles/`: Shared CSS (`shared-styles.ts`)
+
+**Frontend Service Architecture** (following service-oriented design):
+- **`api-service.ts`**: HTTP API client for backend communication
+- **`entity-filter-service.ts`**: Entity filtering and multi-column sorting with memoization (static methods)
+- **`entity-selection-service.ts`**: Selection eligibility logic and entity categorization (static methods)
+- **`modal-orchestration-service.ts`**: SQL generation workflows and progress tracking (instance-based)
+- **`cache-service.ts`**: localStorage caching with version control
+- **`formatters.ts`**: Display value formatting utilities
 
 **Build configuration** (`vite.config.ts`):
 - Outputs ES modules with code splitting enabled
@@ -224,7 +232,13 @@ All DELETE statements use proper WHERE clauses with entity_id or metadata_id.
 - `custom_components/statistics_orphan_finder/www/` - Built frontend (auto-generated, DO NOT edit)
 
 ### Frontend Development
-- `frontend/src/` - TypeScript source files (5,862 lines - edit these)
+- `frontend/src/` - TypeScript source files (edit these)
+- `frontend/src/views/storage-overview-view.ts` - Main view component (936 lines)
+- `frontend/src/services/` - Business logic services:
+  - `entity-filter-service.ts` - Filtering and sorting with memoization (220 lines)
+  - `entity-selection-service.ts` - Selection eligibility logic (149 lines)
+  - `modal-orchestration-service.ts` - SQL generation workflows (232 lines)
+  - `api-service.ts`, `cache-service.ts`, `formatters.ts` - Utilities
 - `frontend/package.json` - Node dependencies
 - `frontend/vite.config.ts` - Build configuration
 - `frontend/tsconfig.json` - TypeScript configuration
