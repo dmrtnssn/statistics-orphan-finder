@@ -8,6 +8,12 @@ from sqlalchemy.engine import Engine
 from homeassistant.config_entries import ConfigEntry
 
 from .database_service import get_database_type
+from .storage_constants import (
+    DEFAULT_STATES_ROW_SIZE,
+    STATES_META_ROW_SIZE,
+    DEFAULT_STATISTICS_ROW_SIZE,
+    STATISTICS_META_ROW_SIZE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,20 +104,20 @@ class StorageCalculator:
                 WHERE table_schema = DATABASE() AND table_name = 'states'
             """)
             size_result = conn.execute(size_query)
-            avg_row_length = size_result.fetchone()[0] or 150
+            avg_row_length = size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE
             size = row_count * avg_row_length
         elif is_postgres:
             size_query = text("""
                 SELECT pg_total_relation_size('states') / NULLIF((SELECT COUNT(*) FROM states), 0) as avg_row_size
             """)
             size_result = conn.execute(size_query)
-            avg_row_size = size_result.fetchone()[0] or 150
+            avg_row_size = size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE
             size = row_count * int(avg_row_size)
         else:  # SQLite
-            size = row_count * 150
+            size = row_count * DEFAULT_STATES_ROW_SIZE
 
         # Add states_meta row size
-        size += 100
+        size += STATES_META_ROW_SIZE
 
         return size
 
@@ -152,7 +158,7 @@ class StorageCalculator:
             )
 
         # Add statistics_meta row size
-        size += 200
+        size += STATISTICS_META_ROW_SIZE
 
         return size
 
@@ -203,7 +209,7 @@ class StorageCalculator:
                 WHERE table_schema = DATABASE() AND table_name = :table_name
             """)
             size_result = conn.execute(size_query, {"table_name": table_name})
-            avg_row_length = size_result.fetchone()[0] or 100
+            avg_row_length = size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE
             return row_count * avg_row_length
         elif is_postgres:
             # For PostgreSQL, use proper type casting and parameterization where possible
@@ -212,7 +218,7 @@ class StorageCalculator:
                 SELECT pg_total_relation_size('{table_name}') / NULLIF((SELECT COUNT(*) FROM {table_name}), 0) as avg_row_size
             """)
             size_result = conn.execute(size_query)
-            avg_row_size = size_result.fetchone()[0] or 100
+            avg_row_size = size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE
             return row_count * int(avg_row_size)
         else:  # SQLite
-            return row_count * 100
+            return row_count * DEFAULT_STATISTICS_ROW_SIZE
