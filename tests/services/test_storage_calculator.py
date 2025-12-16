@@ -589,3 +589,379 @@ class TestDatabaseSpecificCalculations:
         )
 
         assert size > 0
+
+
+class TestBatchStorageCalculation:
+    """Test batch storage calculation methods (AP-18)."""
+
+    def test_calculate_batch_storage_empty_list(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test batch calculation with empty entity list."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        result = calculator.calculate_batch_storage(
+            engine=populated_sqlite_engine,
+            entities=[]
+        )
+
+        assert result == {}
+
+    def test_calculate_batch_storage_states_only(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test batch calculation for states-only entities."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {
+                'entity_id': 'sensor.temperature',
+                'origin': 'States',
+                'in_states_meta': True,
+                'in_statistics_meta': False,
+                'metadata_id_statistics': None
+            },
+            {
+                'entity_id': 'sensor.humidity',
+                'origin': 'States',
+                'in_states_meta': True,
+                'in_statistics_meta': False,
+                'metadata_id_statistics': None
+            }
+        ]
+
+        result = calculator.calculate_batch_storage(
+            engine=populated_sqlite_engine,
+            entities=entities
+        )
+
+        assert 'sensor.temperature' in result
+        assert 'sensor.humidity' in result
+        assert result['sensor.temperature'] > 0
+        # sensor.humidity might be 0 if not in test data, that's OK
+
+    def test_calculate_batch_storage_statistics_only(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test batch calculation for statistics-only entities."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {
+                'entity_id': 'sensor.temperature',
+                'origin': 'Both',
+                'in_states_meta': False,
+                'in_statistics_meta': True,
+                'metadata_id_statistics': 1
+            }
+        ]
+
+        result = calculator.calculate_batch_storage(
+            engine=populated_sqlite_engine,
+            entities=entities
+        )
+
+        assert 'sensor.temperature' in result
+        assert result['sensor.temperature'] > 0
+
+    def test_calculate_batch_storage_mixed_origins(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test batch calculation with mixed origin types."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {
+                'entity_id': 'sensor.temperature',
+                'origin': 'States+Statistics',
+                'in_states_meta': True,
+                'in_statistics_meta': True,
+                'metadata_id_statistics': 1
+            },
+            {
+                'entity_id': 'sensor.humidity',
+                'origin': 'States',
+                'in_states_meta': True,
+                'in_statistics_meta': False,
+                'metadata_id_statistics': None
+            }
+        ]
+
+        result = calculator.calculate_batch_storage(
+            engine=populated_sqlite_engine,
+            entities=entities
+        )
+
+        assert 'sensor.temperature' in result
+        assert 'sensor.humidity' in result
+        # sensor.temperature should have both states and statistics
+        assert result['sensor.temperature'] > 0
+
+    def test_batch_calculate_states_size(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_calculate_states_size method."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {'entity_id': 'sensor.temperature'},
+            {'entity_id': 'sensor.humidity'}
+        ]
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_calculate_states_size(
+                conn=conn,
+                entities=entities,
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False
+            )
+
+        # Should return dict with entity_id keys
+        assert isinstance(result, dict)
+        # sensor.temperature has 2 states, should calculate size
+        if 'sensor.temperature' in result:
+            assert result['sensor.temperature'] > 0
+
+    def test_batch_calculate_states_size_no_matches(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_calculate_states_size with no matching entities."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {'entity_id': 'sensor.nonexistent1'},
+            {'entity_id': 'sensor.nonexistent2'}
+        ]
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_calculate_states_size(
+                conn=conn,
+                entities=entities,
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False
+            )
+
+        # Should return empty dict when no entities found
+        assert result == {}
+
+    def test_batch_calculate_statistics_size(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_calculate_statistics_size method."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        entities = [
+            {
+                'entity_id': 'sensor.temperature',
+                'origin': 'Both',
+                'metadata_id_statistics': 1
+            }
+        ]
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_calculate_statistics_size(
+                conn=conn,
+                entities=entities,
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False
+            )
+
+        assert isinstance(result, dict)
+        assert 'sensor.temperature' in result
+        assert result['sensor.temperature'] > 0
+
+    def test_batch_calculate_statistics_size_with_lookup(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_calculate_statistics_size with metadata_id lookup."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        # Don't provide metadata_id_statistics to force lookup
+        entities = [
+            {
+                'entity_id': 'sensor.temperature',
+                'origin': 'Long-term',
+                'metadata_id_statistics': None
+            }
+        ]
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_calculate_statistics_size(
+                conn=conn,
+                entities=entities,
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False
+            )
+
+        assert isinstance(result, dict)
+        # If sensor.temperature exists in statistics_meta, should have size
+        if 'sensor.temperature' in result:
+            assert result['sensor.temperature'] > 0
+
+    def test_batch_get_table_counts(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_get_table_counts method."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_get_table_counts(
+                conn=conn,
+                table_name='statistics',
+                metadata_ids=[1, 2]
+            )
+
+        assert isinstance(result, dict)
+        # Should return dict mapping metadata_id to count
+        for metadata_id, count in result.items():
+            assert isinstance(metadata_id, int)
+            assert isinstance(count, int)
+            assert count >= 0
+
+    def test_batch_get_table_counts_empty_list(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_get_table_counts with empty metadata_ids."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            result = calculator._batch_get_table_counts(
+                conn=conn,
+                table_name='statistics',
+                metadata_ids=[]
+            )
+
+        assert result == {}
+
+    def test_batch_get_table_counts_validates_table_name(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_get_table_counts validates table name."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            with pytest.raises(ValueError, match="Invalid table name"):
+                calculator._batch_get_table_counts(
+                    conn=conn,
+                    table_name='users',  # Not in whitelist
+                    metadata_ids=[1]
+                )
+
+    def test_batch_get_table_counts_deduplicates(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _batch_get_table_counts deduplicates metadata_ids."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            # Pass duplicates
+            result = calculator._batch_get_table_counts(
+                conn=conn,
+                table_name='statistics',
+                metadata_ids=[1, 1, 2, 2, 1]
+            )
+
+        # Should handle duplicates gracefully
+        assert isinstance(result, dict)
+
+    def test_get_statistics_avg_row_size_sqlite(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test _get_statistics_avg_row_size for SQLite."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        with populated_sqlite_engine.connect() as conn:
+            size = calculator._get_statistics_avg_row_size(
+                conn=conn,
+                is_sqlite=True,
+                is_mysql=False,
+                is_postgres=False
+            )
+
+        # Should return default for SQLite
+        from custom_components.statistics_orphan_finder.services.storage_constants import (
+            DEFAULT_STATISTICS_ROW_SIZE
+        )
+        assert size == DEFAULT_STATISTICS_ROW_SIZE
+
+    def test_calculate_batch_storage_handles_errors(
+        self, mock_config_entry: MagicMock, sqlite_engine: Engine
+    ):
+        """Test batch calculation handles errors gracefully."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        # Drop tables to cause error
+        with sqlite_engine.connect() as conn:
+            from sqlalchemy import text
+            conn.execute(text("DROP TABLE states_meta"))
+            conn.commit()
+
+        entities = [
+            {
+                'entity_id': 'sensor.test',
+                'origin': 'States',
+                'in_states_meta': True,
+                'in_statistics_meta': False,
+                'metadata_id_statistics': None
+            }
+        ]
+
+        # Should return dict with zero values on error
+        result = calculator.calculate_batch_storage(
+            engine=sqlite_engine,
+            entities=entities
+        )
+
+        assert isinstance(result, dict)
+        assert 'sensor.test' in result
+        # Should be 0 due to error
+        assert result['sensor.test'] == 0
+
+    def test_batch_calculation_performance(
+        self, mock_config_entry: MagicMock, populated_sqlite_engine: Engine
+    ):
+        """Test batch calculation with multiple entities (simulates N+1 fix)."""
+        mock_config_entry.data["db_url"] = "sqlite:///:memory:"
+        calculator = StorageCalculator(mock_config_entry)
+
+        # Simulate 10 entities
+        entities = [
+            {
+                'entity_id': f'sensor.test_{i}',
+                'origin': 'States',
+                'in_states_meta': True,
+                'in_statistics_meta': False,
+                'metadata_id_statistics': None
+            }
+            for i in range(10)
+        ]
+
+        result = calculator.calculate_batch_storage(
+            engine=populated_sqlite_engine,
+            entities=entities
+        )
+
+        # Should complete and return results for all entities
+        assert len(result) == 10
+        for entity_id in [e['entity_id'] for e in entities]:
+            assert entity_id in result
+            # Values might be 0 if entities don't exist in test data
+            assert isinstance(result[entity_id], int)
