@@ -269,68 +269,70 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             return "Short-term"
 
     def _fetch_step_7_calculate_deleted_storage(self, session_id: str) -> dict[str, Any]:
-        """Step 7: Calculate storage for deleted entities."""
+        """Step 7: Calculate storage for deleted entities using batch queries."""
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
-        deleted_storage_bytes = 0
 
-        with engine.connect() as conn:
-            for entity in step_data['entities_list']:
-                if (not entity['in_entity_registry'] and
-                    not entity['in_state_machine'] and
-                    (entity['in_states_meta'] or entity['in_statistics_meta'])):
-                    try:
-                        # Get metadata_id from entity_map (already fetched in step 3)
-                        metadata_id = step_data['entity_map'][entity['entity_id']].get('metadata_id')
-                        if metadata_id:
-                            entity['metadata_id'] = metadata_id
+        # Filter deleted entities and prepare for batch calculation
+        deleted_entities = []
+        for entity in step_data['entities_list']:
+            if (not entity['in_entity_registry'] and
+                not entity['in_state_machine'] and
+                (entity['in_states_meta'] or entity['in_statistics_meta'])):
 
-                        # Use helper method to determine origin (DRY - eliminates code duplication)
-                        origin = self._determine_entity_origin(entity)
-                        entity['origin'] = origin
+                # Get metadata_id from entity_map (already fetched in step 3)
+                metadata_id = step_data['entity_map'][entity['entity_id']].get('metadata_id')
+                if metadata_id:
+                    entity['metadata_id'] = metadata_id
 
-                        storage = self._calculate_entity_storage(
-                            entity_id=entity['entity_id'],
-                            origin=origin,
-                            in_states_meta=entity['in_states_meta'],
-                            in_statistics_meta=entity['in_statistics_meta'],
-                            metadata_id_statistics=metadata_id
-                        )
-                        deleted_storage_bytes += storage
-                    except Exception as err:
-                        _LOGGER.debug("Could not calculate storage for %s: %s", entity['entity_id'], err)
+                # Determine origin and store for batch processing
+                origin = self._determine_entity_origin(entity)
+                entity['origin'] = origin
+
+                deleted_entities.append({
+                    'entity_id': entity['entity_id'],
+                    'origin': origin,
+                    'in_states_meta': entity['in_states_meta'],
+                    'in_statistics_meta': entity['in_statistics_meta'],
+                    'metadata_id_statistics': metadata_id
+                })
+
+        # Batch calculate storage for all deleted entities
+        storage_map = self.storage_calculator.calculate_batch_storage(engine, deleted_entities)
+        deleted_storage_bytes = sum(storage_map.values())
 
         step_data['deleted_storage_bytes'] = deleted_storage_bytes
         self.session_manager.update_timestamp(session_id)
         return {'status': 'complete', 'deleted_storage_bytes': deleted_storage_bytes}
 
     def _fetch_step_8_finalize(self, session_id: str) -> dict[str, Any]:
-        """Step 8: Calculate disabled storage and generate summary."""
+        """Step 8: Calculate disabled storage using batch queries and generate summary."""
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
-        disabled_storage_bytes = 0
 
-        with engine.connect() as conn:
-            for entity in step_data['entities_list']:
-                if (entity['registry_status'] == 'Disabled' and
-                    (entity['in_states_meta'] or entity['in_statistics_meta'])):
-                    try:
-                        # Get metadata_id from entity_map (already fetched in step 3)
-                        metadata_id = step_data['entity_map'][entity['entity_id']].get('metadata_id')
+        # Filter disabled entities and prepare for batch calculation
+        disabled_entities = []
+        for entity in step_data['entities_list']:
+            if (entity['registry_status'] == 'Disabled' and
+                (entity['in_states_meta'] or entity['in_statistics_meta'])):
 
-                        # Use helper method to determine origin (DRY - eliminates code duplication)
-                        origin = self._determine_entity_origin(entity)
+                # Get metadata_id from entity_map (already fetched in step 3)
+                metadata_id = step_data['entity_map'][entity['entity_id']].get('metadata_id')
 
-                        storage = self._calculate_entity_storage(
-                            entity_id=entity['entity_id'],
-                            origin=origin,
-                            in_states_meta=entity['in_states_meta'],
-                            in_statistics_meta=entity['in_statistics_meta'],
-                            metadata_id_statistics=metadata_id
-                        )
-                        disabled_storage_bytes += storage
-                    except Exception as err:
-                        _LOGGER.debug("Could not calculate storage for disabled entity %s: %s", entity['entity_id'], err)
+                # Determine origin
+                origin = self._determine_entity_origin(entity)
+
+                disabled_entities.append({
+                    'entity_id': entity['entity_id'],
+                    'origin': origin,
+                    'in_states_meta': entity['in_states_meta'],
+                    'in_statistics_meta': entity['in_statistics_meta'],
+                    'metadata_id_statistics': metadata_id
+                })
+
+        # Batch calculate storage for all disabled entities
+        storage_map = self.storage_calculator.calculate_batch_storage(engine, disabled_entities)
+        disabled_storage_bytes = sum(storage_map.values())
 
         # Generate summary statistics
         entities_list = step_data['entities_list']

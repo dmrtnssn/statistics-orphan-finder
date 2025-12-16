@@ -772,12 +772,14 @@ class TestCoordinatorErrorHandling:
         mock_engine = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
 
+        # Mock batch calculation to return storage for both entities
         with patch.object(coordinator, "_get_engine", return_value=mock_engine), patch.object(
-            coordinator, "_calculate_entity_storage", side_effect=[Exception("fail"), 500]
+            coordinator.storage_calculator, "calculate_batch_storage",
+            return_value={"sensor.fail": 0, "sensor.ok": 500}
         ) as mock_calc:
             result = await coordinator.async_execute_overview_step(7, session_id)
 
-        assert mock_calc.call_count == 2
+        mock_calc.assert_called_once()
         assert result["deleted_storage_bytes"] == 500
 
 
@@ -870,11 +872,18 @@ class TestOriginDetermination:
         mock_engine = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
 
+        # Mock batch calculation
         with patch.object(coordinator, "_get_engine", return_value=mock_engine), patch.object(
-            coordinator, "_calculate_entity_storage", return_value=111
+            coordinator.storage_calculator, "calculate_batch_storage",
+            return_value={"sensor.both": 111}
         ) as mock_calc:
             result = await coordinator.async_execute_overview_step(7, session_id)
 
+        # Verify batch calculation was called with correct entity data
         mock_calc.assert_called_once()
-        assert mock_calc.call_args.kwargs["origin"] == "States+Statistics"
+        call_args = mock_calc.call_args[0]
+        entities = call_args[1]  # Second argument is the entities list
+        assert len(entities) == 1
+        assert entities[0]["entity_id"] == "sensor.both"
+        assert entities[0]["origin"] == "States+Statistics"
         assert result["deleted_storage_bytes"] == 111
