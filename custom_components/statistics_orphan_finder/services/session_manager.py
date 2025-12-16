@@ -1,4 +1,5 @@
 """Session management for progressive data loading."""
+import asyncio
 import logging
 import time
 import uuid
@@ -17,12 +18,30 @@ class SessionManager:
     Provides temporal isolation for multi-step operations, preventing
     concurrent requests from interfering with each other. Sessions
     automatically expire after SESSION_TIMEOUT seconds of inactivity.
+
+    Thread-safety: Each session has an asyncio.Lock to prevent race
+    conditions when multiple requests try to access the same session.
     """
 
     def __init__(self) -> None:
         """Initialize session manager."""
         # Key: session_id (UUID), Value: {data: dict, timestamp: float}
         self._sessions: dict[str, dict[str, Any]] = {}
+        # Key: session_id (UUID), Value: asyncio.Lock
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def get_lock(self, session_id: str) -> asyncio.Lock:
+        """Get or create a lock for a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            asyncio.Lock: Lock for this session
+        """
+        if session_id not in self._locks:
+            self._locks[session_id] = asyncio.Lock()
+        return self._locks[session_id]
 
     def create_session(self) -> str:
         """Create a new session and return its ID.
@@ -58,6 +77,9 @@ class SessionManager:
             },
             'timestamp': time.time()
         }
+
+        # Create lock for this session
+        self._locks[session_id] = asyncio.Lock()
 
         _LOGGER.debug("Created new session %s", session_id[:8])
         return session_id
@@ -118,6 +140,9 @@ class SessionManager:
             raise KeyError(f"Session {session_id[:8]} not found")
 
         del self._sessions[session_id]
+        # Clean up lock for this session
+        if session_id in self._locks:
+            del self._locks[session_id]
         _LOGGER.debug("Deleted session %s", session_id[:8])
 
     def cleanup_stale_sessions(self) -> None:
@@ -137,6 +162,9 @@ class SessionManager:
             age = int(current_time - self._sessions[session_id]['timestamp'])
             _LOGGER.info("Cleaning up stale session %s (age: %ds)", session_id[:8], age)
             del self._sessions[session_id]
+            # Clean up lock for stale session
+            if session_id in self._locks:
+                del self._locks[session_id]
 
     def clear_all_sessions(self) -> None:
         """Clear all sessions (typically called during shutdown).
@@ -147,3 +175,4 @@ class SessionManager:
         if session_count > 0:
             _LOGGER.info("Clearing %d session(s)", session_count)
         self._sessions.clear()
+        self._locks.clear()

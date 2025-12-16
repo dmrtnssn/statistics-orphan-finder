@@ -1,4 +1,5 @@
 """Tests for SessionManager service."""
+import asyncio
 import time
 from collections import defaultdict
 from unittest.mock import patch
@@ -231,3 +232,108 @@ class TestSessionManager:
         assert manager.validate_session(active_session) is True
         assert manager.validate_session(stale_session1) is False
         assert manager.validate_session(stale_session2) is False
+
+    def test_get_lock_creates_lock(self):
+        """Test get_lock creates a lock for a session."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+
+        lock = manager.get_lock(session_id)
+        assert lock is not None
+        assert isinstance(lock, asyncio.Lock)
+
+    def test_get_lock_returns_same_lock(self):
+        """Test get_lock returns the same lock for a session."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+
+        lock1 = manager.get_lock(session_id)
+        lock2 = manager.get_lock(session_id)
+        assert lock1 is lock2
+
+    def test_create_session_creates_lock(self):
+        """Test create_session automatically creates a lock."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+
+        assert session_id in manager._locks
+        assert isinstance(manager._locks[session_id], asyncio.Lock)
+
+    def test_delete_session_removes_lock(self):
+        """Test delete_session removes the session lock."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+
+        # Verify lock exists
+        assert session_id in manager._locks
+
+        # Delete session
+        manager.delete_session(session_id)
+
+        # Verify lock is removed
+        assert session_id not in manager._locks
+
+    def test_cleanup_stale_sessions_removes_locks(self):
+        """Test cleanup removes locks for stale sessions."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+
+        # Verify lock exists
+        assert session_id in manager._locks
+
+        # Make session stale
+        manager._sessions[session_id]['timestamp'] = time.time() - SESSION_TIMEOUT - 10
+
+        # Run cleanup
+        manager.cleanup_stale_sessions()
+
+        # Verify lock is removed
+        assert session_id not in manager._locks
+
+    def test_clear_all_sessions_clears_locks(self):
+        """Test clear_all_sessions removes all locks."""
+        manager = SessionManager()
+
+        # Create multiple sessions
+        session1 = manager.create_session()
+        session2 = manager.create_session()
+        session3 = manager.create_session()
+
+        # Verify locks exist
+        assert len(manager._locks) == 3
+
+        # Clear all
+        manager.clear_all_sessions()
+
+        # Verify all locks cleared
+        assert len(manager._locks) == 0
+
+    @pytest.mark.asyncio
+    async def test_concurrent_access_serialized(self):
+        """Test concurrent access to same session is serialized by lock."""
+        manager = SessionManager()
+        session_id = manager.create_session()
+        lock = manager.get_lock(session_id)
+
+        access_order = []
+
+        async def access_session(task_id: int):
+            """Simulate accessing a session."""
+            async with lock:
+                access_order.append(f"start-{task_id}")
+                await asyncio.sleep(0.01)  # Simulate work
+                access_order.append(f"end-{task_id}")
+
+        # Run two concurrent tasks
+        await asyncio.gather(
+            access_session(1),
+            access_session(2)
+        )
+
+        # Verify tasks were serialized (task 1 completes before task 2 starts, or vice versa)
+        # Either order is valid: [start-1, end-1, start-2, end-2] or [start-2, end-2, start-1, end-1]
+        assert len(access_order) == 4
+        if access_order[0] == "start-1":
+            assert access_order == ["start-1", "end-1", "start-2", "end-2"]
+        else:
+            assert access_order == ["start-2", "end-2", "start-1", "end-1"]
