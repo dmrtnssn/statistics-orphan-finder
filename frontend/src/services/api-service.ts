@@ -15,6 +15,11 @@ import type {
 
 const API_BASE = 'statistics_orphan_finder';
 
+export interface ApiError {
+  message: string;
+  category?: string;
+}
+
 export class ApiService {
   constructor(private hass: HomeAssistant) {}
 
@@ -28,6 +33,23 @@ export class ApiService {
     if (!this.hass.callApi) {
       throw new Error('Home Assistant API not available. Connection may have been lost.');
     }
+  }
+
+  /**
+   * Extract structured error information from API response
+   * Backend returns: { error: string, error_category?: string }
+   */
+  private extractErrorInfo(err: any): ApiError {
+    // Check if error has structured response from backend
+    if (err && typeof err === 'object') {
+      const message = err.error || err.message || 'Unknown error';
+      const category = err.error_category;
+      return { message, category };
+    }
+
+    // Fallback for generic errors
+    const message = err instanceof Error ? err.message : String(err);
+    return { message };
   }
 
   /**

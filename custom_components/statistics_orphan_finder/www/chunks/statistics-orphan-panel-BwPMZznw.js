@@ -606,6 +606,19 @@ class ApiService {
     }
   }
   /**
+   * Extract structured error information from API response
+   * Backend returns: { error: string, error_category?: string }
+   */
+  extractErrorInfo(err) {
+    if (err && typeof err === "object") {
+      const message2 = err.error || err.message || "Unknown error";
+      const category = err.error_category;
+      return { message: message2, category };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return { message };
+  }
+  /**
    * Fetch database size information
    */
   async fetchDatabaseSize() {
@@ -3288,7 +3301,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DqbmVdNV.js");
+      await import("./entity-details-modal-DWZDVjEu.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3297,7 +3310,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-B6OiqyGU.js");
+      await import("./delete-sql-modal-BNryTbkN.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4763,4 +4776,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DCHIy313.js.map
+//# sourceMappingURL=statistics-orphan-panel-BwPMZznw.js.map

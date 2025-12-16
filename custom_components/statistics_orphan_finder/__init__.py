@@ -9,12 +9,60 @@ from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView
 from aiohttp import web
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    ERROR_CATEGORY_DB_CONNECTION,
+    ERROR_CATEGORY_DB_PERMISSION,
+    ERROR_CATEGORY_DB_TIMEOUT,
+    ERROR_CATEGORY_SESSION_EXPIRED,
+    ERROR_CATEGORY_UNKNOWN,
+    ERROR_MESSAGES,
+)
 from .coordinator import StatisticsOrphanCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = []
+
+
+def categorize_error(exception: Exception) -> tuple[str, str]:
+    """Categorize an exception and return (category, user_message).
+
+    Args:
+        exception: The exception to categorize.
+
+    Returns:
+        Tuple of (error_category, user_friendly_message).
+    """
+    import sqlalchemy.exc as sa_exc
+
+    # Convert exception to string for pattern matching
+    error_str = str(exception).lower()
+    error_type = type(exception).__name__
+
+    # Database connection errors
+    if isinstance(exception, (sa_exc.OperationalError, sa_exc.DatabaseError)):
+        # Check for specific connection errors
+        if any(keyword in error_str for keyword in ["can't connect", "connection refused", "no route to host", "unknown host"]):
+            return (ERROR_CATEGORY_DB_CONNECTION, ERROR_MESSAGES[ERROR_CATEGORY_DB_CONNECTION])
+
+        # Check for timeout errors
+        if any(keyword in error_str for keyword in ["timeout", "timed out"]):
+            return (ERROR_CATEGORY_DB_TIMEOUT, ERROR_MESSAGES[ERROR_CATEGORY_DB_TIMEOUT])
+
+        # Check for permission errors
+        if any(keyword in error_str for keyword in ["access denied", "permission denied", "not permitted"]):
+            return (ERROR_CATEGORY_DB_PERMISSION, ERROR_MESSAGES[ERROR_CATEGORY_DB_PERMISSION])
+
+        # Generic database error (connection-related)
+        return (ERROR_CATEGORY_DB_CONNECTION, ERROR_MESSAGES[ERROR_CATEGORY_DB_CONNECTION])
+
+    # Session errors (from coordinator)
+    if "session" in error_str and any(keyword in error_str for keyword in ["expired", "not found", "invalid"]):
+        return (ERROR_CATEGORY_SESSION_EXPIRED, ERROR_MESSAGES[ERROR_CATEGORY_SESSION_EXPIRED])
+
+    # Default to unknown
+    return (ERROR_CATEGORY_UNKNOWN, ERROR_MESSAGES[ERROR_CATEGORY_UNKNOWN])
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -237,10 +285,14 @@ class StatisticsOrphanView(HomeAssistantView):
                 _LOGGER.warning("Invalid parameter in step %s: %s", step_param, err)
                 return web.json_response({"error": "Invalid parameters provided"}, status=400)
             except Exception as err:
-                # Sanitize error message to prevent information disclosure
+                # Categorize error and provide actionable message
                 _LOGGER.error("Error executing step %s (session %s): %s",
                              step_param, session_id[:8] if session_id else "None", err, exc_info=True)
-                return web.json_response({"error": "An error occurred processing the request"}, status=500)
+                error_category, error_message = categorize_error(err)
+                return web.json_response({
+                    "error": error_message,
+                    "error_category": error_category
+                }, status=500)
 
         elif action == "entity_message_histogram":
             entity_id = request.query.get("entity_id")
@@ -266,9 +318,13 @@ class StatisticsOrphanView(HomeAssistantView):
                 _LOGGER.warning("Invalid hours parameter for histogram: %s", err)
                 return web.json_response({"error": "Invalid hours parameter"}, status=400)
             except Exception as err:
-                # Sanitize error message to prevent information disclosure
+                # Categorize error and provide actionable message
                 _LOGGER.error("Error fetching message histogram for %s: %s", entity_id, err, exc_info=True)
-                return web.json_response({"error": "An error occurred fetching histogram data"}, status=500)
+                error_category, error_message = categorize_error(err)
+                return web.json_response({
+                    "error": error_message,
+                    "error_category": error_category
+                }, status=500)
 
         elif action == "generate_delete_sql":
             origin = request.query.get("origin")
@@ -315,8 +371,12 @@ class StatisticsOrphanView(HomeAssistantView):
                 _LOGGER.warning("Invalid parameters for SQL generation: %s", err)
                 return web.json_response({"error": "Invalid parameters provided"}, status=400)
             except Exception as err:
-                # Sanitize error message to prevent information disclosure
+                # Categorize error and provide actionable message
                 _LOGGER.error("Error generating SQL for %s: %s", entity_id, err, exc_info=True)
-                return web.json_response({"error": "An error occurred generating SQL"}, status=500)
+                error_category, error_message = categorize_error(err)
+                return web.json_response({
+                    "error": error_message,
+                    "error_category": error_category
+                }, status=500)
 
         return web.json_response({"error": "Invalid action"}, status=400)
