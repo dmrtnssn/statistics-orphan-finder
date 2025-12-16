@@ -14,10 +14,11 @@ import type {
   ColumnConfig,
   SortState,
   DeleteModalData,
-  HomeAssistant,
-  BulkSqlGenerationResult
+  HomeAssistant
 } from '../types';
-import { ApiService } from '../services/api-service';
+import { EntityFilterService, type FilterCriteria } from '../services/entity-filter-service';
+import { EntitySelectionService } from '../services/entity-selection-service';
+import { ModalOrchestrationService } from '../services/modal-orchestration-service';
 import '../components/storage-health-summary';
 import '../components/filter-bar';
 import '../components/entity-table';
@@ -56,13 +57,12 @@ export class StorageOverviewView extends LitElement {
   @state() private bulkSqlProgress = 0;
   @state() private bulkSqlTotal = 0;
 
-  // Memoization for filtered entities
-  private _cachedFilteredEntities: StorageEntity[] = [];
-  private _lastFilterKey = '';
-
   // Lazy loading flags for modal components
   private _entityDetailsModalLoaded = false;
   private _deleteSqlModalLoaded = false;
+
+  // Modal orchestration service (created lazily when hass is available)
+  private _modalOrchestrator: ModalOrchestrationService | null = null;
 
   // Message histogram state
   @state() private histogramEntityId: string | null = null;
@@ -90,13 +90,22 @@ export class StorageOverviewView extends LitElement {
     }
   }
 
+  /**
+   * Get or create the modal orchestration service
+   */
+  private get modalOrchestrator(): ModalOrchestrationService {
+    if (!this._modalOrchestrator || !this.hass) {
+      this._modalOrchestrator = new ModalOrchestrationService(this.hass);
+    }
+    return this._modalOrchestrator;
+  }
+
   protected willUpdate(changedProperties: PropertyValues<this>) {
     super.willUpdate(changedProperties);
 
-    // Clear cache when entities array changes
+    // Clear EntityFilterService cache when entities array changes
     if (changedProperties.has('entities')) {
-      this._lastFilterKey = '';
-      this._cachedFilteredEntities = [];
+      EntityFilterService.clearCache();
     }
 
     // Validate hass connection
@@ -152,254 +161,46 @@ export class StorageOverviewView extends LitElement {
   ];
 
   /**
-   * Check if entity has been disabled and has statistics data
-   *
-   * Note: Disabled entities with statistics are eligible for cleanup.
-   * This allows users to delete historical data for entities they've disabled.
-   */
-  private isDisabledForAtLeast90Days(entity: StorageEntity): boolean {
-    try {
-      // Entity must be disabled
-      if (!entity || entity.registry_status !== 'Disabled') return false;
-
-      // Must have statistics or states data (otherwise nothing to delete)
-      return !!(entity.in_states_meta || entity.in_statistics_meta);
-    } catch (err) {
-      console.warn('[StorageOverviewView] Error in isDisabledForAtLeast90Days:', entity?.entity_id, err);
-      return false;
-    }
-  }
-
-  /**
-   * Get entity selection type for UI differentiation
-   */
-  private getEntitySelectionType(entity: StorageEntity): 'deleted' | 'disabled' | 'not-selectable' {
-    const hasData = entity.in_states_meta || entity.in_statistics_meta;
-    if (!hasData) return 'not-selectable';
-
-    // Deleted entities (not in registry, not in state machine)
-    if (!entity.in_entity_registry && !entity.in_state_machine) {
-      return 'deleted';
-    }
-
-    // Disabled entities (in registry, disabled)
-    if (this.isDisabledForAtLeast90Days(entity)) {
-      return 'disabled';
-    }
-
-    return 'not-selectable';
-  }
-
-  /**
    * Get entities that are eligible for deletion
    * Includes both deleted entities and disabled entities
    */
   private get selectableEntities(): StorageEntity[] {
-    return this.filteredEntities.filter(entity => {
-      const hasData = entity.in_states_meta || entity.in_statistics_meta;
-      if (!hasData) return false;
-
-      // Deleted entities (existing behavior)
-      const isDeleted = !entity.in_entity_registry && !entity.in_state_machine;
-
-      // Disabled entities with statistics
-      const isDisabledLongEnough = this.isDisabledForAtLeast90Days(entity);
-
-      return isDeleted || isDisabledLongEnough;
-    });
+    return EntitySelectionService.getSelectableEntities(this.filteredEntities);
   }
 
   /**
    * Get Set of selectable entity IDs for efficient lookups
    */
   private get selectableEntityIds(): Set<string> {
-    return new Set(this.selectableEntities.map(e => e.entity_id));
+    return EntitySelectionService.getSelectableEntityIds(this.filteredEntities);
   }
 
   /**
    * Get set of disabled entity IDs (for visual differentiation)
    */
   private get disabledEntityIds(): Set<string> {
-    // Defensive: Return empty set if entities array is not ready
-    if (!this.entities || !Array.isArray(this.entities) || this.entities.length === 0) {
-      return new Set();
-    }
-
-    try {
-      return new Set(
-        this.entities
-          .filter(e => e && this.isDisabledForAtLeast90Days(e))
-          .map(e => e.entity_id)
-      );
-    } catch (err) {
-      console.warn('[StorageOverviewView] Error computing disabledEntityIds:', err);
-      return new Set();
-    }
+    return EntitySelectionService.getDisabledEntityIds(this.entities);
   }
 
   /**
    * Get breakdown of selected entities by type (deleted vs disabled)
    */
   private get selectionBreakdown(): { deleted: StorageEntity[]; disabled: StorageEntity[] } {
-    const deleted: StorageEntity[] = [];
-    const disabled: StorageEntity[] = [];
-
-    this.selectedEntityIds.forEach(entityId => {
-      const entity = this.entities.find(e => e.entity_id === entityId);
-      if (!entity) return;
-
-      const type = this.getEntitySelectionType(entity);
-      if (type === 'deleted') deleted.push(entity);
-      if (type === 'disabled') disabled.push(entity);
-    });
-
-    return { deleted, disabled };
-  }
-
-  /**
-   * Format how long ago statistics were last updated for a disabled entity
-   * This gives users context about data staleness
-   */
-  private formatDisabledDuration(entity: StorageEntity): string {
-    if (!entity.last_stats_update) return 'unknown duration';
-
-    const lastUpdate = new Date(entity.last_stats_update).getTime();
-    const ageMs = Date.now() - lastUpdate;
-    const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-
-    if (days < 1) return 'stats updated today';
-    if (days === 1) return 'stats 1 day old';
-    if (days < 30) return `stats ${days} days old`;
-    if (days < 365) {
-      const months = Math.floor(days / 30);
-      return months === 1 ? 'stats 1 month old' : `stats ${months} months old`;
-    }
-    const years = Math.floor(days / 365);
-    const remainingMonths = Math.floor((days % 365) / 30);
-    if (remainingMonths === 0) {
-      return years === 1 ? 'stats 1 year old' : `stats ${years} years old`;
-    }
-    return `stats ${years} year${years === 1 ? '' : 's'}, ${remainingMonths} month${remainingMonths === 1 ? '' : 's'} old`;
+    return EntitySelectionService.getSelectionBreakdown(this.selectedEntityIds, this.entities);
   }
 
   private get filteredEntities(): StorageEntity[] {
-    // Create a cache key from all filter parameters
-    const filterKey = `${this.searchQuery}|${this.basicFilter}|${this.registryFilter}|${this.stateFilter}|${this.advancedFilter}|${this.statesFilter}|${this.statisticsFilter}|${this.sortStack.map(s => `${s.column}:${s.direction}`).join(',')}`;
+    const filters: FilterCriteria = {
+      searchQuery: this.searchQuery,
+      basicFilter: this.basicFilter,
+      registryFilter: this.registryFilter,
+      stateFilter: this.stateFilter,
+      advancedFilter: this.advancedFilter,
+      statesFilter: this.statesFilter,
+      statisticsFilter: this.statisticsFilter
+    };
 
-    // Return cached result if filters haven't changed
-    if (filterKey === this._lastFilterKey && this._cachedFilteredEntities.length > 0) {
-      return this._cachedFilteredEntities;
-    }
-
-    // Filters changed - recompute
-    let filtered = [...this.entities];
-
-    // Search filter
-    if (this.searchQuery) {
-      const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(e => e.entity_id.toLowerCase().includes(query));
-    }
-
-    // Basic filters
-    if (this.basicFilter === 'in_registry') {
-      filtered = filtered.filter(e => e.in_entity_registry);
-    } else if (this.basicFilter === 'in_state') {
-      filtered = filtered.filter(e => e.in_state_machine);
-    } else if (this.basicFilter === 'deleted') {
-      filtered = filtered.filter(e => !e.in_entity_registry && !e.in_state_machine);
-    } else if (this.basicFilter === 'numeric_sensors_no_stats') {
-      filtered = filtered.filter(e =>
-        e.entity_id.startsWith('sensor.') &&
-        e.in_states_meta &&
-        !e.in_statistics_meta &&
-        e.statistics_eligibility_reason &&
-        !e.statistics_eligibility_reason.includes("is not numeric")
-      );
-    }
-
-    // Registry status filter
-    if (this.registryFilter) {
-      filtered = filtered.filter(e => e.registry_status === this.registryFilter);
-    }
-
-    // State status filter
-    if (this.stateFilter) {
-      filtered = filtered.filter(e => e.state_status === this.stateFilter);
-    }
-
-    // Advanced filters
-    if (this.advancedFilter === 'only_states') {
-      filtered = filtered.filter(e => e.in_states && !e.in_statistics_meta);
-    } else if (this.advancedFilter === 'only_stats') {
-      filtered = filtered.filter(e => e.in_statistics_meta && !e.in_states);
-    }
-
-    // States filter
-    if (this.statesFilter === 'in_states') {
-      filtered = filtered.filter(e => e.in_states);
-    } else if (this.statesFilter === 'not_in_states') {
-      filtered = filtered.filter(e => !e.in_states);
-    }
-
-    // Statistics filter
-    if (this.statisticsFilter === 'in_statistics') {
-      filtered = filtered.filter(e => e.in_statistics_meta);
-    } else if (this.statisticsFilter === 'not_in_statistics') {
-      filtered = filtered.filter(e => !e.in_statistics_meta);
-    }
-
-    // Cache the result
-    this._lastFilterKey = filterKey;
-    this._cachedFilteredEntities = this.sortEntities(filtered);
-
-    return this._cachedFilteredEntities;
-  }
-
-  private sortEntities(entities: StorageEntity[]): StorageEntity[] {
-    return [...entities].sort((a, b) => {
-      for (const { column, direction } of this.sortStack) {
-        let result = 0;
-
-        switch (column) {
-          case 'entity_id':
-            result = a.entity_id.localeCompare(b.entity_id);
-            break;
-          case 'registry':
-          case 'registry_status':
-            result = a.registry_status.localeCompare(b.registry_status);
-            break;
-          case 'state':
-          case 'state_status':
-            result = a.state_status.localeCompare(b.state_status);
-            break;
-          case 'states_count':
-          case 'stats_short_count':
-          case 'stats_long_count':
-            result = (a[column as keyof StorageEntity] as number) - (b[column as keyof StorageEntity] as number);
-            break;
-          case 'update_interval':
-            const aInterval = a.update_interval_seconds ?? 999999;
-            const bInterval = b.update_interval_seconds ?? 999999;
-            result = aInterval - bInterval;
-            break;
-          case 'last_state_update':
-          case 'last_stats_update':
-            const aTime = a[column] ? new Date(a[column] as string).getTime() : 0;
-            const bTime = b[column] ? new Date(b[column] as string).getTime() : 0;
-            result = aTime - bTime;
-            break;
-          default:
-            // Boolean columns
-            const aVal = a[column as keyof StorageEntity] ? 1 : 0;
-            const bVal = b[column as keyof StorageEntity] ? 1 : 0;
-            result = aVal - bVal;
-        }
-
-        if (direction === 'desc') result = -result;
-        if (result !== 0) return result;
-      }
-      return 0;
-    });
+    return EntityFilterService.filterAndSort(this.entities, filters, this.sortStack);
   }
 
   private getActiveFilterType(): string | null {
@@ -810,75 +611,23 @@ export class StorageOverviewView extends LitElement {
   }
 
   /**
-   * Determine origin and count for an entity based on which tables it's in
-   */
-  private determineEntityOriginAndCount(entity: StorageEntity): { origin: string; count: number } | null {
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-
-    if (inStates && inStatistics) {
-      return {
-        origin: 'States+Statistics',
-        count: entity.states_count + entity.stats_short_count + entity.stats_long_count
-      };
-    } else if (inStates) {
-      return {
-        origin: 'States',
-        count: entity.states_count
-      };
-    } else if (inStatistics) {
-      let origin: string;
-      if (entity.in_statistics_long_term && entity.in_statistics_short_term) {
-        origin = 'Both';
-      } else if (entity.in_statistics_long_term) {
-        origin = 'Long-term';
-      } else {
-        origin = 'Short-term';
-      }
-      return {
-        origin,
-        count: entity.stats_short_count + entity.stats_long_count
-      };
-    }
-
-    // Not in any table - shouldn't happen
-    return null;
-  }
-
-  /**
    * Generate SQL for a single entity after user confirms
    */
   private async generateSingleEntitySqlAfterConfirmation(entity: StorageEntity) {
-    // Determine origin based on which tables the entity is in
-    const result = this.determineEntityOriginAndCount(entity);
-    if (!result) return;
+    try {
+      // Use service to generate SQL
+      const result = await this.modalOrchestrator.generateSingleEntitySql(entity);
 
-    const { origin, count } = result;
-    const inStates = entity.in_states_meta;
-    const inStatistics = entity.in_statistics_meta;
-
-    // Update modal data
-    const modalData: DeleteModalData = {
-      entityId: entity.entity_id,
-      metadataId: entity.metadata_id || 0,
-      origin: origin as any,
-      status: 'deleted', // We're deleting statistics for both deleted and disabled entities
-      count: count
-    };
-
-    // Dispatch event to parent to fetch SQL
-    this.dispatchEvent(new CustomEvent('generate-sql', {
-      detail: {
-        entity_id: entity.entity_id,
-        in_states_meta: inStates,
-        in_statistics_meta: inStatistics,
-        metadata_id: entity.metadata_id,
-        origin: origin,
-        entity: modalData
-      },
-      bubbles: true,
-      composed: true
-    }));
+      // Transition modal to display mode with the SQL
+      this.deleteModalMode = 'display';
+      this.deleteModalData = result.modalData;
+      this.deleteSql = result.sql;
+      this.deleteStorageSaved = result.storage_saved;
+    } catch (err) {
+      console.error('Error generating SQL for single entity:', err);
+      // Close modal on error
+      this.handleCloseDeleteModal();
+    }
   }
 
   /**
@@ -898,104 +647,29 @@ export class StorageOverviewView extends LitElement {
       this.bulkSqlTotal = this.deleteModalEntities.length;
       this.bulkSqlProgress = 0;
 
-      const apiService = new ApiService(this.hass);
-
-      // Use a mutable object while building results
-      const resultsBuilder = {
-        entities: [] as Array<{
-          entity_id: string;
-          sql: string;
-          storage_saved: number;
-          count: number;
-          error?: string;
-        }>,
-        total_storage_saved: 0,
-        total_count: 0,
-        success_count: 0,
-        error_count: 0
-      };
-
-      // Generate SQL for each entity sequentially
-      for (const entity of this.deleteModalEntities) {
-        this.bulkSqlProgress++;
-
-        try {
-          // Determine parameters for SQL generation
-          const result = this.determineEntityOriginAndCount(entity);
-          if (!result) continue; // Skip entities not in any table
-
-          const { origin, count } = result;
-          const inStates = entity.in_states_meta;
-          const inStatistics = entity.in_statistics_meta;
-
-          // Call API to generate SQL
-          const response = await apiService.generateDeleteSql(
-            entity.entity_id,
-            origin as any,
-            inStates,
-            inStatistics
-          );
-
-          resultsBuilder.entities.push({
-            entity_id: entity.entity_id,
-            sql: response.sql,
-            storage_saved: response.storage_saved,
-            count: count
-          });
-
-          resultsBuilder.total_storage_saved += response.storage_saved;
-          resultsBuilder.total_count += count;
-          resultsBuilder.success_count++;
-        } catch (err) {
-          console.error(`Error generating SQL for ${entity.entity_id}:`, err);
-          resultsBuilder.entities.push({
-            entity_id: entity.entity_id,
-            sql: '',
-            storage_saved: 0,
-            count: 0,
-            error: err instanceof Error ? err.message : 'Unknown error'
-          });
-          resultsBuilder.error_count++;
+      // Use service to generate bulk SQL with progress tracking
+      const results = await this.modalOrchestrator.generateBulkSql(
+        this.deleteModalEntities,
+        (current, total) => {
+          this.bulkSqlProgress = current;
+          this.bulkSqlTotal = total;
         }
-      }
+      );
 
-      // Create properly typed result based on error count
-      const results: BulkSqlGenerationResult = resultsBuilder.error_count > 0
-        ? {
-            status: 'partial',
-            ...resultsBuilder
-          }
-        : {
-            status: 'success',
-            entities: resultsBuilder.entities,
-            total_storage_saved: resultsBuilder.total_storage_saved,
-            total_count: resultsBuilder.total_count,
-            success_count: resultsBuilder.success_count,
-            error_count: 0
-          };
-
-      // Format combined SQL
-      const combinedSql = resultsBuilder.entities
-        .map((e) => {
-          if (e.error) {
-            return `-- Entity: ${e.entity_id}\n-- ERROR: ${e.error}\n`;
-          }
-          const storageMB = (e.storage_saved / (1024 * 1024)).toFixed(2);
-          return `-- Entity: ${e.entity_id} (${e.count.toLocaleString()} records, ${storageMB} MB saved)\n${e.sql}`;
-        })
-        .join('\n\n');
+      // Format combined SQL using service
+      const combinedSql = this.modalOrchestrator.formatSqlForDisplay(results);
 
       // Update modal to display mode with SQL
       this.deleteModalMode = 'display';
       this.deleteModalData = {
-        entityId: `${resultsBuilder.success_count} entities`,
+        entityId: `${results.success_count} entities`,
         metadataId: 0,
         origin: 'Both' as any,
         status: 'deleted',
-        count: resultsBuilder.total_count
+        count: results.total_count
       };
       this.deleteSql = combinedSql;
-      this.deleteStorageSaved = resultsBuilder.total_storage_saved;
+      this.deleteStorageSaved = results.total_storage_saved;
 
       // Clear selection after successful generation
       this.selectedEntityIds = new Set();
