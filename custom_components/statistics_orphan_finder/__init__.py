@@ -11,7 +11,6 @@ from aiohttp import web
 
 from .const import (
     DOMAIN,
-    API_VERSION,
     ERROR_CATEGORY_DB_CONNECTION,
     ERROR_CATEGORY_DB_PERMISSION,
     ERROR_CATEGORY_DB_TIMEOUT,
@@ -253,7 +252,6 @@ class StatisticsOrphanView(HomeAssistantView):
 
         if action == "database_size":
             db_size = await coordinator.async_get_database_size()
-            db_size["api_version"] = API_VERSION
             return web.json_response(db_size)
 
         elif action == "entity_storage_overview_step":
@@ -281,7 +279,6 @@ class StatisticsOrphanView(HomeAssistantView):
                     )
 
                 result = await coordinator.async_execute_overview_step(step, session_id)
-                result["api_version"] = API_VERSION
                 return web.json_response(result)
             except ValueError as err:
                 # Sanitize error message for client (log full error server-side)
@@ -315,7 +312,6 @@ class StatisticsOrphanView(HomeAssistantView):
                     )
 
                 histogram = await coordinator.async_get_message_histogram(entity_id, hours_int)
-                histogram["api_version"] = API_VERSION
                 return web.json_response(histogram)
             except ValueError as err:
                 # Sanitize error message for client
@@ -368,8 +364,7 @@ class StatisticsOrphanView(HomeAssistantView):
 
                 return web.json_response({
                     "sql": sql,
-                    "storage_saved": storage_saved,
-                    "api_version": API_VERSION
+                    "storage_saved": storage_saved
                 })
             except ValueError as err:
                 # Sanitize error message for client
