@@ -1,12 +1,18 @@
 """Entity analysis service for Statistics Orphan Finder."""
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class HourlyMessageRow(NamedTuple):
+    """Result row for hourly message count queries."""
+    hour_bucket: int
+    count: int
 
 
 class EntityAnalyzer:
@@ -287,19 +293,21 @@ class EntityAnalyzer:
             total = 0
 
             for row in result:
-                # Ensure hour_bucket is an integer
-                hour_bucket = int(row[0]) if row[0] is not None else -1
-                count = row[1]
+                # Convert row to NamedTuple for type-safe access
+                row_data = HourlyMessageRow(
+                    hour_bucket=int(row[0]) if row[0] is not None else -1,
+                    count=row[1]
+                )
 
                 # Validate bounds to prevent array index errors
-                if 0 <= hour_bucket < hours:
-                    hourly_counts[hour_bucket] = count
-                    total += count
+                if 0 <= row_data.hour_bucket < hours:
+                    hourly_counts[row_data.hour_bucket] = row_data.count
+                    total += row_data.count
                 else:
                     # Log unexpected hour buckets (shouldn't happen with proper query)
                     _LOGGER.warning(
                         "Unexpected hour_bucket %s for entity %s (hours=%s). Skipping.",
-                        hour_bucket, entity_id, hours
+                        row_data.hour_bucket, entity_id, hours
                     )
 
             return {
