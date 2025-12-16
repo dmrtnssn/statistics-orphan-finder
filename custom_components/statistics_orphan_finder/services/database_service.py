@@ -56,7 +56,16 @@ class DatabaseService:
                     encoded_password = quote_plus(password)
                     db_url = f"{protocol}://{encoded_username}:{encoded_password}@{rest}"
 
-            self._engine = create_engine(db_url, pool_pre_ping=True)
+            # Determine database type for connection arguments
+            is_sqlite, is_mysql, is_postgres = get_database_type(self.entry)
+
+            # Add connection timeout for remote databases (MySQL/PostgreSQL)
+            connect_args = {}
+            if is_mysql or is_postgres:
+                # 10 second connection timeout to prevent indefinite hangs
+                connect_args["connect_timeout"] = 10
+
+            self._engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
 
         return self._engine
 
