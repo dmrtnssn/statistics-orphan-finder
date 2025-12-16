@@ -4,6 +4,7 @@ from .storage_calculator import StorageCalculator
 from .entity_analyzer import EntityAnalyzer
 from .sql_generator import SqlGenerator
 from .session_manager import SessionManager
+from .entity_repository import EntityRepository
 
 __all__ = [
     "DatabaseService",
@@ -11,4 +12,5 @@ __all__ = [
     "EntityAnalyzer",
     "SqlGenerator",
     "SessionManager",
+    "EntityRepository",
 ]

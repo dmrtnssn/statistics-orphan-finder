@@ -3,8 +3,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
-from .services import DatabaseService, StorageCalculator, SqlGenerator, SessionManager
+from .services import DatabaseService, StorageCalculator, SqlGenerator, SessionManager, EntityRepository
 from .services.entity_analyzer import EntityAnalyzer
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +35,7 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         self.storage_calculator = StorageCalculator(entry)
         self.sql_generator = SqlGenerator(entry)
         self.session_manager = SessionManager()
+        self.entity_repository = EntityRepository()
 
         # Shutdown flag to prevent processing requests during unload
         self._is_shutting_down = False
@@ -141,11 +140,12 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
 
-        with engine.connect() as conn:
-            query = text("SELECT DISTINCT entity_id FROM states_meta")
-            result = conn.execute(query)
-            for row in result:
-                step_data['entity_map'][row[0]]['in_states_meta'] = True
+        # Fetch entity IDs from repository
+        entity_ids = self.entity_repository.fetch_states_meta(engine)
+
+        # Update session data
+        for entity_id in entity_ids:
+            step_data['entity_map'][entity_id]['in_states_meta'] = True
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_states_meta'])
         self.session_manager.update_timestamp(session_id)
@@ -156,43 +156,19 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
 
-        with engine.connect() as conn:
-            # Fetch state counts and last updates
-            query = text("""
-                SELECT sm.entity_id, COUNT(*) as count, MAX(s.last_updated_ts) as last_update
-                FROM states s
-                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
-                GROUP BY sm.entity_id
-            """)
-            result = conn.execute(query)
-            for row in result:
-                entity_id = row[0]
-                step_data['entity_map'][entity_id]['in_states'] = True
-                step_data['entity_map'][entity_id]['states_count'] = row[1]
-                if row[2]:
-                    step_data['entity_map'][entity_id]['last_state_update'] = \
-                        datetime.fromtimestamp(row[2]).isoformat()
+        # Fetch states data and frequency data from repository
+        states_data, frequency_data = self.entity_repository.fetch_states_with_counts(engine)
 
-            # PERFORMANCE OPTIMIZATION: Batch calculate update frequencies for all entities
-            # This eliminates N+1 queries that would happen in step 6
-            cutoff_ts = datetime.now(timezone.utc).timestamp() - 86400
-            frequency_query = text("""
-                SELECT sm.entity_id, COUNT(*) as count_24h
-                FROM states s
-                JOIN states_meta sm ON s.metadata_id = sm.metadata_id
-                WHERE s.last_updated_ts >= :cutoff
-                GROUP BY sm.entity_id
-                HAVING COUNT(*) >= 2
-            """)
-            freq_result = conn.execute(frequency_query, {"cutoff": cutoff_ts})
-            for row in freq_result:
-                entity_id, count_24h = row[0], row[1]
-                interval_seconds = 86400 // count_24h
-                step_data['entity_map'][entity_id]['update_frequency'] = {
-                    'interval_seconds': interval_seconds,
-                    'update_count_24h': count_24h,
-                    'interval_text': EntityAnalyzer.format_interval(interval_seconds)
-                }
+        # Update session data with states info
+        for entity_id, data in states_data.items():
+            step_data['entity_map'][entity_id]['in_states'] = True
+            step_data['entity_map'][entity_id]['states_count'] = data['count']
+            if data['last_update']:
+                step_data['entity_map'][entity_id]['last_state_update'] = data['last_update']
+
+        # Update session data with frequency info
+        for entity_id, freq in frequency_data.items():
+            step_data['entity_map'][entity_id]['update_frequency'] = freq
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_states'])
         self.session_manager.update_timestamp(session_id)
@@ -203,14 +179,13 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
 
-        with engine.connect() as conn:
-            # Fetch both id and statistic_id to avoid N+1 queries later
-            query = text("SELECT id, statistic_id FROM statistics_meta")
-            result = conn.execute(query)
-            for row in result:
-                entity_id = row[1]
-                step_data['entity_map'][entity_id]['in_statistics_meta'] = True
-                step_data['entity_map'][entity_id]['metadata_id'] = row[0]
+        # Fetch statistics metadata from repository
+        metadata_map = self.entity_repository.fetch_statistics_meta(engine)
+
+        # Update session data
+        for entity_id, metadata_id in metadata_map.items():
+            step_data['entity_map'][entity_id]['in_statistics_meta'] = True
+            step_data['entity_map'][entity_id]['metadata_id'] = metadata_id
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_meta'])
         self.session_manager.update_timestamp(session_id)
@@ -221,31 +196,18 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
 
-        with engine.connect() as conn:
-            try:
-                query = text("""
-                    SELECT sm.statistic_id, COUNT(*) as count, MAX(s.start_ts) as last_update
-                    FROM statistics_short_term s
-                    JOIN statistics_meta sm ON s.metadata_id = sm.id
-                    GROUP BY sm.statistic_id
-                """)
-                result = conn.execute(query)
-                for row in result:
-                    entity_id = row[0]
-                    step_data['entity_map'][entity_id]['in_statistics_short_term'] = True
-                    step_data['entity_map'][entity_id]['stats_short_count'] = row[1]
-                    if row[2]:
-                        last_update = datetime.fromtimestamp(row[2]).isoformat()
-                        if not step_data['entity_map'][entity_id]['last_stats_update'] or \
-                           last_update > step_data['entity_map'][entity_id]['last_stats_update']:
-                            step_data['entity_map'][entity_id]['last_stats_update'] = last_update
-            except OperationalError as err:
-                # Table might not exist in older HA versions or different database configurations
-                _LOGGER.info("statistics_short_term table not available: %s", err)
-            except SQLAlchemyError as err:
-                # Unexpected database error - log as error and re-raise
-                _LOGGER.error("Database error querying statistics_short_term: %s", err)
-                raise
+        # Fetch short-term statistics from repository (handles missing table gracefully)
+        stats_data = self.entity_repository.fetch_statistics_short_term(engine)
+
+        # Update session data
+        for entity_id, data in stats_data.items():
+            step_data['entity_map'][entity_id]['in_statistics_short_term'] = True
+            step_data['entity_map'][entity_id]['stats_short_count'] = data['count']
+            if data['last_update']:
+                # Update last_stats_update if this is newer
+                if not step_data['entity_map'][entity_id]['last_stats_update'] or \
+                   data['last_update'] > step_data['entity_map'][entity_id]['last_stats_update']:
+                    step_data['entity_map'][entity_id]['last_stats_update'] = data['last_update']
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_short_term'])
         self.session_manager.update_timestamp(session_id)
@@ -256,23 +218,18 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
         engine = self._get_engine()
         step_data = self.session_manager.get_session_data(session_id)
 
-        with engine.connect() as conn:
-            query = text("""
-                SELECT sm.statistic_id, COUNT(*) as count, MAX(s.start_ts) as last_update
-                FROM statistics s
-                JOIN statistics_meta sm ON s.metadata_id = sm.id
-                GROUP BY sm.statistic_id
-            """)
-            result = conn.execute(query)
-            for row in result:
-                entity_id = row[0]
-                step_data['entity_map'][entity_id]['in_statistics_long_term'] = True
-                step_data['entity_map'][entity_id]['stats_long_count'] = row[1]
-                if row[2]:
-                    last_update = datetime.fromtimestamp(row[2]).isoformat()
-                    if not step_data['entity_map'][entity_id]['last_stats_update'] or \
-                       last_update > step_data['entity_map'][entity_id]['last_stats_update']:
-                        step_data['entity_map'][entity_id]['last_stats_update'] = last_update
+        # Fetch long-term statistics from repository
+        stats_data = self.entity_repository.fetch_statistics_long_term(engine)
+
+        # Update session data
+        for entity_id, data in stats_data.items():
+            step_data['entity_map'][entity_id]['in_statistics_long_term'] = True
+            step_data['entity_map'][entity_id]['stats_long_count'] = data['count']
+            if data['last_update']:
+                # Update last_stats_update if this is newer
+                if not step_data['entity_map'][entity_id]['last_stats_update'] or \
+                   data['last_update'] > step_data['entity_map'][entity_id]['last_stats_update']:
+                    step_data['entity_map'][entity_id]['last_stats_update'] = data['last_update']
 
         entity_count = sum(1 for e in step_data['entity_map'].values() if e['in_statistics_long_term'])
         self.session_manager.update_timestamp(session_id)
