@@ -22,6 +22,9 @@ The Python backend follows a service-oriented architecture:
 - **`config_flow.py`**: Handles UI-based configuration for database connection (SQLite, MySQL, PostgreSQL).
 
 **Service Modules** (in `services/`):
+- **`session_manager.py`**: Session lifecycle management for progressive data loading with auto-cleanup
+- **`entity_repository.py`**: Database queries for entity data (states, statistics) across all tables
+- **`registry_adapter.py`**: Home Assistant registry access and entity enrichment orchestration
 - **`database_service.py`**: Database connection management and size calculations
 - **`entity_analyzer.py`**: Entity availability analysis, statistics eligibility checking, and update frequency calculations
 - **`storage_calculator.py`**: Calculates storage usage for entities across multiple database tables
@@ -66,19 +69,19 @@ All endpoints handled by `StatisticsOrphanView` in `__init__.py`, which delegate
 
 1. Frontend calls `/api/statistics_orphan_finder?action=entity_storage_overview_step&step=N`
 2. API view routes to `coordinator.async_execute_overview_step(step)`
-3. Coordinator executes one of 8 steps:
-   - **Step 0**: Initialize data structures (`_init_step_data`)
-   - **Step 1**: Fetch `states_meta` entities
-   - **Step 2**: Fetch `states` with counts and last update timestamps
-   - **Step 3**: Fetch `statistics_meta` with metadata IDs (stored for later use)
-   - **Step 4**: Fetch `statistics_short_term` with counts
-   - **Step 5**: Fetch `statistics` (long-term) with counts
-   - **Step 6**: Enrich with entity/device registry and state machine info
-   - **Step 7**: Calculate storage for deleted entities
-   - **Step 8**: Calculate storage for disabled entities, generate summary, cleanup
+3. Coordinator orchestrates one of 8 steps by delegating to services:
+   - **Step 0**: Initialize session (`SessionManager.create_session()`)
+   - **Step 1**: Fetch `states_meta` entities (`EntityRepository.fetch_states_meta()`)
+   - **Step 2**: Fetch `states` with counts and frequencies (`EntityRepository.fetch_states_with_counts()`)
+   - **Step 3**: Fetch `statistics_meta` with metadata IDs (`EntityRepository.fetch_statistics_meta()`)
+   - **Step 4**: Fetch `statistics_short_term` (`EntityRepository.fetch_statistics_short_term()`)
+   - **Step 5**: Fetch `statistics` long-term (`EntityRepository.fetch_statistics_long_term()`)
+   - **Step 6**: Enrich with registries (`RegistryAdapter.enrich_entities()`)
+   - **Step 7**: Calculate storage for deleted entities (`StorageCalculator`)
+   - **Step 8**: Calculate disabled storage, generate summary, cleanup session (`SessionManager.delete_session()`)
 4. Each step returns partial results to avoid UI blocking
 5. Frontend aggregates results and displays in table
-6. **Important**: `_step_data` holds intermediate state between steps, cleaned up in Step 8
+6. **Important**: Session data managed by `SessionManager`, auto-cleaned after 5 minutes or on completion
 
 ## Development Commands
 
@@ -102,16 +105,16 @@ All endpoints handled by `StatisticsOrphanView` in `__init__.py`, which delegate
 ```
 
 **Test structure:**
-- `tests/` - Test files (193 tests, 91% coverage)
+- `tests/` - Test files (262 tests, 93% coverage)
 - `tests/conftest.py` - Shared fixtures (sqlite_engine, populated_sqlite_engine, mock_hass, etc.)
-- `tests/services/` - Service module tests
+- `tests/services/` - Service module tests (session_manager, entity_repository, registry_adapter, etc.)
 - `.coveragerc` - Coverage configuration (important: defines omit patterns, exclude_lines)
 - `pytest.ini` - Pytest configuration (coverage enabled by default)
 
 **Coverage details:**
-- Overall: 91% (910 statements, 850 covered)
-- Perfect coverage: storage_calculator.py (100%), const.py (100%), services/__init__.py (100%)
-- Excellent: coordinator.py (91%), entity_analyzer.py (92%), sql_generator.py (95%), __init__.py (91%)
+- Overall: 93% (1018 statements, 972 covered)
+- Perfect coverage: entity_repository.py (100%), registry_adapter.py (100%), storage_calculator.py (100%), const.py (100%), services/__init__.py (100%)
+- Excellent: coordinator.py (96%), session_manager.py (98%), entity_analyzer.py (92%), sql_generator.py (95%), __init__.py (90%)
 
 ### Frontend Build
 
@@ -149,11 +152,12 @@ After building frontend:
 
 ### Progressive Data Loading
 
-The coordinator uses an 8-step process to avoid blocking:
+The coordinator orchestrates an 8-step process to avoid blocking:
 - Each step is executed via `async_execute_overview_step(step_number)`
-- Intermediate data stored in `self._step_data`
+- **SessionManager** manages session lifecycle and intermediate data storage
+- Sessions auto-cleanup after 5 minutes of inactivity or on completion
 - Frontend shows progress indicator while steps execute
-- Final step (8) cleans up `_step_data` and returns complete results
+- Final step (8) cleans up session via `SessionManager.delete_session()` and returns complete results
 
 ### Database Abstraction
 
@@ -161,6 +165,36 @@ The coordinator uses an 8-step process to avoid blocking:
 - Queries use `text()` for raw SQL with proper parameter binding
 - Database engine created lazily via `DatabaseService.get_engine()`
 - Connection pooling handled by SQLAlchemy
+- **EntityRepository** handles all database queries for entity data (stateless, accepts engine as parameter)
+
+### Service Architecture
+
+The coordinator follows a service-oriented architecture with single-responsibility services:
+
+**SessionManager** (158 lines, 7 methods):
+- Session lifecycle management (create, validate, delete)
+- Auto-cleanup of stale sessions (5-minute timeout)
+- Session data isolation with entity_map structure
+- Prevents memory leaks from abandoned sessions
+
+**EntityRepository** (179 lines, 5 methods):
+- All database queries for entity data (stateless)
+- Returns data structures without side effects
+- Preserves N+1 query prevention (batched frequency queries in Step 2)
+- Handles missing tables gracefully (statistics_short_term for older HA versions)
+
+**RegistryAdapter** (304 lines, 10 methods):
+- Home Assistant registry access and coordination
+- Entity/device/config entry enrichment
+- Delegates business logic to EntityAnalyzer
+- N+1 prevention via batched config entry lookups
+
+**Benefits of refactored architecture:**
+- Coordinator reduced from 671 to 458 lines (31.7% reduction)
+- Each service has single, well-defined responsibility
+- 100% test coverage on new services (EntityRepository, RegistryAdapter)
+- Improved maintainability and testability
+- All performance optimizations preserved
 
 ### Storage Calculation
 
