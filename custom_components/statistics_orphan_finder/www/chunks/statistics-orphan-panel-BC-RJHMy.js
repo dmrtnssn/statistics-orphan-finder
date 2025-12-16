@@ -2854,7 +2854,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-CPz13oIp.js");
+      await import("./entity-details-modal-BQIQraeu.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -2863,7 +2863,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CQO0K_6n.js");
+      await import("./delete-sql-modal-BECQRLou.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -3943,6 +3943,8 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     this.loadingSteps = [];
     this.currentStepIndex = 0;
     this.error = null;
+    this.lastFailedStep = null;
+    this.lastSessionId = null;
     this.databaseSize = null;
     this.storageEntities = [];
     this.storageSummary = null;
@@ -4026,7 +4028,13 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     }
   }
   async loadStorageOverviewData() {
-    console.log("[Panel] Starting data load (9-step process)");
+    const resumeFromStep = this.lastFailedStep;
+    const resumeSessionId = this.lastSessionId;
+    if (resumeFromStep !== null && resumeSessionId) {
+      console.log(`[Panel] Resuming from step ${resumeFromStep + 1}/9 (session: ${resumeSessionId.substring(0, 8)}...)`);
+    } else {
+      console.log("[Panel] Starting data load (9-step process)");
+    }
     this.loading = true;
     this.error = null;
     this.initLoadingSteps([
@@ -4044,28 +4052,43 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
       if (!this.hass) {
         throw new Error("Home Assistant connection not available. Please reload the page.");
       }
-      let sessionId;
-      for (let step = 0; step <= 8; step++) {
-        console.debug(`[Panel] Executing step ${step + 1}/9`);
-        const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
-        if (step === 0 && "session_id" in result) {
-          sessionId = result.session_id;
-          console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
-        }
-        if (step === 8) {
-          if ("entities" in result && "summary" in result) {
-            this.storageEntities = result.entities;
-            this.storageSummary = result.summary;
-            console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
-          } else {
-            throw new Error("Final step did not return expected data structure");
-          }
-        }
-        if (step < 8) {
+      let startStep = resumeFromStep !== null ? resumeFromStep : 0;
+      let sessionId = resumeSessionId || void 0;
+      if (resumeFromStep !== null && resumeFromStep > 0) {
+        for (let i2 = 0; i2 < resumeFromStep; i2++) {
           this.completeCurrentStep();
         }
       }
+      for (let step = startStep; step <= 8; step++) {
+        console.debug(`[Panel] Executing step ${step + 1}/9`);
+        try {
+          const result = await this.apiService.fetchEntityStorageOverviewStep(step, sessionId);
+          if (step === 0 && "session_id" in result) {
+            sessionId = result.session_id;
+            console.debug(`[Panel] Session initialized: ${sessionId.substring(0, 8)}...`);
+          }
+          if (step === 8) {
+            if ("entities" in result && "summary" in result) {
+              this.storageEntities = result.entities;
+              this.storageSummary = result.summary;
+              console.log(`[Panel] Data loaded: ${result.entities.length} entities`);
+            } else {
+              throw new Error("Final step did not return expected data structure");
+            }
+          }
+          if (step < 8) {
+            this.completeCurrentStep();
+          }
+        } catch (stepErr) {
+          this.lastFailedStep = step;
+          this.lastSessionId = sessionId || null;
+          console.error(`[Panel] Step ${step + 1}/9 failed, saved for resumption`);
+          throw stepErr;
+        }
+      }
       this.databaseSize = await this.apiService.fetchDatabaseSize();
+      this.lastFailedStep = null;
+      this.lastSessionId = null;
       this.error = null;
       this.saveToCache();
       console.log("[Panel] Data load complete and cached");
@@ -4075,6 +4098,8 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
         errorMessage = err.message;
         if (errorMessage.includes("session_id") || errorMessage.includes("Invalid or missing session_id")) {
           errorMessage = "Session expired. Please refresh the page to reload data.";
+          this.lastFailedStep = null;
+          this.lastSessionId = null;
         }
       }
       this.error = errorMessage;
@@ -4085,6 +4110,8 @@ const _StatisticsOrphanPanel = class _StatisticsOrphanPanel extends i$1 {
     }
   }
   handleRefresh() {
+    this.lastFailedStep = null;
+    this.lastSessionId = null;
     this.loadStorageOverviewData();
   }
   handleRetry() {
@@ -4509,6 +4536,12 @@ __decorateClass([
 ], StatisticsOrphanPanel.prototype, "error");
 __decorateClass([
   r()
+], StatisticsOrphanPanel.prototype, "lastFailedStep");
+__decorateClass([
+  r()
+], StatisticsOrphanPanel.prototype, "lastSessionId");
+__decorateClass([
+  r()
 ], StatisticsOrphanPanel.prototype, "databaseSize");
 __decorateClass([
   r()
@@ -4545,4 +4578,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-CZFi4FFR.js.map
+//# sourceMappingURL=statistics-orphan-panel-BC-RJHMy.js.map
