@@ -1089,7 +1089,17 @@ const _EntityFilterService = class _EntityFilterService {
 };
 _EntityFilterService._cache = /* @__PURE__ */ new Map();
 let EntityFilterService = _EntityFilterService;
-class EntitySelectionService {
+const _EntitySelectionService = class _EntitySelectionService {
+  /**
+   * Generate cache key from entities array
+   * Uses array length and first/last entity IDs for fast cache key generation
+   */
+  static generateCacheKey(entities) {
+    if (!entities || entities.length === 0) return "empty";
+    const first = entities[0]?.entity_id || "";
+    const last = entities[entities.length - 1]?.entity_id || "";
+    return `${entities.length}:${first}:${last}`;
+  }
   /**
    * Check if entity has been disabled and has statistics data
    * Note: Disabled entities with statistics are eligible for cleanup
@@ -1149,10 +1159,16 @@ class EntitySelectionService {
     if (!entities || !Array.isArray(entities) || entities.length === 0) {
       return /* @__PURE__ */ new Set();
     }
+    const cacheKey = this.generateCacheKey(entities);
+    if (this._disabledIdsCache.has(cacheKey)) {
+      return this._disabledIdsCache.get(cacheKey);
+    }
     try {
-      return new Set(
+      const result = new Set(
         entities.filter((e2) => e2 && this.isDisabledForAtLeast90Days(e2)).map((e2) => e2.entity_id)
       );
+      this._disabledIdsCache.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn("[EntitySelectionService] Error computing disabledEntityIds:", err);
       return /* @__PURE__ */ new Set();
@@ -1196,7 +1212,9 @@ class EntitySelectionService {
     }
     return `stats ${years} year${years === 1 ? "" : "s"}, ${remainingMonths} month${remainingMonths === 1 ? "" : "s"} old`;
   }
-}
+};
+_EntitySelectionService._disabledIdsCache = /* @__PURE__ */ new Map();
+let EntitySelectionService = _EntitySelectionService;
 class ModalOrchestrationService {
   constructor(hass) {
     this.apiService = new ApiService(hass);
@@ -3308,7 +3326,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-GapGqRJw.js");
+      await import("./entity-details-modal-CzojofSh.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3317,7 +3335,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-B8tu2ST6.js");
+      await import("./delete-sql-modal-CI-lQN7b.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4783,4 +4801,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-DfbZZtz8.js.map
+//# sourceMappingURL=statistics-orphan-panel-DzqvEzER.js.map

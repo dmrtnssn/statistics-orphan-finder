@@ -8,6 +8,20 @@ import type { StorageEntity } from '../types';
 export type EntitySelectionType = 'deleted' | 'disabled' | 'not-selectable';
 
 export class EntitySelectionService {
+  // Memoization cache for disabled entity IDs
+  private static _disabledIdsCache = new Map<string, Set<string>>();
+
+  /**
+   * Generate cache key from entities array
+   * Uses array length and first/last entity IDs for fast cache key generation
+   */
+  private static generateCacheKey(entities: StorageEntity[]): string {
+    if (!entities || entities.length === 0) return 'empty';
+    const first = entities[0]?.entity_id || '';
+    const last = entities[entities.length - 1]?.entity_id || '';
+    return `${entities.length}:${first}:${last}`;
+  }
+
   /**
    * Check if entity has been disabled and has statistics data
    * Note: Disabled entities with statistics are eligible for cleanup
@@ -87,12 +101,23 @@ export class EntitySelectionService {
       return new Set();
     }
 
+    // Check cache first
+    const cacheKey = this.generateCacheKey(entities);
+    if (this._disabledIdsCache.has(cacheKey)) {
+      return this._disabledIdsCache.get(cacheKey)!;
+    }
+
+    // Compute disabled entity IDs
     try {
-      return new Set(
+      const result = new Set(
         entities
           .filter(e => e && this.isDisabledForAtLeast90Days(e))
           .map(e => e.entity_id)
       );
+
+      // Cache the result
+      this._disabledIdsCache.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn('[EntitySelectionService] Error computing disabledEntityIds:', err);
       return new Set();
