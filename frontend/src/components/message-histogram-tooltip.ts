@@ -20,6 +20,7 @@ export class MessageHistogramTooltip extends LitElement {
   @state() private totalMessages = 0;
   @state() private error: string | null = null;
   private currentLoadRequest = 0; // Track request sequence to prevent race conditions
+  private _isDisconnected = false; // Prevent state updates after component is removed from DOM
 
   static styles = [
     sharedStyles,
@@ -143,7 +144,13 @@ export class MessageHistogramTooltip extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+    this._isDisconnected = false; // Reset flag when component is (re)connected
     await this.loadData();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._isDisconnected = true; // Prevent pending async operations from updating state
   }
 
   updated(changedProperties: Map<string, any>) {
@@ -156,6 +163,9 @@ export class MessageHistogramTooltip extends LitElement {
   }
 
   private async loadData() {
+    // Don't start loading if already disconnected
+    if (this._isDisconnected) return;
+
     this.loading = true;
     this.error = null;
 
@@ -168,21 +178,22 @@ export class MessageHistogramTooltip extends LitElement {
     try {
       const data = await apiService.fetchMessageHistogram(this.entityId, this.timeRange);
 
-      // Only update state if this is still the latest request
+      // Only update state if this is still the latest request AND component is still connected
       // Prevents race condition when quickly hovering between entities
-      if (thisRequestId === this.currentLoadRequest) {
+      // Prevents memory leak when component is removed before request completes
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         this.hourlyCounts = data.hourly_counts;
         this.totalMessages = data.total_messages;
       }
     } catch (err) {
-      // Only update error if this is still the latest request
-      if (thisRequestId === this.currentLoadRequest) {
+      // Only update error if this is still the latest request AND component is still connected
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         console.error('Failed to load histogram:', err);
         this.error = err instanceof Error ? err.message : 'Failed to load data';
       }
     } finally {
-      // Only clear loading if this is still the latest request
-      if (thisRequestId === this.currentLoadRequest) {
+      // Only clear loading if this is still the latest request AND component is still connected
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         this.loading = false;
       }
     }
