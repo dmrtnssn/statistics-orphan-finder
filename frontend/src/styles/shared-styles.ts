@@ -335,6 +335,19 @@ export const sharedStyles = css`
     animation: spin 1s linear infinite;
   }
 
+  /* Small spinner variant for inline button use */
+  .loading-spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
   @keyframes spin {
     to { transform: rotate(360deg); }
   }

@@ -329,6 +329,19 @@ const sharedStyles = i`
     animation: spin 1s linear infinite;
   }
 
+  /* Small spinner variant for inline button use */
+  .loading-spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
@@ -2896,7 +2909,7 @@ const _SelectionPanel = class _SelectionPanel extends i$1 {
             ?disabled=${this.selectedCount === 0 || this.isGenerating}
           >
             ${this.isGenerating ? x`
-              <span class="loading-spinner"></span>
+              <span class="loading-spinner-sm"></span>
               Generating...
             ` : x`
               Generate Delete SQL
@@ -3080,24 +3093,6 @@ _SelectionPanel.styles = [
       .deselect-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
-      }
-
-      .loading-spinner {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top-color: white;
-        animation: spin 0.8s linear infinite;
-        margin-right: 8px;
-        vertical-align: middle;
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
       }
 
       @media (max-width: 768px) {
@@ -3488,7 +3483,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-Ctq7lDFC.js");
+      await import("./entity-details-modal-DEQUYUjZ.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3497,7 +3492,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-nb5dujLs.js");
+      await import("./delete-sql-modal-CH3yGxSS.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4963,4 +4958,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-C6JXo4-J.js.map
+//# sourceMappingURL=statistics-orphan-panel-BAcnaE1O.js.map
