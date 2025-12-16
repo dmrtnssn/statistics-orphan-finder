@@ -192,24 +192,6 @@ export class SelectionPanel extends LitElement {
         cursor: not-allowed;
       }
 
-      .loading-spinner {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top-color: white;
-        animation: spin 0.8s linear infinite;
-        margin-right: 8px;
-        vertical-align: middle;
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
       @media (max-width: 768px) {
         .selection-panel {
           left: 16px; /* Mobile - no sidebar */
@@ -311,7 +293,7 @@ export class SelectionPanel extends LitElement {
             ?disabled=${this.selectedCount === 0 || this.isGenerating}
           >
             ${this.isGenerating ? html`
-              <span class="loading-spinner"></span>
+              <span class="loading-spinner-sm"></span>
               Generating...
             ` : html`
               Generate Delete SQL
