@@ -429,7 +429,15 @@ class StatisticsOrphanCoordinator(DataUpdateCoordinator):
             Step result dictionary
         """
         try:
-            return await self.hass.async_add_executor_job(self._execute_overview_step, step, session_id)
+            # For steps 1-8, acquire session lock to prevent race conditions
+            if step > 0 and session_id:
+                lock = self.session_manager.get_lock(session_id)
+                async with lock:
+                    _LOGGER.debug("Acquired lock for session %s step %d", session_id[:8], step)
+                    return await self.hass.async_add_executor_job(self._execute_overview_step, step, session_id)
+            else:
+                # Step 0 doesn't need a lock (creates new session)
+                return await self.hass.async_add_executor_job(self._execute_overview_step, step, session_id)
         except Exception as err:
             _LOGGER.error("Error executing overview step %d (session %s): %s",
                          step, session_id[:8] if session_id else "None", err)
