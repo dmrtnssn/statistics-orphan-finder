@@ -2226,13 +2226,15 @@ const _StorageHealthSummary = class _StorageHealthSummary extends i$1 {
             .activeStates=${this.activeStates}
             .activeStatistics=${this.activeStatistics}
             @filter-changed=${(e2) => {
+      e2.stopPropagation();
       this.dispatchEvent(new CustomEvent("filter-changed", {
         detail: e2.detail,
         bubbles: true,
         composed: true
       }));
     }}
-            @filter-reset=${() => {
+            @filter-reset=${(e2) => {
+      e2.stopPropagation();
       this.dispatchEvent(new CustomEvent("filter-reset", {
         bubbles: true,
         composed: true
@@ -3483,7 +3485,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DEQUYUjZ.js");
+      await import("./entity-details-modal-Ck8OAAzE.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3492,7 +3494,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-CH3yGxSS.js");
+      await import("./delete-sql-modal-6WAAU2qM.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4958,4 +4960,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BAcnaE1O.js.map
+//# sourceMappingURL=statistics-orphan-panel-Cq4qpCL9.js.map

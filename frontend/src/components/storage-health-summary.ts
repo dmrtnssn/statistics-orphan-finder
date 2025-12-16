@@ -124,13 +124,15 @@ export class StorageHealthSummary extends LitElement {
             .activeStates=${this.activeStates}
             .activeStatistics=${this.activeStatistics}
             @filter-changed=${(e: CustomEvent) => {
+              e.stopPropagation(); // Prevent original event from bubbling further
               this.dispatchEvent(new CustomEvent('filter-changed', {
                 detail: e.detail,
                 bubbles: true,
                 composed: true
               }));
             }}
-            @filter-reset=${() => {
+            @filter-reset=${(e: CustomEvent) => {
+              e.stopPropagation(); // Prevent original event from bubbling further
               this.dispatchEvent(new CustomEvent('filter-reset', {
                 bubbles: true,
                 composed: true
