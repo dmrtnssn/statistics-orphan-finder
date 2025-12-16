@@ -2984,10 +2984,16 @@ const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
     this.totalMessages = 0;
     this.error = null;
     this.currentLoadRequest = 0;
+    this._isDisconnected = false;
   }
   async connectedCallback() {
     super.connectedCallback();
+    this._isDisconnected = false;
     await this.loadData();
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._isDisconnected = true;
   }
   updated(changedProperties) {
     super.updated(changedProperties);
@@ -2996,6 +3002,7 @@ const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
     }
   }
   async loadData() {
+    if (this._isDisconnected) return;
     this.loading = true;
     this.error = null;
     this.currentLoadRequest++;
@@ -3003,17 +3010,17 @@ const _MessageHistogramTooltip = class _MessageHistogramTooltip extends i$1 {
     const apiService = new ApiService(this.hass);
     try {
       const data = await apiService.fetchMessageHistogram(this.entityId, this.timeRange);
-      if (thisRequestId === this.currentLoadRequest) {
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         this.hourlyCounts = data.hourly_counts;
         this.totalMessages = data.total_messages;
       }
     } catch (err) {
-      if (thisRequestId === this.currentLoadRequest) {
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         console.error("Failed to load histogram:", err);
         this.error = err instanceof Error ? err.message : "Failed to load data";
       }
     } finally {
-      if (thisRequestId === this.currentLoadRequest) {
+      if (thisRequestId === this.currentLoadRequest && !this._isDisconnected) {
         this.loading = false;
       }
     }
@@ -3301,7 +3308,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadEntityDetailsModal() {
     if (!this._entityDetailsModalLoaded) {
-      await import("./entity-details-modal-DWZDVjEu.js");
+      await import("./entity-details-modal-GapGqRJw.js");
       this._entityDetailsModalLoaded = true;
     }
   }
@@ -3310,7 +3317,7 @@ const _StorageOverviewView = class _StorageOverviewView extends i$1 {
    */
   async _loadDeleteSqlModal() {
     if (!this._deleteSqlModalLoaded) {
-      await import("./delete-sql-modal-BNryTbkN.js");
+      await import("./delete-sql-modal-B8tu2ST6.js");
       this._deleteSqlModalLoaded = true;
     }
   }
@@ -4776,4 +4783,4 @@ export {
   formatNumber as f,
   sharedStyles as s
 };
-//# sourceMappingURL=statistics-orphan-panel-BwPMZznw.js.map
+//# sourceMappingURL=statistics-orphan-panel-DfbZZtz8.js.map
