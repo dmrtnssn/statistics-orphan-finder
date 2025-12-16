@@ -1,6 +1,6 @@
 """Storage calculation service for Statistics Orphan Finder."""
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -16,6 +16,26 @@ from .storage_constants import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class MetadataIdRow(NamedTuple):
+    """Result row for metadata_id queries (states_meta)."""
+    metadata_id: int
+
+
+class StatisticsMetaRow(NamedTuple):
+    """Result row for statistics_meta id queries."""
+    id: int
+
+
+class CountRow(NamedTuple):
+    """Result row for COUNT(*) queries."""
+    count: int
+
+
+class AvgRowSizeRow(NamedTuple):
+    """Result row for average row size queries."""
+    avg_row_size: float
 
 
 class StorageCalculator:
@@ -91,10 +111,10 @@ class StorageCalculator:
         if not row:
             return 0
 
-        states_metadata_id = row[0]
+        metadata_row = MetadataIdRow(metadata_id=row[0])
         count_query = text("SELECT COUNT(*) FROM states WHERE metadata_id = :metadata_id")
-        count_result = conn.execute(count_query, {"metadata_id": states_metadata_id})
-        row_count = count_result.fetchone()[0]
+        count_result = conn.execute(count_query, {"metadata_id": metadata_row.metadata_id})
+        count_row = CountRow(count=count_result.fetchone()[0])
 
         size = 0
         if is_mysql:
@@ -104,17 +124,17 @@ class StorageCalculator:
                 WHERE table_schema = DATABASE() AND table_name = 'states'
             """)
             size_result = conn.execute(size_query)
-            avg_row_length = size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE
-            size = row_count * avg_row_length
+            avg_size_row = AvgRowSizeRow(avg_row_size=size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE)
+            size = count_row.count * avg_size_row.avg_row_size
         elif is_postgres:
             size_query = text("""
                 SELECT pg_total_relation_size('states') / NULLIF((SELECT COUNT(*) FROM states), 0) as avg_row_size
             """)
             size_result = conn.execute(size_query)
-            avg_row_size = size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE
-            size = row_count * int(avg_row_size)
+            avg_size_row = AvgRowSizeRow(avg_row_size=size_result.fetchone()[0] or DEFAULT_STATES_ROW_SIZE)
+            size = count_row.count * int(avg_size_row.avg_row_size)
         else:  # SQLite
-            size = row_count * DEFAULT_STATES_ROW_SIZE
+            size = count_row.count * DEFAULT_STATES_ROW_SIZE
 
         # Add states_meta row size
         size += STATES_META_ROW_SIZE
@@ -138,7 +158,8 @@ class StorageCalculator:
             result = conn.execute(query, {"entity_id": entity_id})
             row = result.fetchone()
             if row:
-                metadata_id_statistics = row[0]
+                stats_meta_row = StatisticsMetaRow(id=row[0])
+                metadata_id_statistics = stats_meta_row.id
 
         if not metadata_id_statistics:
             return 0
@@ -199,7 +220,7 @@ class StorageCalculator:
         # This is safe because table_name has been validated against ALLOWED_TABLES above
         count_query = text(f"SELECT COUNT(*) FROM {table_name} WHERE metadata_id = :metadata_id")
         count_result = conn.execute(count_query, {"metadata_id": metadata_id})
-        row_count = count_result.fetchone()[0]
+        count_row = CountRow(count=count_result.fetchone()[0])
 
         if is_mysql:
             # Use parameterized query for table name in information_schema
@@ -209,8 +230,8 @@ class StorageCalculator:
                 WHERE table_schema = DATABASE() AND table_name = :table_name
             """)
             size_result = conn.execute(size_query, {"table_name": table_name})
-            avg_row_length = size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE
-            return row_count * avg_row_length
+            avg_size_row = AvgRowSizeRow(avg_row_size=size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE)
+            return count_row.count * avg_size_row.avg_row_size
         elif is_postgres:
             # For PostgreSQL, use proper type casting and parameterization where possible
             # pg_total_relation_size requires string literal, so we use validated table_name
@@ -218,7 +239,7 @@ class StorageCalculator:
                 SELECT pg_total_relation_size('{table_name}') / NULLIF((SELECT COUNT(*) FROM {table_name}), 0) as avg_row_size
             """)
             size_result = conn.execute(size_query)
-            avg_row_size = size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE
-            return row_count * int(avg_row_size)
+            avg_size_row = AvgRowSizeRow(avg_row_size=size_result.fetchone()[0] or DEFAULT_STATISTICS_ROW_SIZE)
+            return count_row.count * int(avg_size_row.avg_row_size)
         else:  # SQLite
-            return row_count * DEFAULT_STATISTICS_ROW_SIZE
+            return count_row.count * DEFAULT_STATISTICS_ROW_SIZE
